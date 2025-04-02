@@ -23,6 +23,8 @@ from codeit.hf_model_module import HFModule
 from codeit.task import from_dict
 from codeit.utils import get_num_pixels
 
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 def calculate_performance_over_inference_tasks(solutions, inference_keys):
     task_demonstration_performance_list = []
@@ -124,6 +126,7 @@ def main(config: Any) -> None:
 
     agent = Agent(config=config)
 
+    
     initialise_csv_writer(config)
 
     logger = TensorBoardLogger(

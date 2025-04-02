@@ -21,3 +21,5 @@
 
 # Patches (not to be committed by mistake)
 *.patch
+
+outputs/*

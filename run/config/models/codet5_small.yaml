@@ -5,7 +5,10 @@ model:
 data:
   dataloader:
     tokenizer:
-      cls: 'transformers.RobertaTokenizer'
+      cls: 'transformers.AutoTokenizer'
       pad_token_id: 0
       eos_token_id: 2
       abr: codet5-small
+    batch_size: 8
+trainer:
+  accumulate_grad_batches: 64

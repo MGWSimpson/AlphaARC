@@ -23,12 +23,12 @@ class HFModule(pl.LightningModule):
         super().__init__()
         self.transformer = None
         self.cls = config.model.cls
-        if not os.path.isdir(config.model.resume_path):
-            print(f"***{config.model.resume_path} does not exist so initialising base model ***")
-            self.name = config.model.name
-        else:
-            print("*** model resuming from checkpoint ***")
-            self.name = config.model.resume_path
+        # if not os.path.isdir(config.model.resume_path):
+        print(f"***{config.model.resume_path} does not exist so initialising base model ***")
+        self.name = config.model.name
+        # else:
+            # print("*** model resuming from checkpoint ***")
+            # self.name = config.model.resume_path
         self.cache_dir = config.model.cache_dir
         self.reduce_size = config.model.reduce_size
         self.config = config
