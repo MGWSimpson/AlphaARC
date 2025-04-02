@@ -145,42 +145,7 @@ def main(config: Any) -> None:
     print("initialising trainer")
     trainer = pl.Trainer(**config.trainer, logger=logger, callbacks=callbacks)
 
-    # load tasks for ablations
-    if config.ablation.used:
-        print("preparing ablations")
-        assert config.exit.add_policy_samples == False
-        print(
-            f"sample values from {config.ablation.start_value} to {config.ablation.final_value} at interval {config.ablation.mutation_interval}"
-        )
-        sample_values = list(
-            range(
-                config.ablation.start_value,
-                config.ablation.final_value + config.ablation.mutation_interval,
-                config.ablation.mutation_interval,
-            )
-        )
-        mutated_tasks_files = [
-            config.ablation.tasks_file + "_" + str(value) + ".json" for value in sample_values
-        ]
-        mutated_tasks_list = []
-        for file in mutated_tasks_files:
-            print(f"loading file {file}")
-            with open(file, "r") as f:
-                mutated_tasks = json.load(f)
-            print(f"loaded {len(mutated_tasks)} tasks")
-            print(f"filtering tasks from file {file}")
-            mutated_tasks = filter_and_load_mutated_tasks(mutated_tasks)
-            if not config.final_experiments:
-                print(f"filtering out validation keys from tasks from file {file}")
-                mutated_tasks = filter_by_inference_keys(
-                    mutated_tasks, agent.inference_tasks.keys()
-                )
-            print(f"adding {len(mutated_tasks)} tasks to task list")
-            mutated_tasks_list.append(mutated_tasks)
-        if len(mutated_tasks_list) != config.exit.n_iters:
-            raise Exception(
-                f"mutated task list length: {len(mutated_tasks_list)} num iters: {config.exit.n_iters}"
-            )
+    # Removed: loading the mutated tasks.
 
     print(
         f'first inference example inputs {agent.replay_buffer.tokenizer.decode(agent.inference_dataset["input_ids"][0])}'
@@ -188,6 +153,8 @@ def main(config: Any) -> None:
     print(
         f'first inference example labels {agent.replay_buffer.tokenizer.decode(agent.inference_dataset["labels"][0])}'
     )
+
+
 
     for n_iter in range(0, config.exit.n_iters):
 
@@ -197,17 +164,13 @@ def main(config: Any) -> None:
 
         print(f"******** iteration {n_iter} ********")
 
-        # add mutated tasks to buffer
-        if config.ablation.used:
-            agent.add_tasks_to_buffer(
-                tasks=mutated_tasks_list[n_iter], iteration_id=n_iter, mode="mutated"
-            )
+        # Removed: adding mutated tasks to buffer. 
 
         # sampling replay buffer
 
         data_module = ExItDataModule(config=config, replay_buffer=agent.replay_buffer)
         data_module.setup()
-
+        
         trainer.logger.log_metrics(
             {"training set size": len(data_module.train_dataset)}, trainer.global_step
         )

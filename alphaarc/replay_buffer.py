@@ -23,6 +23,9 @@ def normalize(p):
 
 def load_mutated_tasks(file_name, start_id, end_id, id_interval, val_keys=None):
     print("loaded tasks from file", file_name)
+    
+    # Added
+    file_name = None
     if file_name:
         file_ids = range(start_id, end_id + id_interval, id_interval)
         tasks = {}
