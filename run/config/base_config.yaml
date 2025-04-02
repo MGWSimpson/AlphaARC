@@ -96,7 +96,7 @@ data:
       input_state_max: 512
       allowed_tokens: True # ends generation early using  logits processor on allowed tokens
       sparse: True
-  n_train: 400
+  n_train: 10
   n_val: 10
   n_test: 10
   train_split: 0.8

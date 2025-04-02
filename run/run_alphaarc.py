@@ -145,7 +145,7 @@ def main(config: Any) -> None:
     print("initialising trainer")
     trainer = pl.Trainer(**config.trainer, logger=logger, callbacks=callbacks)
 
-    # Removed: loading the mutated tasks.
+    # Removed: loading the mutated tasks
 
     print(
         f'first inference example inputs {agent.replay_buffer.tokenizer.decode(agent.inference_dataset["input_ids"][0])}'
@@ -170,7 +170,7 @@ def main(config: Any) -> None:
 
         data_module = ExItDataModule(config=config, replay_buffer=agent.replay_buffer)
         data_module.setup()
-        
+
         trainer.logger.log_metrics(
             {"training set size": len(data_module.train_dataset)}, trainer.global_step
         )

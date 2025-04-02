@@ -140,6 +140,7 @@ class Buffer:
         self.programs[mode].add(task.program_lines)
         priority = self.get_priority(task, iteration_id, mode)
         experience = self.tokenize_task(task=task)
+        print(experience)
         self.entries[mode][unique_id] = {"experience": experience, "priority": priority}
         self.size[mode] += 1
 
@@ -177,6 +178,7 @@ class Buffer:
         experiences["task_id"] = policy_experiences["task_id"] + mutated_experiences["task_id"]
         return experiences
 
+    
     def sample(self, n_samples, mode):
         samples = {"input_ids": [], "attention_mask": [], "labels": [], "task_id": []}
 

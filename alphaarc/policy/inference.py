@@ -105,6 +105,7 @@ class Evaluator:
         else:
             logits_processor = None
 
+        # TODO: return the prediction scores here.
         tokens = model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
