@@ -36,6 +36,7 @@ def main(config: Any) -> None:
     n_attempts = 10
     buffer = ReplayBuffer()    
     agent = Agent()
+    
     for task in tqdm():
         env = ARCEnv(task)
         for i in range(n_attempts): 
@@ -47,7 +48,11 @@ def main(config: Any) -> None:
                 action = agent.choose_action(observation)
                 observation_, reward, done = env.step(action)
 
-                agent.store_transition(observation, action, reward, observation_, done)
+                agent.store_transition(
+                    
+
+
+                )
                 agent.learn()
                 observation = observation_
     
