@@ -6,17 +6,17 @@ import signal
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
-from codeit.augment.mutate_grid import valid_grid
-from codeit.augment.type_inference import CONSTANT_TO_TYPE_MAPPING
-from codeit.dsl.dsl import *
-from codeit.dsl.primitives import *
+from alphaarc.augment.mutate_grid import valid_grid
+from alphaarc.augment.type_inference import CONSTANT_TO_TYPE_MAPPING
+from alphaarc.dsl.dsl import *
+from alphaarc.dsl.primitives import *
 
 
 def execute_candidate_program(program_string, program_input, max_state_size=1_000, sig_alarm=False):
     program_string = program_string.rstrip("\n")
     valid_syntax = check_syntax(program_string)
     if valid_syntax != "Valid Syntax":
-        return valid_syntax
+        return "Invalid Input"
     if not valid_grid(program_input):
         return "Invalid Input"
     lines = program_string.split("\n")

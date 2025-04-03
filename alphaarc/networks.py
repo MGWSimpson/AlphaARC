@@ -1,15 +1,24 @@
 import torch
-import torch.nn as nn 
-
-from transformers import T5ForConditionalGeneration
-
+import torch.nn as nn
 """
-Policy network, will be a pretrained LLM
+Joint policy value network.
 """
-class PolicyNetwork(nn.Module): 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.network = T5ForConditionalGeneration.from_pretrained('codet5p-220m')
+class PolicyValueNetwork(nn.Module):
+    def __init__(self):
+        pass
 
-    def forward(self, x): 
-        pass 
+
+    # takes in a state and a probability distribution over actions
+    def forward(self, state): 
+        pass
+
+
+class PolicyNetwork: 
+    def __init__(self):
+        pass
+
+
+class ValueNetwork:
+    
+    def __init__(self):
+        pass

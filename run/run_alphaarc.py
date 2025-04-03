@@ -25,9 +25,6 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
-
-
-
 @hydra.main(version_base=None, config_path="config", config_name="base_config")
 def main(config: Any) -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
