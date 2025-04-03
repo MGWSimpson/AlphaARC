@@ -3,6 +3,7 @@
 
 class ReplayBuffer(): 
     def __init__(self):
-        pass
-
-    
+        self. state = []
+        self. reward = []
+        self. next_state = []
+        self. action = []
