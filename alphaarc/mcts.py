@@ -94,10 +94,10 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, env: LineLevelArcEnv, model, args):
+    def __init__(self, env: LineLevelArcEnv, model, n_simulations):
         self.env = env
         self.model = model
-        self.args = args
+        self.n_simulations = n_simulations
 
     def run(self, model, state):
 
@@ -111,7 +111,7 @@ class MCTS:
 
         root.expand(state, action_probs)
 
-        for _ in range(self.args['num_simulations']):
+        for _ in range(self.n_simulations):
             node = root
             search_path = [node]
 

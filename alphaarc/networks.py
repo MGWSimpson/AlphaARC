@@ -9,7 +9,6 @@ Joint policy value network.
 class PolicyValueNetwork(nn.Module):
     def __init__(self):
         self.policy = T5ForConditionalGeneration.from_pretrained('codet5p-220m')
-
         self.num_samples = 5
         self.temperature = 0.95
         self.max_length = 512

@@ -40,6 +40,8 @@ class LineLevelArcEnv:
                 for training_example in task.training_examples[: self.n_examples]
         ]
 
+        self.n_actions = 5 # n lines of code allowed.
+
         self.state = []
 
     # action corresponds to a line of code
@@ -88,6 +90,8 @@ class LineLevelArcEnv:
         return observation, reward, terminated
     
 
+    def get_action_space(self):
+        return self.n_actions
  
     def reset(self): 
         self.state = []
