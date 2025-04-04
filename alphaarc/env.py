@@ -64,7 +64,29 @@ class LineLevelArcEnv:
 
         reward /= len(self.initial_states)
         return observation, reward, terminated
- 
+    
+
+    def step(self, action, state): 
+        state.append(action)
+        observation = (self.initial_states, self.goal_states, state)
+        terminated = False
+        
+        for i, state in enumerate(self.initial_states):
+            program = "\n".join(state)
+            program = append_return(program)
+            output = execute_candidate_program(program_string=program, program_input=state)
+            if output == "Invalid Input": 
+                terminated = True
+                reward -= -1
+
+            if output == self.goal_states[i]:
+                reward +=1
+                terminated = True
+                
+
+        reward /= len(self.initial_states)
+        return observation, reward, terminated
+    
 
  
     def reset(self): 

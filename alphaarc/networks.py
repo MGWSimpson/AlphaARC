@@ -15,6 +15,10 @@ class PolicyValueNetwork(nn.Module):
         self.max_length = 512
         self.stop_strings = "\n"
 
+
+    def predict(self, state):
+        pass
+
     def forward(self, input_ids, attention_mask): 
         outputs = self.network.generate(input_ids=input_ids,
                                         attention_mask=attention_mask,

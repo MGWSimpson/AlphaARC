@@ -2,6 +2,8 @@ import torch
 import math
 import numpy as np
 
+from env import LineLevelArcEnv
+from networks import PolicyValueNetwork
 
 def ucb_score(parent, child):
     """
@@ -15,6 +17,13 @@ def ucb_score(parent, child):
 
     return value_score + prior_score
 
+
+def normalize_actions(): 
+    # TODO: decide if I will mask moves here.
+        # valid_moves = self.game.get_valid_moves(state)
+        # action_probs = action_probs * valid_moves  # mask invalid moves
+        # action_probs /= np.sum(action_probs)
+    pass
 
 class Node:
     def __init__(self, prior):
@@ -85,7 +94,7 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, env, model, args):
+    def __init__(self, env: LineLevelArcEnv, model, args):
         self.env = env
         self.model = model
         self.args = args
@@ -97,10 +106,9 @@ class MCTS:
         # EXPAND root
         action_probs, value = model.predict(state)
         
-        # TODO: decide if I will mask moves here.
-        # valid_moves = self.game.get_valid_moves(state)
-        # action_probs = action_probs * valid_moves  # mask invalid moves
-        # action_probs /= np.sum(action_probs)
+        
+        # normalize_actions()
+
         root.expand(state, action_probs)
 
         for _ in range(self.args['num_simulations']):
@@ -115,17 +123,14 @@ class MCTS:
             parent = search_path[-2]
             state = parent.state
 
-            # TODO: fill out this.
-            next_state, _ = self.game.get_next_state(state, action=action)
-            value = self.game.get_reward_for_player(next_state)
-            
-            if value is None:
+            next_state, value, terminated = self.env.step(action=action, state=state)
+            # check if not terminated.
+            if not terminated:
                 # If the game has not ended:
                 # EXPAND
                 action_probs, value = model.predict(next_state)
-                valid_moves = self.game.get_valid_moves(next_state)
-                action_probs = action_probs * valid_moves  # mask invalid moves
-                action_probs /= np.sum(action_probs)
+                
+                # normalize_actions()
                 node.expand(next_state, action_probs)
             self.backpropagate(search_path, value)
 
