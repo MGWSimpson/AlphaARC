@@ -5,6 +5,14 @@ import os
 import numpy as np
 from numpy import inf
 
+
+def concat_states_and_actions(state, actions): 
+    state = state['input_ids'] # (1, L)
+    state = state.repeat((actions.shape[0], 1))
+    new_states = torch.cat((state, actions), dim=-1)
+
+    return new_states
+
 # note: will handle the tokenization within the network
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, *args, **kwargs):
@@ -20,10 +28,28 @@ class PolicyValueNetwork(nn.Module):
         self.num_samples = 5
         self.stop_strings =['\n']
 
+    def _to_tokens_and_logprobs(self, input_ids):
+        outputs = self.model(input_ids)
+        probs = torch.log_softmax(outputs.logits, dim=-1).detach()
 
-    # training mode (compute the log probs)
-    def forward(self, state, actions):
-        pass
+        # collect the probability of the generated token -- probability at index 0 corresponds to the token at index 1
+        probs = probs[:, :-1, :]
+        input_ids = input_ids[:, 1:]
+        gen_probs = torch.gather(probs, 2, input_ids[:, :, None]).squeeze(-1)
+
+        batch = []
+        for input_sentence, input_probs in zip(input_ids, gen_probs):
+            text_sequence = []
+            for token, p in zip(input_sentence, input_probs):
+                if token not in tokenizer.all_special_ids:
+                    text_sequence.append((tokenizer.decode(token), p.item()))
+            batch.append(text_sequence)
+        return batch
+    
+    def forward(self, state, actions): 
+        self.train()
+        new_states = concat_states_and_actions(state, actions)
+        return new_states
 
     
     def _compute_action_probs(self, actions, scores): 
@@ -49,19 +75,15 @@ class PolicyValueNetwork(nn.Module):
         
 
 
-        actions = outputs['sequences'][:, 1:]
+        actions = outputs['sequences'][:, 1:] # TODO: check if I should keep this.
         scores = outputs['scores']
         action_probs = self._compute_action_probs(actions, scores)
         return actions, action_probs
 
     def _compute_values(self, state, actions): 
-        base_model = self.model.base_model
-        values = []
-        for action in actions:
-            new_state = state + action
-            value = self.value(base_model(new_state))
-            values.append(value)
-        
+        new_states = concat_states_and_actions(state, actions)
+        last_hidden_state = self.model.forward(input_ids=new_states, decoder_input_ids=new_states,output_hidden_states=True).decoder_hidden_states[-1]
+        values = self.value(last_hidden_state)
         return values
   
 
@@ -88,6 +110,10 @@ if __name__ == "__main__":
 
     input_ids = tokenizer(state, return_tensors='pt').to('cuda')
 
-    print(network._compute_actions(input_ids))
+    actions, action_probs, values = network.predict(input_ids)
+    
+    result = network.forward(input_ids, actions)
 
+    print(action_probs)
+    print(result)
     
