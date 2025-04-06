@@ -1,9 +1,26 @@
+import numpy as np
+import torch
 
 
-
+"""
+TODO: probably should rewrite this to make it more numpy like.
+"""
 class ReplayBuffer(): 
-    def __init__(self):
-        self. state = []
-        self. reward = []
-        self. next_state = []
-        self. action = []
+    def __init__(self, sample_batch_size=8):
+        self.history = []
+        self.sample_batch_size = sample_batch_size
+
+    
+    def add(self, new_data): 
+        self.history.extend(new_data)
+
+    def sample(self):
+        sample_ids = np.random.randint(len(self.history), size=self.sample_batch_size)
+        states, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
+
+        states = torch.FloatTensor(np.array(states).astype(np.float64))
+        action_probs = torch.FloatTensor(np.array(action_probs).astype(np.float64))
+        values = torch.FloatTensor(np.array(values).astype(np.float64))
+
+
+        return states, action_probs, values

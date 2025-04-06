@@ -127,7 +127,6 @@ class MCTS:
             # check if not terminated.
             if not terminated:
                 # If the game has not ended:
-                # EXPAND
                 action_probs, value = model.predict(next_state)
                 
                 # normalize_actions()

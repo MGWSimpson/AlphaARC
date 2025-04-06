@@ -39,16 +39,16 @@ class Agent():
             if terminated:
                 ret = []
                 for hist_state,  hist_action_probs in train_examples:
-                    # [Board, currentPlayer, actionProbabilities, Reward]
+                    # [state, actionProbabilities, Reward]
                     ret.append((hist_state, hist_action_probs, reward))
                 return ret
 
 
     def learn(self, env): 
-        # TODO: replace with 
-        train_examples = []
         for eps in self.n_eps: 
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
 
         self.train()
+
+    
