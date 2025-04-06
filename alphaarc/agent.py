@@ -52,3 +52,5 @@ class Agent():
         self.train()
 
     
+    def train(self):
+        pass

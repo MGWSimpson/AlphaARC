@@ -5,6 +5,11 @@ import numpy as np
 from env import LineLevelArcEnv
 from networks import PolicyValueNetwork
 
+
+"""
+TODO: must alter MCTS.
+"""
+
 def ucb_score(parent, child):
     """
     The score for an action that would transition between the parent and child.
@@ -127,6 +132,7 @@ class MCTS:
             # check if not terminated.
             if not terminated:
                 # If the game has not ended:
+                # EXPAND
                 action_probs, value = model.predict(next_state)
                 
                 # normalize_actions()
