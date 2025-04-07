@@ -10,10 +10,10 @@ from alphaarc.env import LineLevelArcEnv
  
 class Agent(): 
     
-    def __init__(self):
+    def __init__(self, n_eps=10, n_simulations=5):
         # how many episodes to generate per enviroment
-        self.n_eps = 10
-        self.n_simulations = 5
+        self.n_eps = n_eps
+        self.n_simulations = n_simulations
         self.replay_buffer = ReplayBuffer()
         self.model = PolicyValueNetwork()
 
@@ -47,7 +47,7 @@ class Agent():
 
 
     def learn(self, env): 
-        for eps in self.n_eps: 
+        for eps in range(self.n_eps):
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
 
@@ -61,9 +61,6 @@ class Agent():
 if __name__ == "__main__": 
     task = Task.from_json('data/training/67385a82.json')
     env = LineLevelArcEnv(task)
-    program1 = """x1 = objects(I, T, F, F)"""
-    program2 = "x2 = colorfilter(x1, THREE)"
+    agent = Agent()
     
-    print(env.step(program1))  
-    print(env.step(program2))
-   
+    agent.learn(env)

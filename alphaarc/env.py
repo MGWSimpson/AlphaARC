@@ -27,6 +27,15 @@ def append_return(program):
 
 
 
+"""
+Gym like enviroment for ARC DSL task.
+
+Need to think about how I will structure this now.
+At some point I will have to construct it into a string.
+The question is whether I do that within the model or the enviroment.
+
+
+"""
 class LineLevelArcEnv:
     def __init__(self, task: Task):
         self.task = task
@@ -72,10 +81,10 @@ class LineLevelArcEnv:
         observation = (self.initial_states, self.goal_states, state)
         terminated = False
         
-        for i, state in enumerate(self.initial_states):
+        for i, st in enumerate(self.initial_states):
             program = "\n".join(state)
             program = append_return(program)
-            output = execute_candidate_program(program_string=program, program_input=state)
+            output = execute_candidate_program(program_string=program, program_input=st)
             if output == "Invalid Input": 
                 terminated = True
                 reward -= -1

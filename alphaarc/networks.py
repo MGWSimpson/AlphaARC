@@ -4,6 +4,7 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import os
 import numpy as np
 from numpy import inf
+from utils import observation_tuple_to_string
 
 
 """
@@ -73,6 +74,7 @@ class PolicyValueNetwork(nn.Module):
 
     def predict(self, state): 
         self.eval()
+        state = observation_tuple_to_string(state)
         state = self._tokenize(state)
         state = state['input_ids']
         actions, action_probs =  self._compute_actions(state)
