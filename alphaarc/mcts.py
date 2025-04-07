@@ -83,7 +83,7 @@ class Node:
         We expand a node and keep track of the prior policy probability given by neural network
         """
         self.state = state
-        for a, prob in enumerate(action_probs):
+        for a, prob in (action_probs):
             if prob != 0:
                 self.children[a] = Node(prior=prob)
 
@@ -124,7 +124,7 @@ class MCTS:
 
             parent = search_path[-2]
             state = parent.state
-
+           
             next_state, value, terminated = self.env.step(action=action, state=state)
             # check if not terminated.
             if not terminated:

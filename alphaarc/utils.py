@@ -8,12 +8,7 @@ from matplotlib import pyplot as plt
 
 
 
-def observation_tuple_to_string(observation):
-    initial_states, goal_states, state = observation
-    initial_states_str = "\n".join(initial_states)
-    goal_states_str = "\n".join(goal_states)
-    state_str = "\n".join(state)
-    return initial_states_str + goal_states_str + state_str
+
 
 def transform_to_function(input_str: str, function_name: str) -> str:
     header = f"def {function_name}(I):\n"

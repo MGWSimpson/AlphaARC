@@ -1,1 +1,3 @@
-So for the first iteration we will just use tokens as the action space and then will expand it to lines.
+
+Problem:
+The enviroment and actions are stored as strings, and actually the observation is a tuple right now not a string.

@@ -17,6 +17,7 @@ class Agent():
         self.replay_buffer = ReplayBuffer()
         self.model = PolicyValueNetwork()
 
+        self.model.to('cuda')
 
     def execute_episode(self, env): 
         
@@ -28,9 +29,9 @@ class Agent():
             self.mcts = MCTS(env, self.model, n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
 
-            action_probs = [0 for _ in range(self.env.get_action_space())]
-            for k, v in root.children.items():
-                action_probs[k] = v.visit_count
+            action_probs = [0 for _ in range(env.get_action_space())]
+            for i, (k, v) in enumerate(root.children.items()):
+                action_probs[i] = v.visit_count
 
             action_probs = action_probs / np.sum(action_probs)
             train_examples.append((state, action_probs))

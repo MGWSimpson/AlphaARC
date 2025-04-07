@@ -1,6 +1,7 @@
 from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
-
+from alphaarc.policy.tokenize import tokenize_task, TextEncoder
+from transformers import AutoTokenizer
 
 def append_action_to_state(state, action): 
     return state + action
@@ -77,9 +78,12 @@ class LineLevelArcEnv:
     
 
     def step(self, action, state): 
+        task, state = state
+
         state.append(action)
-        observation = (self.initial_states, self.goal_states, state)
+        observation = (self.task, state)
         terminated = False
+        reward = 0
         
         for i, st in enumerate(self.initial_states):
             program = "\n".join(state)
@@ -103,16 +107,13 @@ class LineLevelArcEnv:
  
     def reset(self): 
         self.state = []
-        return (self.initial_states, self.goal_states, self.state)
+        return (self.task, self.state)
     
 
 
 if __name__ == "__main__": 
     task = Task.from_json('data/training/67385a82.json')
     env = LineLevelArcEnv(task)
-    program1 = """x1 = objects(I, T, F, F)"""
-    program2 = "x2 = colorfilter(x1, THREE)"
-    
-    print(env.step(program1))  
-    print(env.step(program2))
-   
+    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
+    result = tokenize_task(task, tokenizer, 100, 1024, 1024)
+    print(result)

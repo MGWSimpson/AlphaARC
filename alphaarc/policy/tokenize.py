@@ -129,9 +129,6 @@ def tokenize_simple_seq_2_seq(dataset_entry, tokenizer, input_state_max, max_tok
     example = {}
     example["input_ids"] = tokenize_inputs(dataset_entry, tokenizer, input_state_max)
     example["attention_mask"] = [1] * len(example["input_ids"])
-    example["labels"] = tokenizer.encode(dataset_entry["program"], add_special_tokens=True)[
-        :max_tokens
-    ]
     example["task_id"] = tokenizer.encode(dataset_entry["task_id"], add_special_tokens=False)[
         :max_tokens
     ]

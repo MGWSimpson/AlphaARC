@@ -4,11 +4,12 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import os
 import numpy as np
 from numpy import inf
-from utils import observation_tuple_to_string
+from alphaarc.policy.tokenize import tokenize_task
 
 
 """
-NOTE: presently we handle all tokenization within network. Thinks are assumed to be passed in as strings.
+State is presently defined as:
+(task, lines of the program so far)
 """
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, *args, **kwargs):
@@ -26,9 +27,21 @@ class PolicyValueNetwork(nn.Module):
         self.stop_strings =['\n']
 
 
-    def _tokenize(self, string):
-        return self.tokenizer(string, return_tensors='pt').to('cuda')
+        self.n_examples = 100
+        self.input_state_max = 1024
 
+        self.device = 'cuda'        
+
+    def _tokenize(self, state):
+        task, program_lines = state
+        task_tokens = torch.tensor(tokenize_task(task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'], device=self.device).unsqueeze(0) 
+        
+        if len(program_lines) == 0:
+            return task_tokens
+        
+        program_tokens = self.tokenizer(program_lines, return_tensors='pt')['input_ids'].to(self.device)
+        
+        return torch.cat((task_tokens, program_tokens)).to(self.device)
 
     def _decode(self, tokens):
         return self.tokenizer.batch_decode(tokens)
@@ -48,8 +61,8 @@ class PolicyValueNetwork(nn.Module):
         return zip(actions, scores)
 
     def _compute_actions(self, state):
-        outputs = self.model.generate(state ,
-                                      temperature=1.0,
+        outputs = self.model.generate(  state ,
+                                        temperature=1.0,
                                             do_sample=True,
                                             max_length=self.max_length,
                                             num_return_sequences=self.num_samples,
@@ -71,12 +84,10 @@ class PolicyValueNetwork(nn.Module):
         values = self.value(last_hidden_state)
         return values
   
-
+    # state == (task, program line arr)
     def predict(self, state): 
         self.eval()
-        state = observation_tuple_to_string(state)
         state = self._tokenize(state)
-        state = state['input_ids']
         actions, action_probs =  self._compute_actions(state)
         values = self._compute_values(state, actions)
         actions = self._decode(actions)
@@ -97,7 +108,7 @@ if __name__ == "__main__":
     x4 = mfilter(x1, x3)
     x5 = fill(I, TWO, x4)"""
 
-
-    actions_probs, values = network.predict(state)
-    actions = [x[0] for x in actions_probs]
-    action_probs2 = network.forward(state, actions)
+    print(tokenizer(state, return_tensors='pt'))
+    #actions_probs, values = network.predict(state)
+    # actions = [x[0] for x in actions_probs]
+    # action_probs2 = network.forward(state, actions)
