@@ -10,7 +10,6 @@ def concat_states_and_actions(state, actions):
     state = state['input_ids'] # (1, L)
     state = state.repeat((actions.shape[0], 1))
     new_states = torch.cat((state, actions), dim=-1)
-
     return new_states
 
 # note: will handle the tokenization within the network
@@ -18,9 +17,10 @@ class PolicyValueNetwork(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self.model= T5ForConditionalGeneration.from_pretrained('Salesforce/codet5p-220m')
-        self.value = nn.Linear(768, 1)    
-        self.tokenizer =AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+        self.model= T5ForConditionalGeneration.from_pretrained('Salesforce/codet5-small')
+        self.model.eval()
+        self.value = nn.Linear(512, 1)    
+        self.tokenizer =AutoTokenizer.from_pretrained('Salesforce/codet5-small')
 
         # model parameters
         self.temperature = 0.95
@@ -28,74 +28,94 @@ class PolicyValueNetwork(nn.Module):
         self.num_samples = 5
         self.stop_strings =['\n']
 
-    def _to_tokens_and_logprobs(self, input_ids):
-        outputs = self.model(input_ids)
-        probs = torch.log_softmax(outputs.logits, dim=-1).detach()
-
-        # collect the probability of the generated token -- probability at index 0 corresponds to the token at index 1
+    def _compute_action_probs(self, input_ids, probs ):
         probs = probs[:, :-1, :]
         input_ids = input_ids[:, 1:]
         gen_probs = torch.gather(probs, 2, input_ids[:, :, None]).squeeze(-1)
 
         batch = []
         for input_sentence, input_probs in zip(input_ids, gen_probs):
-            text_sequence = []
+            log_probs = 0
             for token, p in zip(input_sentence, input_probs):
-                if token not in tokenizer.all_special_ids:
-                    text_sequence.append((tokenizer.decode(token), p.item()))
-            batch.append(text_sequence)
+                if token not in self.tokenizer.all_special_ids:
+                    log_probs += p.item()
+            batch.append(log_probs)
         return batch
-    
+
+
     def forward(self, state, actions): 
-        self.train()
+        self.eval()
         new_states = concat_states_and_actions(state, actions)
-        return new_states
-
+        logits = self.model.forward(input_ids=new_states, decoder_input_ids=new_states).logits
+        
+        # print(logits[-1])
+        #logits = logits[: , -actions.shape[1]:, :]
+        #action_probs = self._compute_action_probs(actions, logits)
+        # return action_probs
     
-    def _compute_action_probs(self, actions, scores): 
-        transition_scores = self.model.compute_transition_scores(actions, scores, normalize_logits=True).cpu()
-        output_length = np.sum(transition_scores.numpy()  < 0, axis=1)
-        length_penalty = self.model.generation_config.length_penalty
-        transition_scores[transition_scores == -float('inf')] = 0 # handle padding tokens
-        reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
-
-        return reconstructed_scores
 
     def _compute_actions(self, state):
-        outputs = self.model.generate(input_ids=state['input_ids'] ,
-                                        attention_mask=state['attention_mask'],
-                                        do_sample=True,
-                                        temperature=self.temperature,
-                                        max_length=self.max_length,
-                                        num_return_sequences=self.num_samples,
-                                        return_dict_in_generate=True,
-                                        output_scores=True,
-                                        stop_strings=self.stop_strings,
-                                        tokenizer= self.tokenizer) 
+        outputs = self.model.generate(state['input_ids'] ,
+                                            do_sample=True,
+                                            max_length=self.max_length,
+                                            num_return_sequences=self.num_samples,
+                                            return_dict_in_generate=True,
+                                            output_logits=True,
+                                            output_scores = True,
+                                            stop_strings=self.stop_strings,
+                                            tokenizer= self.tokenizer,
+                                            use_cache=False) 
+            
+
+
         
 
+        actions = outputs['sequences'][:, : ] # TODO: check if I should keep this.
+        logits = outputs.logits
+        logits = torch.stack(logits )
+        logits = logits.permute(1, 0, 2)
 
-        actions = outputs['sequences'][:, 1:] # TODO: check if I should keep this.
-        scores = outputs['scores']
-        action_probs = self._compute_action_probs(actions, scores)
-        return actions, action_probs
+        print(logits[-1, -1])
+        self.model.eval()
+        new_states = concat_states_and_actions(state, actions)
+        outputs = self.model.generate( new_states,
+                                            do_sample=True,
+                                            max_length=new_states.shape[1]+ 1,
+                                            num_return_sequences=self.num_samples,
+                                            return_dict_in_generate=True,
+                                            output_logits=True,
+                                            output_scores = True,
+                                            stop_strings=self.stop_strings,
+                                            tokenizer= self.tokenizer,
+                                            use_cache=False) 
 
+        logits = outputs.logits
+        logits = torch.stack(logits )
+        logits = logits.permute(1, 0, 2)
+        print(logits[-1, -1])
+        #action_probs = self._compute_action_probs(actions[:, 1:], logits)
+        #return actions, action_probs
+        return actions
+    
     def _compute_values(self, state, actions): 
         new_states = concat_states_and_actions(state, actions)
         last_hidden_state = self.model.forward(input_ids=new_states, decoder_input_ids=new_states,output_hidden_states=True).decoder_hidden_states[-1]
-        values = self.value(last_hidden_state)
-        return values
+        #values = self.value(last_hidden_state)
+        #return values
   
 
     # inference mode
     def predict(self, state): 
         self.eval()
-        actions, action_probs = self._compute_actions(state)
-        values = self._compute_values(state, actions)
-        return actions, action_probs, values
-
+        #actions, action_probs = 
+        actions = self._compute_actions(state)
+        #values = self._compute_values(state, actions)
+        #return actions, action_probs, values
+        return actions
     
 if __name__ == "__main__":
+    torch.manual_seed(0)
+    
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     network = PolicyValueNetwork()
@@ -109,11 +129,19 @@ if __name__ == "__main__":
     x5 = fill(I, TWO, x4)"""
 
     input_ids = tokenizer(state, return_tensors='pt').to('cuda')
-
-    actions, action_probs, values = network.predict(input_ids)
-    
+    actions = network.predict(input_ids)
     result = network.forward(input_ids, actions)
 
-    print(action_probs)
-    print(result)
     
+    #result = network.forward(input_ids)
+    # B x L 
+    # B x L x V 
+    
+    # input_ids = input_ids['input_ids']
+    # result = network.model.forward(input_ids=input_ids, decoder_input_ids=input_ids).logits
+    # probs = torch.log_softmax(result, dim=-1).detach()
+
+    # print(input_ids.shape)
+    # print(result.shape)
+    # print(probs.shape)
+    # print(network._compute_action_probs(input_ids, probs))
