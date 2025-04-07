@@ -51,6 +51,7 @@ class Agent():
         for eps in range(self.n_eps):
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
+            print(self.replay_buffer.sample())
 
         self.train()
 

@@ -84,7 +84,7 @@ class LineLevelArcEnv:
         observation = (self.task, state)
         terminated = False
         reward = 0
-        
+
         for i, st in enumerate(self.initial_states):
             program = "\n".join(state)
             program = append_return(program)
