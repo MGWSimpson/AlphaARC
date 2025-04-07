@@ -56,12 +56,12 @@ class PolicyValueNetwork(nn.Module):
 
     def _compute_actions(self, state):
         outputs = self.model.generate(state['input_ids'] ,
+                                      temperature=1.0,
                                             do_sample=True,
                                             max_length=self.max_length,
                                             num_return_sequences=self.num_samples,
                                             return_dict_in_generate=True,
                                             output_logits=True,
-                                            output_scores = True,
                                             stop_strings=self.stop_strings,
                                             tokenizer= self.tokenizer,
                                             use_cache=False) 
@@ -70,21 +70,21 @@ class PolicyValueNetwork(nn.Module):
 
         
 
-        actions = outputs['sequences'][:, : ] # TODO: check if I should keep this.
+        actions = outputs['sequences'][:, 1: ] # TODO: check if I should keep this.
         logits = outputs.logits
         logits = torch.stack(logits )
         logits = logits.permute(1, 0, 2)
 
-        print(logits[-1, -1])
+        print(logits)
         self.model.eval()
         new_states = concat_states_and_actions(state, actions)
         outputs = self.model.generate( new_states,
+                                        temperature=1.0,
                                             do_sample=True,
-                                            max_length=new_states.shape[1]+ 1,
+                                            max_length=new_states.shape[1]-1,
                                             num_return_sequences=self.num_samples,
                                             return_dict_in_generate=True,
                                             output_logits=True,
-                                            output_scores = True,
                                             stop_strings=self.stop_strings,
                                             tokenizer= self.tokenizer,
                                             use_cache=False) 
@@ -92,7 +92,7 @@ class PolicyValueNetwork(nn.Module):
         logits = outputs.logits
         logits = torch.stack(logits )
         logits = logits.permute(1, 0, 2)
-        print(logits[-1, -1])
+        print(logits)
         #action_probs = self._compute_action_probs(actions[:, 1:], logits)
         #return actions, action_probs
         return actions
