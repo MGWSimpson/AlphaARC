@@ -92,9 +92,9 @@ if __name__ == "__main__":
     x4 = mfilter(x1, x3)
     x5 = fill(I, TWO, x4)"""
 
+
     state = network.tokenize(state)
     actions, action_probs, values = network.predict(state)
-    
     action_probs2 = network.forward(state['input_ids'], actions)
 
 
