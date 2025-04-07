@@ -120,7 +120,7 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     network = PolicyValueNetwork()
     network.to('cuda')
-    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
 
     state = """x1 = objects(I, T, F, F)
     x2 = rbind(bordering, I)
@@ -128,9 +128,41 @@ if __name__ == "__main__":
     x4 = mfilter(x1, x3)
     x5 = fill(I, TWO, x4)"""
 
-    input_ids = tokenizer(state, return_tensors='pt').to('cuda')
-    actions = network.predict(input_ids)
-    result = network.forward(input_ids, actions)
+
+    input_ids = input_ids = tokenizer(state, return_tensors='pt').to('cuda')['input_ids']
+    
+    output = network.model.generate( input_ids,
+                                        temperature=1.0,
+                                            do_sample=True,
+                                            max_length=1024,
+                                            num_return_sequences=5,
+                                            return_dict_in_generate=True,
+                                            output_logits=True,
+                                            output_scores=True,
+                                            stop_strings=['\n'],
+                                            tokenizer=tokenizer,
+                                            use_cache=False)
+
+
+    sequences = output.sequences[: , :-1]
+    logits = torch.stack(output.logits)
+    logits = logits.permute(1, 0, 2)
+
+    actions = tokenizer.batch_decode(sequences)
+    new_state = [state + action for action in actions]
+    new_input_ids = tokenizer(new_state, return_tensors='pt').to('cuda')['input_ids']
+    other_logits = network.model(input_ids=input_ids.repeat(5, 1), decoder_input_ids=sequences).logits
+    
+    print(logits[:, -1])
+    print(other_logits[:, -1])
+    
+    
+
+    
+
+    #input_ids = tokenizer(state, return_tensors='pt').to('cuda')
+    #actions = network.predict(input_ids)
+    #result = network.forward(input_ids, actions)
 
     
     #result = network.forward(input_ids)
