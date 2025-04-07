@@ -2,9 +2,6 @@ import numpy as np
 import torch
 
 
-"""
-TODO: probably should rewrite this to make it more numpy like.
-"""
 class ReplayBuffer(): 
     def __init__(self, sample_batch_size=8):
         self.history = []

@@ -30,10 +30,13 @@ class Agent():
             root = self.mcts.run(self.model, state)
 
             action_probs = [0 for _ in range(env.get_action_space())]
+            actions = []
             for i, (k, v) in enumerate(root.children.items()):
                 action_probs[i] = v.visit_count
-
+                actions.append(k)
+            
             action_probs = action_probs / np.sum(action_probs)
+            action_probs = zip(actions, action_probs)
             train_examples.append((state, action_probs))
 
             action = root.select_action(temperature=0)
