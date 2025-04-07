@@ -3,8 +3,10 @@ from networks import PolicyValueNetwork
 from mcts import MCTS
 from buffers import ReplayBuffer
 
+from alphaarc.policy.environment import execute_candidate_program
+from alphaarc.task import Task
 
-
+from alphaarc.env import LineLevelArcEnv
  
 class Agent(): 
     
@@ -54,3 +56,14 @@ class Agent():
     
     def train(self):
         pass
+
+
+if __name__ == "__main__": 
+    task = Task.from_json('data/training/67385a82.json')
+    env = LineLevelArcEnv(task)
+    program1 = """x1 = objects(I, T, F, F)"""
+    program2 = "x2 = colorfilter(x1, THREE)"
+    
+    print(env.step(program1))  
+    print(env.step(program2))
+   

@@ -6,9 +6,6 @@ from env import LineLevelArcEnv
 from networks import PolicyValueNetwork
 
 
-"""
-TODO: must alter MCTS.
-"""
 
 def ucb_score(parent, child):
     """

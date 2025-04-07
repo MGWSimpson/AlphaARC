@@ -41,7 +41,6 @@ class LineLevelArcEnv:
         ]
 
         self.n_actions = 5 # n lines of code allowed.
-
         self.state = []
 
     # action corresponds to a line of code

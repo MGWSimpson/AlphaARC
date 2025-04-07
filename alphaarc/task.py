@@ -1,4 +1,3 @@
-# TODO: might end up removing the program line stuff but won't get bogged down.
 
 
 # Copyright (c) 2024 Qualcomm Technologies, Inc.
