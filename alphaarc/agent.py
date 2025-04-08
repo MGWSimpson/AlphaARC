@@ -41,15 +41,15 @@ class Agent():
             root = self.mcts.run(self.model, state)
 
             action_probs = [0 for _ in range(env.get_action_space())]
-            actions = []
+            actions = ["" for _ in range(env.get_action_space())]
             for i, (k, v) in enumerate(root.children.items()):
                 action_probs[i] = v.visit_count
-                actions.append(k)
+                actions[i] = k
             
             action_probs = action_probs / np.sum(action_probs)
-            action_probs = zip(actions, action_probs)
             
-            train_examples.append((state, action_probs))
+            pr = zip(actions, action_probs)
+            train_examples.append((state, pr))
 
             action = root.select_action(temperature=0)
             state, reward, terminated = env.step(action=action, state=state)
@@ -76,43 +76,34 @@ class Agent():
 
         for i in range(self.n_iters):
             states, action_probs, values = self.replay_buffer.sample()
-            
-            # TODO: start from here making it all batchified.
-            # action_probs = list zips
-            # targets
-            target_vs = torch.FloatTensor(np.array(values).astype(np.float64))
-            batch_target_pis = []
-            actions = []
-            for prob_zip in action_probs:
-                # Convert the zipped items to a list of (action, probability)
-                prob_list = list(prob_zip)
-                # Initialize a distribution tensor with zeros
-                target_pi = torch.zeros(5, dtype=torch.float32)
-                action_list = []
-                # Fill in the probabilities for the actions presented.
-                for i, (action, prob) in enumerate(prob_list):
-                    target_pi[i] = prob
-                    action_list.append(action)
+            for idx in range(len(values)): 
+                s, pr, v, = states[idx], action_probs[idx], values[idx]
 
-                batch_target_pis.append(target_pi)
-                actions.append(action_list)
-            # Stack to get a tensor of shape: (batch_size, n_actions)
-            target_pis = torch.stack(batch_target_pis)
-        
-            
-            # compute output
-            predicted_vs = self.model.value_forward(state=states, actions=actions)
-            predicted_pi = self.model.forward(states=states, actions=actions)
+                actions = []
+                target_pis = []
+                pr = list(pr)
+                for lx in pr:
+                    l , x = lx
+                    actions.append(l)
+                    target_pis.append(x) 
+
+                if len(actions) == 0:
+                    continue
+                target_vs = torch.FloatTensor(np.array(v).astype(np.float64)).to('cuda')
+                target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64)).to('cuda')
+                
+                predicted_pi = self.model.forward(state=s, actions=actions).to('cuda')
+                predicted_vs = self.model.value_forward(state=s, actions=actions).to('cuda')
 
 
-            policy_loss = F.cross_entropy(predicted_pi, target_pis)
-            value_loss = F.mse_loss( predicted_vs, target_vs)
+    
+                policy_loss = F.cross_entropy(predicted_pi, target_pis)
+                value_loss = F.mse_loss( predicted_vs, target_vs)
 
-            loss = policy_loss + value_loss # TODO: add in a balancing term.
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
+                loss = policy_loss + value_loss # TODO: add in a balancing term.
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
 
 if __name__ == "__main__": 

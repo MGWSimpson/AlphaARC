@@ -32,16 +32,21 @@ class PolicyValueNetwork(nn.Module):
 
         self.device = 'cuda'        
 
-    def _tokenize(self, state):
+    def _state_tokenize(self, state):
         task, program_lines = state
+        program_lines = "\n".join(program_lines)
         task_tokens = torch.tensor(tokenize_task(task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'], device=self.device).unsqueeze(0) 
         
         if len(program_lines) == 0:
             return task_tokens
         
         program_tokens = self.tokenizer(program_lines, return_tensors='pt')['input_ids'].to(self.device)
-        
-        return torch.cat((task_tokens, program_tokens)).to(self.device)
+        return torch.cat((task_tokens, program_tokens), dim=-1).to(self.device)
+
+    def _action_tokenize(self, actions):
+        print(actions) 
+        return self.tokenizer(actions,padding='longest', return_tensors='pt')['input_ids'].to(self.device)
+
 
     def _decode(self, tokens):
         return self.tokenizer.batch_decode(tokens)
@@ -52,14 +57,7 @@ class PolicyValueNetwork(nn.Module):
         scores = torch.softmax(scores, dim=-1)
         return scores
 
-    def forward(self, state, actions): 
-        self.eval()
-        state = self._tokenize(state)['input_ids']
-        actions = self._tokenize(actions)['input_ids']
-        logits = network.model(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False).logits
-        scores = self._compute_score_from_logits(actions, logits)
-        return scores
-
+    
     def _compute_actions(self, state):
         outputs = self.model.generate(  state ,
                                         temperature=1.0,
@@ -83,19 +81,30 @@ class PolicyValueNetwork(nn.Module):
         last_hidden_state = self.model.forward(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False, output_hidden_states=True).decoder_hidden_states[-1]
         values = self.value(last_hidden_state)
         return values
-  
+    
+    
+
     # state == (task, program line arr)
     def predict(self, state): 
         self.eval()
-        state = self._tokenize(state)
+        state = self._state_tokenize(state)
         actions, action_probs =  self._compute_actions(state)
         values = self._compute_values(state, actions)
         actions = self._decode(actions)
         return zip(actions, action_probs), values
-        
+    
+    def forward(self, state, actions): 
+        self.eval()
+        state = self._state_tokenize(state) 
+        actions = self._action_tokenize(actions) 
+        logits = self.model(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False).logits
+        scores = self._compute_score_from_logits(actions, logits)
+        return scores
+
+
     def value_forward(self, state, actions):
-        state = self._tokenize(state)
-        actions = self._tokenize(actions)['input_ids']
+        state = self._state_tokenize(state)
+        actions = self._action_tokenize(actions) 
         return self._compute_values(state=state, actions=actions)
     
 if __name__ == "__main__":
