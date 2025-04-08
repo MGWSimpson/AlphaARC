@@ -26,20 +26,6 @@ from codeit.utils import get_num_pixels
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
-def calculate_performance_over_inference_tasks(solutions, inference_keys):
-    task_demonstration_performance_list = []
-    test_performance_list = []
-    for task_key in inference_keys:
-        task_demonstration_performance, test_performance = calculate_performance(
-            solutions, task_key
-        )
-        task_demonstration_performance_list.append(task_demonstration_performance)
-        test_performance_list.append(test_performance)
-    return {
-        "task_demonstration_performance": task_demonstration_performance_list,
-        "test_performance": test_performance_list,
-    }
-
 
 def filter_by_inference_keys(tasks, inference_keys):
     task_keys = [
@@ -51,52 +37,6 @@ def filter_by_inference_keys(tasks, inference_keys):
     return filtered_tasks
 
 
-def initialise_csv_writer(config):
-    results_dir = config.run_dir + "/performance.csv"
-    with open(results_dir, "w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(
-            [
-                "meta_iteration",
-                "cumulative_performance",
-                "performance",
-                "step",
-                "num_mutated_tasks",
-                "num_policy_tasks",
-            ]
-        )
-
-
-def write_performance(
-    config,
-    meta_iteration,
-    cumulative_performance,
-    performance,
-    step,
-    num_mutated_tasks,
-    num_policy_tasks,
-):
-    results_dir = config.run_dir + "/performance.csv"
-    with open(results_dir, "a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(
-            [
-                meta_iteration,
-                cumulative_performance,
-                performance,
-                step,
-                num_mutated_tasks,
-                num_policy_tasks,
-            ]
-        )
-
-
-def get_num_programs(agent, mode="policy"):
-    return copy.copy(len(agent.replay_buffer.programs[mode]))
-
-
-def get_num_tasks(agent, mode="policy"):
-    return copy.copy(len(agent.replay_buffer.entries[mode]))
 
 
 def filter_and_load_mutated_tasks(mutated_train_tasks):
