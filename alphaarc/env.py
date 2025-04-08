@@ -90,14 +90,15 @@ class LineLevelArcEnv:
             program = append_return(program)
             output = execute_candidate_program(program_string=program, program_input=st)
             if output == "Invalid Input": 
-                terminated = True
-                reward -= -1
+                #terminated = True # TODO: change this back to false
+                reward -= 0
 
             if output == self.goal_states[i]:
                 reward +=1
-                terminated = True
+                # terminated = True
                 
 
+        terminated = (reward ==  len(self.initial_states))
         reward /= len(self.initial_states)
         return observation, reward, terminated
     

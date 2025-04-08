@@ -37,7 +37,7 @@ class Agent():
         terminated = False
 
         while not terminated:
-            self.mcts = MCTS(env, self.model, n_simulations=self.n_simulations)
+            self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
 
             action_probs = [0 for _ in range(env.get_action_space())]
@@ -87,8 +87,7 @@ class Agent():
                     actions.append(l)
                     target_pis.append(x) 
 
-                if len(actions) == 0:
-                    continue
+                
                 target_vs = torch.FloatTensor(np.array(v).astype(np.float64)).to('cuda')
                 target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64)).to('cuda')
                 

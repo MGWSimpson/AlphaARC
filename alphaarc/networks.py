@@ -44,7 +44,6 @@ class PolicyValueNetwork(nn.Module):
         return torch.cat((task_tokens, program_tokens), dim=-1).to(self.device)
 
     def _action_tokenize(self, actions):
-        print(actions) 
         return self.tokenizer(actions,padding='longest', return_tensors='pt')['input_ids'].to(self.device)
 
 

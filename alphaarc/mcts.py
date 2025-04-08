@@ -96,21 +96,15 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, env: LineLevelArcEnv, model, n_simulations):
+    def __init__(self, env: LineLevelArcEnv, n_simulations):
         self.env = env
-        self.model = model
         self.n_simulations = n_simulations
 
     def run(self, model, state):
 
         root = Node(0)
 
-        # EXPAND root
         action_probs, value = model.predict(state)
-        
-        
-        # normalize_actions()
-
         root.expand(state, action_probs)
 
         for _ in range(self.n_simulations):
