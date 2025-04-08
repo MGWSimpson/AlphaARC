@@ -14,6 +14,4 @@ class ReplayBuffer():
     def sample(self):
         sample_ids = np.random.randint(len(self.history), size=self.sample_batch_size)
         states, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
-
-   
         return states, action_probs, values

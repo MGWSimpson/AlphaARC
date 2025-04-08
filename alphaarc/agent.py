@@ -13,6 +13,11 @@ import torch
 
 import torch.nn.functional as F
 
+
+
+def unpack_actions():
+    pass
+
 class Agent(): 
     
     def __init__(self, n_eps=10, n_simulations=5):
@@ -71,16 +76,31 @@ class Agent():
 
         for i in range(self.n_iters):
             states, action_probs, values = self.replay_buffer.sample()
-            actions, action_probs = action_probs
-
-
+            
+            # action_probs = list zips
             # targets
-            target_pis = torch.FloatTensor(np.array(action_probs).astype(np.float64))
             target_vs = torch.FloatTensor(np.array(values).astype(np.float64))
+            batch_target_pis = []
+            actions = []
+            for prob_zip in action_probs:
+                # Convert the zipped items to a list of (action, probability)
+                prob_list = list(prob_zip)
+                # Initialize a distribution tensor with zeros
+                target_pi = torch.zeros(5, dtype=torch.float32)
+                action_list = []
+                # Fill in the probabilities for the actions presented.
+                for i, (action, prob) in enumerate(prob_list):
+                    target_pi[i] = prob
+                    action_list.append(action)
 
+                batch_target_pis.append(target_pi)
+                actions.append(action_list)
+            # Stack to get a tensor of shape: (batch_size, n_actions)
+            target_pis = torch.stack(batch_target_pis)
+        
             
             # compute output
-            predicted_vs = self.model.value(state=states, actions=actions)
+            predicted_vs = self.model.value_forward(state=states, actions=actions)
             predicted_pi = self.model.forward(states=states, actions=actions)
 
 

@@ -93,7 +93,7 @@ class PolicyValueNetwork(nn.Module):
         actions = self._decode(actions)
         return zip(actions, action_probs), values
         
-    def value(self, state, actions):
+    def value_forward(self, state, actions):
         state = self._tokenize(state)
         actions = self._tokenize(actions)['input_ids']
         return self._compute_values(state=state, actions=actions)
