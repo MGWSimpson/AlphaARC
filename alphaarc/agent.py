@@ -77,6 +77,7 @@ class Agent():
         for i in range(self.n_iters):
             states, action_probs, values = self.replay_buffer.sample()
             
+            # TODO: start from here making it all batchified.
             # action_probs = list zips
             # targets
             target_vs = torch.FloatTensor(np.array(values).astype(np.float64))
