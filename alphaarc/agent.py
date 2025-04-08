@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch
 
 import torch.nn.functional as F
-
+from tqdm import tqdm
 
 
 def unpack_actions():
@@ -20,7 +20,7 @@ def unpack_actions():
 
 class Agent(): 
     
-    def __init__(self, n_eps=10, n_simulations=5):
+    def __init__(self, n_eps=2, n_simulations=5):
         # how many episodes to generate per enviroment
         self.n_eps = n_eps
         self.n_simulations = n_simulations
@@ -75,11 +75,12 @@ class Agent():
         optimizer = optim.Adam(self.model.parameters())
         self.model.train()
 
-        for i in range(self.n_iters):
+        for i in tqdm(range(self.n_iters)):
             states, action_probs, values = self.replay_buffer.sample()
             for idx in range(len(values)): 
                 s, pr, v, = states[idx], action_probs[idx], values[idx]
 
+                
                 actions = []
                 target_pis = []
                 pr = list(pr)
@@ -88,7 +89,12 @@ class Agent():
                     actions.append(l)
                     target_pis.append(x) 
 
-                
+                if len(pr) == 0:
+                    if v == 1:
+                        print("PLEASE NO!")
+                    continue
+                    
+
                 target_vs = torch.FloatTensor(np.array(v).astype(np.float64)).to('cuda')
                 target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64)).to('cuda')
                 

@@ -99,7 +99,7 @@ class LineLevelArcEnv:
 
         terminated = (reward ==  len(self.initial_states)) or len(state) > 15
         reward /= len(self.initial_states)
-
+        print(len(state))
         return observation, reward, terminated
     
 
