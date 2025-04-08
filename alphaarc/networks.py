@@ -58,7 +58,7 @@ class PolicyValueNetwork(nn.Module):
         actions = self._tokenize(actions)['input_ids']
         logits = network.model(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False).logits
         scores = self._compute_score_from_logits(actions, logits)
-        return zip(actions, scores)
+        return scores
 
     def _compute_actions(self, state):
         outputs = self.model.generate(  state ,
@@ -93,6 +93,11 @@ class PolicyValueNetwork(nn.Module):
         actions = self._decode(actions)
         return zip(actions, action_probs), values
         
+    def value(self, state, actions):
+        state = self._tokenize(state)
+        actions = self._tokenize(actions)['input_ids']
+        return self._compute_values(state=state, actions=actions)
+    
 if __name__ == "__main__":
     torch.manual_seed(0)
     

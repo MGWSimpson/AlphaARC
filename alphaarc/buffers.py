@@ -15,9 +15,5 @@ class ReplayBuffer():
         sample_ids = np.random.randint(len(self.history), size=self.sample_batch_size)
         states, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
 
-        states = torch.FloatTensor(np.array(states).astype(np.float64))
-        action_probs = torch.FloatTensor(np.array(action_probs).astype(np.float64))
-        values = torch.FloatTensor(np.array(values).astype(np.float64))
-
-
+   
         return states, action_probs, values

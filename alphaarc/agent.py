@@ -5,9 +5,14 @@ from buffers import ReplayBuffer
 
 from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
-
 from alphaarc.env import LineLevelArcEnv
  
+import torch.optim as optim
+import torch
+
+
+import torch.nn.functional as F
+
 class Agent(): 
     
     def __init__(self, n_eps=10, n_simulations=5):
@@ -17,6 +22,7 @@ class Agent():
         self.replay_buffer = ReplayBuffer()
         self.model = PolicyValueNetwork()
 
+        self.n_iters = 10
         self.model.to('cuda')
 
     def execute_episode(self, env): 
@@ -37,6 +43,7 @@ class Agent():
             
             action_probs = action_probs / np.sum(action_probs)
             action_probs = zip(actions, action_probs)
+            
             train_examples.append((state, action_probs))
 
             action = root.select_action(temperature=0)
@@ -54,13 +61,37 @@ class Agent():
         for eps in range(self.n_eps):
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
-            print(self.replay_buffer.sample())
 
         self.train()
 
     
     def train(self):
-        pass
+        optimizer = optim.Adam(self.model.parameters())
+        self.model.train()
+
+        for i in range(self.n_iters):
+            states, action_probs, values = self.replay_buffer.sample()
+            actions, action_probs = action_probs
+
+
+            # targets
+            target_pis = torch.FloatTensor(np.array(action_probs).astype(np.float64))
+            target_vs = torch.FloatTensor(np.array(values).astype(np.float64))
+
+            
+            # compute output
+            predicted_vs = self.model.value(state=states, actions=actions)
+            predicted_pi = self.model.forward(states=states, actions=actions)
+
+
+            policy_loss = F.cross_entropy(predicted_pi, target_pis)
+            value_loss = F.mse_loss( predicted_vs, target_vs)
+
+            loss = policy_loss + value_loss # TODO: add in a balancing term.
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
 
 
 if __name__ == "__main__": 
