@@ -51,10 +51,9 @@ class LineLevelArcEnv:
         ]
 
         self.n_actions = 5 # n lines of code allowed.
-        self.state = []
 
     # action corresponds to a line of code
-    def step(self, action):
+    """def step(self, action):
         self.state.append(action)
         reward = 0
         observation = (self.initial_states, self.goal_states, self.state)
@@ -74,7 +73,7 @@ class LineLevelArcEnv:
                 
 
         reward /= len(self.initial_states)
-        return observation, reward, terminated
+        return observation, reward, terminated"""
     
 
     def step(self, action, state): 
@@ -98,8 +97,9 @@ class LineLevelArcEnv:
                 # terminated = True
                 
 
-        terminated = (reward ==  len(self.initial_states))
+        terminated = (reward ==  len(self.initial_states)) or len(state) > 15
         reward /= len(self.initial_states)
+
         return observation, reward, terminated
     
 
@@ -107,8 +107,7 @@ class LineLevelArcEnv:
         return self.n_actions
  
     def reset(self): 
-        self.state = []
-        return (self.task, self.state)
+        return (self.task, [])
     
 
 

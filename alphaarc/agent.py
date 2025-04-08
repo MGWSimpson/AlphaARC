@@ -6,10 +6,10 @@ from buffers import ReplayBuffer
 from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
 from alphaarc.env import LineLevelArcEnv
- 
+
+import os
 import torch.optim as optim
 import torch
-
 
 import torch.nn.functional as F
 
@@ -37,6 +37,7 @@ class Agent():
         terminated = False
 
         while not terminated:
+            print("REAL STEP")
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
 
@@ -92,20 +93,23 @@ class Agent():
                 target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64)).to('cuda')
                 
                 predicted_pi = self.model.forward(state=s, actions=actions).to('cuda')
-                predicted_vs = self.model.value_forward(state=s, actions=actions).to('cuda')
+                predicted_vs = self.model.value_forward(state=s).to('cuda')
 
 
     
                 policy_loss = F.cross_entropy(predicted_pi, target_pis)
                 value_loss = F.mse_loss( predicted_vs, target_vs)
 
-                loss = policy_loss + value_loss # TODO: add in a balancing term.
+                loss = policy_loss + value_loss 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+ 
     task = Task.from_json('data/training/67385a82.json')
     env = LineLevelArcEnv(task)
     agent = Agent()

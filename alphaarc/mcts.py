@@ -4,7 +4,7 @@ import numpy as np
 
 from env import LineLevelArcEnv
 from networks import PolicyValueNetwork
-
+import gc
 
 
 def ucb_score(parent, child):
@@ -106,8 +106,9 @@ class MCTS:
 
         action_probs, value = model.predict(state)
         root.expand(state, action_probs)
-
+        
         for _ in range(self.n_simulations):
+           
             node = root
             search_path = [node]
 
@@ -125,7 +126,6 @@ class MCTS:
                 # If the game has not ended:
                 # EXPAND
                 action_probs, value = model.predict(next_state)
-                
                 # normalize_actions()
                 node.expand(next_state, action_probs)
             self.backpropagate(search_path, value)
