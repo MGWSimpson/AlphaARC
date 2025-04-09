@@ -52,28 +52,6 @@ class LineLevelArcEnv:
 
         self.n_actions = 5 # n lines of code allowed.
 
-    # action corresponds to a line of code
-    """def step(self, action):
-        self.state.append(action)
-        reward = 0
-        observation = (self.initial_states, self.goal_states, self.state)
-        terminated = False
-        
-        for i, state in enumerate(self.initial_states):
-            program = "\n".join(self.state)
-            program = append_return(program)
-            output = execute_candidate_program(program_string=program, program_input=state)
-            if output == "Invalid Input": 
-                terminated = True
-                reward -= -1
-
-            if output == self.goal_states[i]:
-                reward +=1
-                terminated = True
-                
-
-        reward /= len(self.initial_states)
-        return observation, reward, terminated"""
     
 
     def step(self, action, state): 
@@ -93,13 +71,13 @@ class LineLevelArcEnv:
                 reward -= 0
 
             if output == self.goal_states[i]:
-                reward +=1
                 # terminated = True
-                
+                reward +=1
 
+
+        print(len(state))
         terminated = (reward ==  len(self.initial_states)) or len(state) > 15
         reward /= len(self.initial_states)
-        print(len(state))
         return observation, reward, terminated
     
 

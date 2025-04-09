@@ -6,11 +6,9 @@ import numpy as np
 from numpy import inf
 from alphaarc.policy.tokenize import tokenize_task
 
+import torch.nn.functional as F
 
-"""
-State is presently defined as:
-(task, lines of the program so far)
-"""
+
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,10 +50,12 @@ class PolicyValueNetwork(nn.Module):
 
     # TODO: fill this function out where we assign the pr of taking each action relative to each other one.    
     def _compute_score_from_logits(self, actions, logits): 
-        scores = torch.rand((actions.shape[0]))
-        scores = torch.softmax(scores, dim=-1)
-        return scores
-
+        probabilities = F.softmax(logits, dim=-1) 
+        chosen_token_probs = probabilities.gather(dim=-1, index=actions.unsqueeze(-1)).squeeze(-1)
+        chosen_token_probs = torch.clamp(chosen_token_probs, min=1e-12)
+        log_seq_scores = torch.log(chosen_token_probs).sum(dim=-1)
+        normalized_scores = F.softmax(log_seq_scores, dim=0)
+        return normalized_scores
     
     def _compute_actions(self, state):
         outputs = self.model.generate(      state.to('cuda'),
@@ -100,7 +100,7 @@ class PolicyValueNetwork(nn.Module):
         state = self._state_tokenize(state) 
         actions = self._action_tokenize(actions) 
         logits = self.model(input_ids=state.repeat(actions.shape[0], 1).to('cuda'), decoder_input_ids=actions.to('cuda'), use_cache=False).logits
-        scores = self._compute_score_from_logits(actions, logits)
+        scores = self._compute_score_from_logits(actions.to('cuda'), logits.to('cuda'))
         return scores
 
 

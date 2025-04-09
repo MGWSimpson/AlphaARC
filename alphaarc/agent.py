@@ -15,12 +15,9 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 
-def unpack_actions():
-    pass
-
 class Agent(): 
     
-    def __init__(self, n_eps=2, n_simulations=5):
+    def __init__(self, n_eps=2, n_simulations=100):
         # how many episodes to generate per enviroment
         self.n_eps = n_eps
         self.n_simulations = n_simulations
@@ -37,7 +34,6 @@ class Agent():
         terminated = False
 
         while not terminated:
-            print("REAL STEP")
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
 
@@ -52,7 +48,7 @@ class Agent():
             pr = zip(actions, action_probs)
             train_examples.append((state, pr))
 
-            action = root.select_action(temperature=0)
+            action = root.select_action(temperature=0.5)
             state, reward, terminated = env.step(action=action, state=state)
 
             if terminated:

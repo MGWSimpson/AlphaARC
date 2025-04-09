@@ -105,6 +105,7 @@ class MCTS:
         root = Node(0)
 
         action_probs, value = model.predict(state)
+        print(action_probs)
         root.expand(state, action_probs)
         
         for _ in range(self.n_simulations):
