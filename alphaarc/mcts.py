@@ -85,7 +85,7 @@ class Node:
         self.state = copy.deepcopy(state)
         for a, prob in (action_probs):
             if prob != 0:
-                self.children[a] = Node(prior=0.2)
+                self.children[a] = Node(prior=prob)
 
     def __repr__(self):
         """
