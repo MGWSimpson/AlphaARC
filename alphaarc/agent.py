@@ -88,7 +88,7 @@ class Agent():
                 ret = []
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     # [state, actions,  actionProbabilities, Reward]
-                    # NOTE: It 
+                    # NOTE: It may be theoretically better to store each transition seperately.  
                     ret.append((np.concatenate((env.reset(), hist_state)), hist_actions, hist_action_probs, reward))
                 return ret 
 
@@ -110,7 +110,6 @@ class Agent():
             states, actions, action_probs, values = self.replay_buffer.sample()
             target_vs = torch.FloatTensor(np.array(values).astype(np.float64)).to('cuda')
             target_pis = torch.FloatTensor(np.array(action_probs).astype(np.float64)).to('cuda')
-
             states, actions = pad_and_convert(states, actions, pad_value=self.model.tokenizer.pad_token_type_id)
 
             predicted_pi = self.model.forward(state=states, actions=actions).to('cuda')
