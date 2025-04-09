@@ -3,7 +3,7 @@ import torch
 
 
 class ReplayBuffer(): 
-    def __init__(self, sample_batch_size=8):
+    def __init__(self, sample_batch_size=2):
         self.history = []
         self.sample_batch_size = sample_batch_size
 
@@ -13,5 +13,5 @@ class ReplayBuffer():
 
     def sample(self):
         sample_ids = np.random.randint(len(self.history), size=self.sample_batch_size)
-        states, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
-        return states, action_probs, values
+        states, actions, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
+        return states ,actions, action_probs, values

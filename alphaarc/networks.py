@@ -80,16 +80,20 @@ class PolicyValueNetwork(nn.Module):
     
 
     def forward(self, state, actions): 
-        self.eval()
-        state = self._state_tokenize(state) 
-        actions = self._action_tokenize(actions) 
-        logits = self.model(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False).logits
+        
+        B, L = state.shape
+        B, A, AL = actions.shape
+
+
+        for i in range(B):
+            logits = self.model(input_ids=state[B].repeat(A, 1), decoder_input_ids=actions[B], use_cache=False).logits
+
+        print(logits.shape)
         scores = self._compute_score_from_logits(actions, logits)
         return scores
 
 
     def value_forward(self, state):
-        state = self._state_tokenize(state)
         return self._compute_values(state=state)
     
 if __name__ == "__main__":

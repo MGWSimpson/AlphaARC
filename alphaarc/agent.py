@@ -15,17 +15,53 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
+
+def pad_and_convert(states, actions, pad_value=0.0, device='cuda'):
+    # Determine the maximum sequence length for states
+    max_state_seq_length = max(state.shape[-1] for state in states)
+    
+    # Pad each state along the sequence dimension
+    padded_states = []
+    for state in states:
+        pad_len = max_state_seq_length - state.shape[-1]
+        # If state is 1D, pad width is (before, after)
+        padded_state = np.pad(state, pad_width=(0, pad_len), mode='constant', constant_values=pad_value)
+        padded_states.append(padded_state)
+    # Convert list to a numpy array (shape: [batch_size, max_state_seq_length])
+    padded_states = np.stack(padded_states, axis=0)
+    
+    # Determine the maximum sequence length for actions
+    # We assume all actions have the same number of actions, only the sequence length varies.
+    max_action_seq_length = max(action.shape[-1] for action in actions)
+    
+    # Pad each action along the sequence dimension (last dimension)
+    padded_actions = []
+    for action in actions:
+        pad_len = max_action_seq_length - action.shape[-1]
+        # For a 2D array of shape (n_actions, sequence_length), pad only the sequence axis.
+        padded_action = np.pad(action, pad_width=((0, 0), (0, pad_len)), mode='constant', constant_values=pad_value)
+        padded_actions.append(padded_action)
+    # Convert list to a numpy array (shape: [batch_size, n_actions, max_action_seq_length])
+    padded_actions = np.stack(padded_actions, axis=0)
+    
+    # Convert to PyTorch tensors and move to specified device
+    states_tensor = torch.IntTensor(padded_states).to(device)
+    actions_tensor = torch.IntTensor(padded_actions).to(device)
+    
+    return states_tensor, actions_tensor
+
+
 # save.
 class Agent(): 
     
-    def __init__(self, n_eps=2, n_simulations=20):
+    def __init__(self, n_eps=2, n_simulations=3):
         # how many episodes to generate per enviroment
         self.n_eps = n_eps
         self.n_simulations = n_simulations
         self.replay_buffer = ReplayBuffer()
         self.model = PolicyValueNetwork()
 
-        self.n_iters = 10
+        self.n_iters = 5
         self.model.to('cuda')
 
     def execute_episode(self, env): 
@@ -52,7 +88,7 @@ class Agent():
                 ret = []
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     # [state, actions,  actionProbabilities, Reward]
-                    ret.append((hist_state, hist_actions, hist_action_probs, reward))
+                    ret.append((np.concatenate((env.reset(), hist_state)), hist_actions, hist_action_probs, reward))
                 return ret 
 
 
@@ -62,7 +98,7 @@ class Agent():
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
 
-        # self.train()
+        self.train()
 
     
     def train(self):
@@ -71,37 +107,26 @@ class Agent():
 
         for i in tqdm(range(self.n_iters)):
             states, actions, action_probs, values = self.replay_buffer.sample()
-            for idx in range(len(values)): 
-                s, pr, v, = states[idx], action_probs[idx], values[idx]
-                actions = []
-                target_pis = []
-                pr = list(pr)
-                for lx in pr:
-                    l , x = lx
-                    actions.append(l)
-                    target_pis.append(x) 
+            
+            
+            target_vs = torch.FloatTensor(np.array(values).astype(np.float64)).to('cuda')
+            target_pis = torch.FloatTensor(np.array(action_probs).astype(np.float64)).to('cuda')
 
-                if len(pr) == 0:
-                    if v == 1:
-                        print("PLEASE NO!")
-                    continue
-                    
+            
+            states, actions = pad_and_convert(states, actions, pad_value=self.model.tokenizer.pad_token_type_id)
 
-                target_vs = torch.FloatTensor(np.array(v).astype(np.float64)).to('cuda')
-                target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64)).to('cuda')
-                
-                predicted_pi = self.model.forward(state=s, actions=actions).to('cuda')
-                predicted_vs = self.model.value_forward(state=s).to('cuda')
+            predicted_pi = self.model.forward(state=states, actions=actions).to('cuda')
+            predicted_vs = self.model.value_forward(state=states).to('cuda')
 
 
     
-                policy_loss = F.cross_entropy(predicted_pi, target_pis)
-                value_loss = F.mse_loss( predicted_vs, target_vs)
+            policy_loss = F.cross_entropy(predicted_pi, target_pis)
+            value_loss = F.mse_loss( predicted_vs, target_vs)
 
-                loss = policy_loss + value_loss 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            loss = policy_loss + value_loss 
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
 
 if __name__ == "__main__":
