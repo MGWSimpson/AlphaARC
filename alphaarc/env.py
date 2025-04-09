@@ -3,10 +3,11 @@ from alphaarc.task import Task
 from alphaarc.policy.tokenize import tokenize_task, TextEncoder
 from transformers import AutoTokenizer
 import copy
+import numpy as np
+import torch
 
 def append_action_to_state(state, action): 
     return state + action
-
 
 def get_last_var_assignment(lines):
     last_var = ""
@@ -29,17 +30,8 @@ def append_return(program):
 
 
 
-"""
-Gym like enviroment for ARC DSL task.
-
-Need to think about how I will structure this now.
-At some point I will have to construct it into a string.
-The question is whether I do that within the model or the enviroment.
-
-
-"""
 class LineLevelArcEnv:
-    def __init__(self, task: Task):
+    def __init__(self, task: Task, tokenizer):
         self.task = task
         self.n_examples = 100
         self.initial_states = [
@@ -50,21 +42,44 @@ class LineLevelArcEnv:
                 training_example["output"]
                 for training_example in task.training_examples[: self.n_examples]
         ]
+        self.input_state_max = 1024
+        self.max_length = 1024
 
         self.n_actions = 5 # n lines of code allowed.
+        self.tokenizer = tokenizer
 
-    
+        self.new_line_arr = self.tokenizer("\n", return_tensors='np')['input_ids'].squeeze()
 
+
+
+    def _state_tokenize(self, state):
+        task, program_lines = state
+        program_lines = "\n".join(program_lines)
+        task_tokens = torch.tensor(tokenize_task(task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids']).unsqueeze(0) 
+        
+        if len(program_lines) == 0:
+            return task_tokens
+        
+        program_tokens = self.tokenizer(program_lines, return_tensors='pt')['input_ids'] 
+        return torch.cat((task_tokens, program_tokens), dim=-1) 
+
+    def _action_tokenize(self, actions):
+        return self.tokenizer(actions,padding='longest', return_tensors='pt')['input_ids']
+
+
+    def _decode(self, tokens):
+        return "".join(self.tokenizer.batch_decode(tokens))
+
+    # action = new program tokens
+    # state =  previous program tokens 
     def step(self, action, state): 
-        task, state_info = state
-        state = copy.deepcopy(state_info)
-        state.append(action)
-        observation = (self.task, state)
+        state = copy.deepcopy(state)
+
+        observation = np.concatenate((state, action, self.new_line_arr))
         terminated = False
         reward = 0
-
+        program = self._decode(observation)
         for i, st in enumerate(self.initial_states):
-            program = "\n".join(state)
             program = append_return(program)
             output = execute_candidate_program(program_string=program, program_input=st)
             if output == "Invalid Input": 
@@ -75,9 +90,7 @@ class LineLevelArcEnv:
                 # terminated = True
                 reward +=1
 
-
-        print(len(state))
-        terminated = (reward ==  len(self.initial_states)) or len(state) > 15
+        terminated = (reward ==  len(self.initial_states)) or len(program.split("\n")) > 15
         reward /= len(self.initial_states)
         return observation, reward, terminated
     
@@ -85,9 +98,8 @@ class LineLevelArcEnv:
     def get_action_space(self):
         return self.n_actions
  
-    def reset(self): 
-        return (self.task, [])
-    
+    def reset(self):
+        return np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
 
 
 if __name__ == "__main__": 

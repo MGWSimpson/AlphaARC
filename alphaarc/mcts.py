@@ -32,7 +32,9 @@ class Node:
         self.visit_count = 0
         self.prior = prior
         self.value_sum = 0
-        self.children = {}
+
+        self.child_actions = None
+        self.children = []
         self.state = None
 
     def expanded(self):
@@ -47,8 +49,8 @@ class Node:
         """
         Select action according to the visit count distribution and the temperature.
         """
-        visit_counts = np.array([child.visit_count for child in self.children.values()])
-        actions = [action for action in self.children.keys()]
+        visit_counts = np.array([child.visit_count for child in self.children])
+        actions = self.child_actions
         if temperature == 0:
             action = actions[np.argmax(visit_counts)]
         elif temperature == float("inf"):
@@ -57,8 +59,8 @@ class Node:
             # See paper appendix Data Generation
             visit_count_distribution = visit_counts ** (1 / temperature)
             visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
-            action = np.random.choice(actions, p=visit_count_distribution)
-
+            action_index = np.random.choice(len(actions), p=visit_count_distribution)
+            action = actions[action_index]
         return action
 
     def select_child(self):
@@ -68,24 +70,20 @@ class Node:
         best_score = -np.inf
         best_action = -1
         best_child = None
-
-        for action, child in self.children.items():
-            score = ucb_score(self, child)
+        for i in range(len(self.children)):
+            score = ucb_score(self, self.children[i])
             if score > best_score:
                 best_score = score
-                best_action = action
-                best_child = child
-
+                best_action = self.child_actions[i]
+                best_child = self.children[i]
+            
         return best_action, best_child
 
-    def expand(self, state, action_probs):
-        """
-        We expand a node and keep track of the prior policy probability given by neural network
-        """ 
+    def expand(self, state, actions, action_probs):
         self.state = copy.deepcopy(state)
-        for a, prob in (action_probs):
-            if prob != 0:
-                self.children[a] = Node(prior=prob)
+        self.child_actions = copy.deepcopy(actions)
+        self.children = [Node(prior=prob) for prob in action_probs]
+
 
     def __repr__(self):
         """
@@ -104,8 +102,8 @@ class MCTS:
 
         root = Node(0)
 
-        action_probs, value = model.predict(state)
-        root.expand(state, action_probs)
+        actions, action_probs, value = model.predict(state)
+        root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):
             node = root
@@ -123,9 +121,9 @@ class MCTS:
             if not terminated:
                 # If the game has not ended:
                 # EXPAND
-                action_probs, value = model.predict(next_state)
+                actions, action_probs, value = model.predict(next_state)
                 # normalize_actions()
-                node.expand(next_state, action_probs)
+                node.expand(next_state, actions, action_probs)
             self.backpropagate(search_path, value)
 
         return root

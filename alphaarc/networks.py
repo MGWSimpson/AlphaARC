@@ -27,28 +27,12 @@ class PolicyValueNetwork(nn.Module):
 
         self.n_examples = 100
         self.input_state_max = 1024
+        self.max_length = 1024
 
         self.device = 'cuda'        
 
-    def _state_tokenize(self, state):
-        task, program_lines = state
-        program_lines = "\n".join(program_lines)
-        task_tokens = torch.tensor(tokenize_task(task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids']).unsqueeze(0) 
-        
-        if len(program_lines) == 0:
-            return task_tokens
-        
-        program_tokens = self.tokenizer(program_lines, return_tensors='pt')['input_ids'] 
-        return torch.cat((task_tokens, program_tokens), dim=-1) 
+    
 
-    def _action_tokenize(self, actions):
-        return self.tokenizer(actions,padding='longest', return_tensors='pt')['input_ids']
-
-
-    def _decode(self, tokens):
-        return self.tokenizer.batch_decode(tokens)
-
-    # TODO: fill this function out where we assign the pr of taking each action relative to each other one.    
     def _compute_score_from_logits(self, actions, logits): 
         probabilities = F.softmax(logits, dim=-1) 
         chosen_token_probs = probabilities.gather(dim=-1, index=actions.unsqueeze(-1)).squeeze(-1)
@@ -58,7 +42,7 @@ class PolicyValueNetwork(nn.Module):
         return normalized_scores
     
     def _compute_actions(self, state):
-        outputs = self.model.generate(      state.to('cuda'),
+        outputs = self.model.generate(      state,
                                             temperature=self.temperature,
                                             do_sample=True,
                                             max_new_tokens=20,
@@ -69,38 +53,38 @@ class PolicyValueNetwork(nn.Module):
                                             tokenizer= self.tokenizer,
                                             use_cache=False) 
 
-        actions = outputs.sequences[:, :-1].cpu()
+        actions = outputs.sequences[:, :-1] 
         logits = outputs.logits
-        logits = torch.stack(logits ).cpu( )
+        logits = torch.stack(logits).to(self.device)
         logits = logits.permute(1, 0, 2)
         action_probs = self._compute_score_from_logits(actions=actions, logits=logits)
         return actions, action_probs
     
     def _compute_values(self, state): 
-        last_hidden_state = self.model.encoder(input_ids=state.to('cuda'), use_cache=False, output_hidden_states=True).hidden_states[-1]
+        last_hidden_state = self.model.encoder(input_ids=state, use_cache=False, output_hidden_states=True).hidden_states[-1]
         values = self.value(last_hidden_state)
-        values.cpu()
         values = values.squeeze()
         values = values[-1] # just take the last value prediction
         return values
     
     
 
-    # state == (task, program line arr)
+    # predict expects everything as a tensor.
     def predict(self, state): 
         self.eval()
-        state = self._state_tokenize(state)
-        actions, action_probs =  self._compute_actions(state)
-        values = self._compute_values(state)
-        actions = self._decode(actions)
-        return zip(actions, action_probs.cpu()), values.cpu()
+        with torch.no_grad(): 
+            state = torch.tensor(state, device=self.device).unsqueeze(0)
+            actions, action_probs =  self._compute_actions(state)
+            values = self._compute_values(state)
+        return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy()
     
+
     def forward(self, state, actions): 
         self.eval()
         state = self._state_tokenize(state) 
         actions = self._action_tokenize(actions) 
-        logits = self.model(input_ids=state.repeat(actions.shape[0], 1).to('cuda'), decoder_input_ids=actions.to('cuda'), use_cache=False).logits
-        scores = self._compute_score_from_logits(actions.to('cuda'), logits.to('cuda'))
+        logits = self.model(input_ids=state.repeat(actions.shape[0], 1), decoder_input_ids=actions, use_cache=False).logits
+        scores = self._compute_score_from_logits(actions, logits)
         return scores
 
 
@@ -114,7 +98,7 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     network = PolicyValueNetwork()
-    network.to('cuda')
+    network
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
 
     state = """x1 = objects(I, T, F, F)
