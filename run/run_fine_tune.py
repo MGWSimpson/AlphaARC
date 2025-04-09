@@ -24,7 +24,7 @@ from codeit.task import from_dict
 from codeit.utils import get_num_pixels
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def filter_by_inference_keys(tasks, inference_keys):

@@ -86,7 +86,7 @@ trainer:
 data:
   dataloader:
     batch_size: ${models.data.dataloader.batch_size}
-    num_workers: 0
+    num_workers: 0 
     tokenizer:
       pad_token_id: ${models.data.dataloader.tokenizer.pad_token_id}
       eos_token_id: ${models.data.dataloader.tokenizer.eos_token_id}
@@ -96,9 +96,9 @@ data:
       input_state_max: 512
       allowed_tokens: True # ends generation early using  logits processor on allowed tokens
       sparse: True
-  n_train: 10
-  n_val: 10
-  n_test: 10
+  n_train: 400
+  n_val: 400
+  n_test: 400
   train_split: 0.8
   training_data_dir: './data/training/'
   evaluation_data_dir: './data/evaluation/'
