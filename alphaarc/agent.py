@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 class Agent(): 
     
-    def __init__(self, n_eps=2, n_simulations=100):
+    def __init__(self, n_eps=2, n_simulations=20):
         # how many episodes to generate per enviroment
         self.n_eps = n_eps
         self.n_simulations = n_simulations
@@ -60,11 +60,11 @@ class Agent():
 
 
     def learn(self, env): 
-        for eps in range(self.n_eps):
+        for eps in range(1):
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
 
-        self.train()
+        # self.train()
 
     
     def train(self):
@@ -75,8 +75,6 @@ class Agent():
             states, action_probs, values = self.replay_buffer.sample()
             for idx in range(len(values)): 
                 s, pr, v, = states[idx], action_probs[idx], values[idx]
-
-                
                 actions = []
                 target_pis = []
                 pr = list(pr)

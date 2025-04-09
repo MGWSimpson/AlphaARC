@@ -25,8 +25,50 @@ from codeit.utils import get_num_pixels
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+from lightning.pytorch.callbacks import Callback
 
+class LossLoggerCallback(Callback):
+    def __init__(self, save_dir="loss_logs", filename="loss_log.csv"):
+        super().__init__()
+        self.save_dir = save_dir
+        self.filename = filename
+        self.filepath = os.path.join(self.save_dir, self.filename)
 
+        # Ensure the directory exists
+        os.makedirs(self.save_dir, exist_ok=True)
+
+        # Create and initialize the CSV file if it doesn't exist
+        if not os.path.isfile(self.filepath):
+            with open(self.filepath, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["epoch", "global_step", "train_loss", "val_loss"])
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        metrics = trainer.callback_metrics
+        train_loss = metrics.get("train_loss", None)
+        val_loss = metrics.get("val_loss", None)
+
+        train_loss_val = train_loss.item() if train_loss is not None else None
+        val_loss_val = val_loss.item() if val_loss is not None else None
+
+        # Log to TensorBoard
+        if train_loss_val is not None:
+            trainer.logger.log_metrics({"train_loss_epoch": train_loss_val}, step=trainer.global_step)
+        if val_loss_val is not None:
+            trainer.logger.log_metrics({"val_loss_epoch": val_loss_val}, step=trainer.global_step)
+
+        # Print to console
+        print(f"[Epoch {trainer.current_epoch}] Train Loss: {train_loss_val} | Val Loss: {val_loss_val}")
+
+        # Append to CSV
+        with open(self.filepath, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                trainer.current_epoch,
+                trainer.global_step,
+                train_loss_val,
+                val_loss_val
+            ])
 def filter_by_inference_keys(tasks, inference_keys):
     task_keys = [
         s for s in tasks.keys() if not any(s.startswith(prefix) for prefix in inference_keys)
@@ -77,7 +119,7 @@ def main(config: Any) -> None:
         save_last=config.model.save_last,
         config=config,
     )
-    callbacks = [checkpoint_callback]
+    callbacks = [checkpoint_callback, LossLoggerCallback(save_dir=config.run_dir)]
 
     print("initialising trainer")
     trainer = pl.Trainer(**config.trainer, logger=logger, callbacks=callbacks)

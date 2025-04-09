@@ -108,10 +108,9 @@ class MCTS:
         root.expand(state, action_probs)
         
         for _ in range(self.n_simulations):
-           
+            
             node = root
             search_path = [node]
-
             # SELECT
             while node.expanded():
                 action, node = node.select_child()
