@@ -45,7 +45,7 @@ class LossLoggerCallback(Callback):
 
     def on_train_epoch_end(self, trainer, pl_module):
         metrics = trainer.callback_metrics
-        train_loss = metrics.get("train_loss", None)
+        train_loss = metrics.get("train/loss", None)
         val_loss = metrics.get("val_loss", None)
 
         train_loss_val = train_loss.item() if train_loss is not None else None

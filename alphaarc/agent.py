@@ -36,7 +36,9 @@ class Agent():
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
-
+            
+            exit()
+            """
             action_probs = [0 for _ in range(env.get_action_space())]
             actions = ["" for _ in range(env.get_action_space())]
             for i, (k, v) in enumerate(root.children.items()):
@@ -56,7 +58,7 @@ class Agent():
                 for hist_state,  hist_action_probs in train_examples:
                     # [state, actionProbabilities, Reward]
                     ret.append((hist_state, hist_action_probs, reward))
-                return ret
+                return ret"""
 
 
     def learn(self, env): 

@@ -5,7 +5,7 @@ import numpy as np
 from env import LineLevelArcEnv
 from networks import PolicyValueNetwork
 import gc
-
+import copy
 
 def ucb_score(parent, child):
     """
@@ -81,18 +81,18 @@ class Node:
     def expand(self, state, action_probs):
         """
         We expand a node and keep track of the prior policy probability given by neural network
-        """
-        self.state = state
+        """ 
+        self.state = copy.deepcopy(state)
         for a, prob in (action_probs):
             if prob != 0:
-                self.children[a] = Node(prior=prob)
+                self.children[a] = Node(prior=0.2)
 
     def __repr__(self):
         """
         Debugger pretty print node info
         """
         prior = "{0:.2f}".format(self.prior)
-        return "{} Prior: {} Count: {} Value: {}".format(self.state.__str__(), prior, self.visit_count, self.value())
+        return "{} Prior: {} Count: {} Value: {}".format(self.state.__str__(), self.prior, self.visit_count, self.value())
 
 
 class MCTS:
@@ -108,7 +108,6 @@ class MCTS:
         root.expand(state, action_probs)
         
         for _ in range(self.n_simulations):
-            
             node = root
             search_path = [node]
             # SELECT

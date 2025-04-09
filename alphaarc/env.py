@@ -2,6 +2,7 @@ from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
 from alphaarc.policy.tokenize import tokenize_task, TextEncoder
 from transformers import AutoTokenizer
+import copy
 
 def append_action_to_state(state, action): 
     return state + action
@@ -55,8 +56,8 @@ class LineLevelArcEnv:
     
 
     def step(self, action, state): 
-        task, state = state
-
+        task, state_info = state
+        state = copy.deepcopy(state_info)
         state.append(action)
         observation = (self.task, state)
         terminated = False
