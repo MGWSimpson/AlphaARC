@@ -1,8 +1,7 @@
 import math
 import numpy as np
-import copy
 from alphaarc.env import LineLevelArcEnv
-
+import copy 
 def ucb_score(parent, child):
     """
     The score for an action that would transition between the parent and child.
@@ -76,7 +75,7 @@ class Node:
         return best_action, best_child
 
     def expand(self, state, actions, action_probs):
-        self.state = copy.deepcopy(state)
+        self.state = state.copy()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(prior=prob) for prob in action_probs]
 
@@ -98,7 +97,7 @@ class MCTS:
 
         root = Node(0)
 
-        actions, action_probs, value = model.predict(state)
+        actions, action_probs, value = model.predict(np.concatenate((self.env.tokenized_task, state)))
         root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):
@@ -117,7 +116,7 @@ class MCTS:
             if not terminated:
                 # If the game has not ended:
                 # EXPAND
-                actions, action_probs, value = model.predict(next_state)
+                actions, action_probs, value = model.predict(np.concatenate((self.env.tokenized_task, next_state)))
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs)
             self.backpropagate(search_path, value)

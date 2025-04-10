@@ -27,8 +27,29 @@ class PolicyValueNetwork(nn.Module):
         self.input_state_max = input_state_max
 
 
-    
+    def _clean_outputs(self, output): 
+        sequences = output.sequences  # shape: (batch_size, seq_length)
+        logits = output.logits        # tensor of shape (batch_size, seq_length, vocab_size)
+        
+        bos_id = self.tokenizer.bos_token_id
+        eos_id = self.tokenizer.eos_token_id
 
+        batch_size = sequences.size(0)
+        clean_sequences = []
+        clean_logits = []
+        
+        for i in range(batch_size):
+            # Extract the i-th sequence and its corresponding logits
+            seq = sequences[i]          # shape: (seq_length,)
+            logit_seq = logits[i]       # shape: (seq_length, vocab_size)
+            # Create mask for tokens that are not BOS or EOS
+            mask = (seq != bos_id) & (seq != eos_id)
+            # Use the boolean mask to filter the sequence and the corresponding logits
+            clean_sequences.append(seq[mask])
+            clean_logits.append(logit_seq[mask])
+            
+        return clean_sequences, clean_logits
+    
     def _compute_score_from_logits(self, actions, logits): 
         probabilities = F.softmax(logits, dim=-1) 
         chosen_token_probs = probabilities.gather(dim=-1, index=actions.unsqueeze(-1)).squeeze(-1)
@@ -63,6 +84,7 @@ class PolicyValueNetwork(nn.Module):
                                             tokenizer= self.tokenizer,
                                             use_cache=False) 
 
+        actions, logits = self._clean_outputs(outputs)
         actions = outputs.sequences[:, :-1] 
         logits = outputs.logits
         logits = torch.stack(logits).to(self.device)

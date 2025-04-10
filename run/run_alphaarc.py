@@ -36,10 +36,10 @@ class AlphaARCConfig:
     batch_size: int = 2 
     model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
     tokenizer_path: str = 'Salesforce/codet5-small'
-    model_temperature: float = 0.95
+    model_temperature: float = 0.1
     model_samples: int = 5
     
-    n_episodes_per_task: int = 1
+    n_episodes_per_task: int = 10
     n_simulations: int = 10
     n_training_iterations: int = 100
     action_temperature: float = 1
@@ -56,8 +56,8 @@ def evaluate(agent, evaluation_set, tokenizer ):
 def main(config: Any) -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
     pl.seed_everything(config.seed)
-    curriculum = Curriculum(dir_paths=['data/training', 'data/evaluation'], 
-                   file_paths=['data/mutated_tasks_train_9600.json'])
+    curriculum = Curriculum(dir_paths=['data/training'])#, 'data/evaluation'], 
+                   # file_paths=['data/mutated_tasks_train_9600.json'])
 
     evaluation = Curriculum(dir_paths=['data/evaluation'])
     terminated = False # TODO: decide on termination condition

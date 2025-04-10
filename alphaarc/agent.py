@@ -5,47 +5,49 @@ from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
 from alphaarc.env import LineLevelArcEnv
 from alphaarc.mcts import MCTS
-
 import os
 import torch.optim as optim
 import torch
-
+from alphaarc.env import LineLevelArcEnv
+from alphaarc.curriculum import Curriculum
+from alphaarc.buffers import ReplayBuffer
+from alphaarc.networks import PolicyValueNetwork
 import torch.nn.functional as F
 from tqdm import tqdm
 
+from dataclasses import dataclass
+
+@dataclass
+class AlphaARCConfig:
+    batch_size: int = 2 
+    model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
+    tokenizer_path: str = 'Salesforce/codet5-small'
+    model_temperature: float = 0.1
+    model_samples: int = 5
+    
+    n_episodes_per_task: int = 10
+    n_simulations: int = 10
+    n_training_iterations: int = 100
+    action_temperature: float = 1
 
 def pad_and_convert(states, actions, pad_value=0.0, device='cuda'):
-    # Determine the maximum sequence length for states
     max_state_seq_length = max(state.shape[-1] for state in states)
-    
-    # Pad each state along the sequence dimension
     padded_states = []
     for state in states:
         pad_len = max_state_seq_length - state.shape[-1]
-        # If state is 1D, pad width is (before, after)
         padded_state = np.pad(state, pad_width=(0, pad_len), mode='constant', constant_values=pad_value)
         padded_states.append(padded_state)
-    # Convert list to a numpy array (shape: [batch_size, max_state_seq_length])
     padded_states = np.stack(padded_states, axis=0)
-    
-    # Determine the maximum sequence length for actions
-    # We assume all actions have the same number of actions, only the sequence length varies.
     max_action_seq_length = max(action.shape[-1] for action in actions)
-    
-    # Pad each action along the sequence dimension (last dimension)
     padded_actions = []
     for action in actions:
         pad_len = max_action_seq_length - action.shape[-1]
-        # For a 2D array of shape (n_actions, sequence_length), pad only the sequence axis.
         padded_action = np.pad(action, pad_width=((0, 0), (0, pad_len)), mode='constant', constant_values=pad_value)
         padded_actions.append(padded_action)
-    # Convert list to a numpy array (shape: [batch_size, n_actions, max_action_seq_length])
     padded_actions = np.stack(padded_actions, axis=0)
     
-    # Convert to PyTorch tensors and move to specified device
     states_tensor = torch.LongTensor(padded_states).to(device)
     actions_tensor = torch.LongTensor(padded_actions).to(device)
-    
     return states_tensor, actions_tensor
 
 
@@ -75,7 +77,7 @@ class Agent():
             train_examples.append((state, actions, action_probs))
             action = root.select_action(temperature=temperature)
             state, reward, terminated = env.step(action=action, state=state)
-
+            print(env._decode(action))
             if terminated:
                 ret = []
                 solved = (reward == len(env.initial_states))
@@ -127,9 +129,14 @@ class Agent():
 
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "6"
-    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
+    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     task = Task.from_json('data/training/67385a82.json')
-    env = LineLevelArcEnv(task, tokenizer=tokenizer)
-    agent = Agent()
+    print(task.program)
+    config = AlphaARCConfig()
+    tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
+    replay_buffer =  ReplayBuffer(config.batch_size)
+    model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
+    model.to('cuda')
+    agent = Agent(replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
+    env = LineLevelArcEnv(task, tokenizer)
     agent.learn(env)

@@ -49,8 +49,8 @@ class LineLevelArcEnv:
         self.tokenizer = tokenizer
 
         self.new_line_arr = self.tokenizer("\n", return_tensors='np')['input_ids'].squeeze()
-
-
+        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
+        self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
 
     def _state_tokenize(self, state):
         task, program_lines = state
@@ -68,13 +68,11 @@ class LineLevelArcEnv:
 
 
     def _decode(self, tokens):
-        return "".join(self.tokenizer.batch_decode(tokens))
+        return self.tokenizer.decode(tokens, skip_special_tokens=False)
 
     # action = new program tokens
     # state =  previous program tokens 
     def step(self, action, state): 
-        state = copy.deepcopy(state)
-
         observation = np.concatenate((state, action, self.new_line_arr))
         terminated = False
         reward = 0
@@ -90,6 +88,7 @@ class LineLevelArcEnv:
                 # terminated = True
                 reward +=1
 
+        # print(program)
         terminated = (reward ==  len(self.initial_states)) or len(program.split("\n")) > 15
         reward /= len(self.initial_states)
         return observation, reward, terminated
@@ -99,7 +98,7 @@ class LineLevelArcEnv:
         return self.n_actions
  
     def reset(self):
-        return np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
+        return np.array([], dtype=np.int64)
 
 
 if __name__ == "__main__": 
