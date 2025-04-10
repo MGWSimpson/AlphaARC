@@ -51,7 +51,6 @@ def pad_and_convert(states, actions, pad_value=0.0, device='cuda'):
 
 # save.
 class Agent(): 
-    
     def __init__(self, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
@@ -83,21 +82,26 @@ class Agent():
 
             if terminated:
                 ret = []
+                solved = (reward == len(env.initial_states))
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     # [state, actions,  actionProbabilities, Reward]
                     # NOTE: It may be theoretically better to store each transition seperately.  
                     ret.append((np.concatenate((env.reset(), hist_state)), hist_actions, hist_action_probs, reward))
-                return ret 
+                return ret, solved
 
 
 
     def learn(self, env): 
+        task_solved = False
+
         for eps in range(self.n_episodes):
-            episode_history = self.execute_episode(env)
+            episode_history, solved = self.execute_episode(env)
+            if solved:
+                task_solved
             self.replay_buffer.add(episode_history)
 
         self.train() # TODO: where to train?
-
+        return int(task_solved)
     
     
     def train(self):

@@ -58,18 +58,18 @@ def main(config: Any) -> None:
     terminated = False # TODO: decide on termination condition
     
     config = AlphaARCConfig()
-
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
     replay_buffer =  ReplayBuffer(config.batch_size)
     model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
     model.to('cuda')
     agent = Agent(replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
 
-
+    tasks_solved = 0
     while not terminated:
         task = curriculum.select_task()
+        print(f"starting on task {task.task_key}")
         env = LineLevelArcEnv(task, tokenizer=tokenizer)
-        agent.learn(env)
+        tasks_solved += agent.learn(env)
         
 
     
