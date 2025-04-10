@@ -1,12 +1,10 @@
 import numpy as np
-from networks import PolicyValueNetwork
-from mcts import MCTS
-from buffers import ReplayBuffer
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 from alphaarc.policy.environment import execute_candidate_program
 from alphaarc.task import Task
 from alphaarc.env import LineLevelArcEnv
+from alphaarc.mcts import MCTS
 
 import os
 import torch.optim as optim
@@ -54,16 +52,15 @@ def pad_and_convert(states, actions, pad_value=0.0, device='cuda'):
 # save.
 class Agent(): 
     
-    def __init__(self, n_eps=2, n_simulations=3):
-        # how many episodes to generate per enviroment
-        self.n_eps = n_eps
-        self.n_simulations = n_simulations
-        self.replay_buffer = ReplayBuffer()
-        self.model = PolicyValueNetwork()
+    def __init__(self, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature):
+        self.n_episodes = n_episodes
+        self.n_simulations  = n_simulations
+        self.n_training_iterations = n_training_iterations
+        self.action_temperature = action_temperature
 
-        self.n_iters = 5
-        self.model.to('cuda')
-
+        self.replay_buffer = replay_buffer
+        self.model = model
+        
     def execute_episode(self, env): 
         
         state = env.reset()
@@ -95,18 +92,19 @@ class Agent():
 
 
     def learn(self, env): 
-        for eps in range(1):
+        for eps in range(self.n_episodes):
             episode_history = self.execute_episode(env)
             self.replay_buffer.add(episode_history)
 
-        self.train()
+        self.train() # TODO: where to train?
 
+    
     
     def train(self):
         optimizer = optim.Adam(self.model.parameters())
         self.model.train()
 
-        for i in tqdm(range(self.n_iters)):
+        for i in tqdm(range(self.n_training_iterations)):
             states, actions, action_probs, values = self.replay_buffer.sample()
             target_vs = torch.FloatTensor(np.array(values).astype(np.float64)).to('cuda')
             target_pis = torch.FloatTensor(np.array(action_probs).astype(np.float64)).to('cuda')
@@ -127,7 +125,7 @@ class Agent():
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "6"
-    tokenizer =AutoTokenizer.from_pretrained('Salesforce/codet5-small')
+    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
     task = Task.from_json('data/training/67385a82.json')
     env = LineLevelArcEnv(task, tokenizer=tokenizer)
     agent = Agent()
