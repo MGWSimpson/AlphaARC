@@ -60,7 +60,7 @@ class Agent():
         self.replay_buffer = replay_buffer
         self.model = model
         
-    def execute_episode(self, env): 
+    def execute_episode(self, env, temperature): 
         
         state = env.reset()
         train_examples = []
@@ -69,15 +69,11 @@ class Agent():
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
-            
-
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
             action_probs = action_probs / np.sum(action_probs)
-            
             train_examples.append((state, actions, action_probs))
-
-            action = root.select_action(temperature=0.5)
+            action = root.select_action(temperature=temperature)
             state, reward, terminated = env.step(action=action, state=state)
 
             if terminated:
@@ -90,12 +86,15 @@ class Agent():
                 return ret, solved
 
 
+    def evaluate(self, env):
+        episode_history, solved = self.execute_episode(env, 0)
+        return int(solved)
 
     def learn(self, env): 
         task_solved = False
 
         for eps in range(self.n_episodes):
-            episode_history, solved = self.execute_episode(env)
+            episode_history, solved = self.execute_episode(env, self.action_temperature)
             if solved:
                 task_solved
             self.replay_buffer.add(episode_history)
@@ -133,5 +132,4 @@ if __name__ == "__main__":
     task = Task.from_json('data/training/67385a82.json')
     env = LineLevelArcEnv(task, tokenizer=tokenizer)
     agent = Agent()
-    
     agent.learn(env)

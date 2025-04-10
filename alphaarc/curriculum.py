@@ -14,7 +14,6 @@ class Curriculum:
         new_tasks = [Task.from_json(path) for path in file_paths]
         self.tasks.extend(new_tasks)
 
-
     def _load_tasks_from_files(self, file_path):
         # load the JSON and iterate through the keys basically.
         with open(file_path) as fp:

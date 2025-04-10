@@ -39,14 +39,18 @@ class AlphaARCConfig:
     model_temperature: float = 0.95
     model_samples: int = 5
     
-    n_episodes_per_task: int = 10
+    n_episodes_per_task: int = 1
     n_simulations: int = 10
     n_training_iterations: int = 100
     action_temperature: float = 1
 
 
-
-
+def evaluate(agent, evaluation_set, tokenizer ):
+    solved_tasks = 0
+    for task in evaluation_set.tasks:
+        env =  LineLevelArcEnv(task, tokenizer)
+        solve_rate += agent.evaluate(env)
+    print(f"solve rate on the evaluation set {float(solved_tasks/ len(evaluation_set.tasks))}")
 
 @hydra.main(version_base=None, config_path="config", config_name="base_config")
 def main(config: Any) -> None:
@@ -55,8 +59,8 @@ def main(config: Any) -> None:
     curriculum = Curriculum(dir_paths=['data/training', 'data/evaluation'], 
                    file_paths=['data/mutated_tasks_train_9600.json'])
 
+    evaluation = Curriculum(dir_paths=['data/evaluation'])
     terminated = False # TODO: decide on termination condition
-    
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
     replay_buffer =  ReplayBuffer(config.batch_size)
@@ -64,24 +68,20 @@ def main(config: Any) -> None:
     model.to('cuda')
     agent = Agent(replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
 
+    task_iteration = 0
+    test_every = 100
+
     tasks_solved = 0
     while not terminated:
         task = curriculum.select_task()
         print(f"starting on task {task.task_key}")
         env = LineLevelArcEnv(task, tokenizer=tokenizer)
         tasks_solved += agent.learn(env)
-        
+        print(f"number of talks solved: {tasks_solved}")
 
-    
-
-    
-    
-    
-
-
-   
-        
-
+        if task_iteration % test_every:
+            print("starting eval!")
+            evaluate(evaluation, evaluation_set=evaluation, tokenizer=tokenizer)
 
 if __name__ == "__main__":
     main()
