@@ -96,8 +96,7 @@ class MCTS:
     def run(self, model, state):
 
         root = Node(0)
-
-        actions, action_probs, value = model.predict(np.concatenate((self.env.tokenized_task, state)))
+        actions, action_probs, value = model.predict(self.env.tokenized_task, state)
         root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):
@@ -116,7 +115,7 @@ class MCTS:
             if not terminated:
                 # If the game has not ended:
                 # EXPAND
-                actions, action_probs, value = model.predict(np.concatenate((self.env.tokenized_task, next_state)))
+                actions, action_probs, value = model.predict(self.env.tokenized_task, next_state)
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs)
             self.backpropagate(search_path, value)

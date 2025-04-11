@@ -67,8 +67,15 @@ class PolicyValueNetwork(nn.Module):
         
         return normalized_scores
 
-    def _compute_actions(self, state):
-        outputs = self.model.generate(      state,
+    def _compute_actions(self, task, state):
+
+        if state.shape == (1,0): 
+            print(task)
+            state = None
+            print("HERE!")
+
+        outputs = self.model.generate(      input_ids=task,
+                                            decoder_input_ids=state,
                                             temperature=self.temperature,
                                             do_sample=True,
                                             max_new_tokens=20,
@@ -83,9 +90,10 @@ class PolicyValueNetwork(nn.Module):
         logits = outputs.logits
         logits = torch.stack(logits).to(self.device)
         logits = logits.permute(1, 0, 2)
-        actions , logits = self._clean_outputs(actions, logits )
+        # actions , logits = self._clean_outputs(actions, logits )
 
-        action_probs = self._compute_score_from_logits(actions=actions, logits=logits)
+        # action_probs = self._compute_score_from_logits(actions=actions, logits=logits)
+        action_probs = torch.rand((5))
         return actions, action_probs
     
     def _compute_values(self, state): 
@@ -100,12 +108,13 @@ class PolicyValueNetwork(nn.Module):
         values = self.value(last_hidden_states).squeeze()
         return values[:, -1]
     # predict expects everything as a tensor.
-    def predict(self, state): 
+    def predict(self, task, state): 
         self.eval()
         with torch.no_grad(): 
+            task = torch.tensor(task, device=self.device).unsqueeze(0)
             state = torch.tensor(state, device=self.device).unsqueeze(0)
-            actions, action_probs =  self._compute_actions(state)
-            values = self._compute_values(state)
+            actions, action_probs =  self._compute_actions(task, state)
+            values = self._compute_values(task)
         return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy()
     
 

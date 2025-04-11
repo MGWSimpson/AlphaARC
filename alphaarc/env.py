@@ -68,7 +68,10 @@ class LineLevelArcEnv:
 
 
     def _decode(self, tokens):
-        return self.tokenizer.decode(tokens, skip_special_tokens=False)
+        return self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+
+    def _encode(self, program): 
+        return self.tokenizer( program, return_tensors='np')['input_ids'].squeeze()
 
     # action = new program tokens
     # state =  previous program tokens 
@@ -78,8 +81,8 @@ class LineLevelArcEnv:
         reward = 0
         program = self._decode(observation)
         for i, st in enumerate(self.initial_states):
-            program = append_return(program)
-            output = execute_candidate_program(program_string=program, program_input=st)
+            candidate_program = append_return(program)
+            output = execute_candidate_program(program_string=candidate_program, program_input=st)
             if output == "Invalid Input": 
                 #terminated = True # TODO: change this back to false
                 reward -= 0
@@ -91,6 +94,7 @@ class LineLevelArcEnv:
         # print(program)
         terminated = (reward ==  len(self.initial_states)) or len(program.split("\n")) > 15
         reward /= len(self.initial_states)
+        observation = self._encode(program)
         return observation, reward, terminated
     
 
