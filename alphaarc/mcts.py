@@ -98,6 +98,10 @@ class MCTS:
         root = Node(0)
 
         actions, action_probs, value = model.predict(np.concatenate((self.env.tokenized_task, state)))
+        
+        for action in actions:
+            print(self.env._decode(action))
+
         root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):

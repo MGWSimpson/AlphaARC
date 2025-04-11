@@ -32,11 +32,14 @@ class PolicyValueNetwork(nn.Module):
         pad_token = self.tokenizer.pad_token_type_id
         cleaned_actions = []
         cleaned_logits = []
+
         for act_seq, log_seq in zip(actions, logits):
-            mask = (act_seq != bos_id) & (act_seq != eos_id) & (act_seq != pad_token)
+            mask = (act_seq != bos_id) # & (act_seq != eos_id) # & (act_seq != pad_token)
+
             cleaned_actions.append(act_seq[mask])
-            cleaned_logits.append(log_seq[mask])
+            cleaned_logits.append(log_seq[mask, :])
             
+       
         return torch.stack(cleaned_actions), torch.stack(cleaned_logits)
 
 

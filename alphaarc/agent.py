@@ -22,13 +22,13 @@ class AlphaARCConfig:
     batch_size: int = 2 
     model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
     tokenizer_path: str = 'Salesforce/codet5-small'
-    model_temperature: float = 0.1
+    model_temperature: float = 0.95
     model_samples: int = 5
     
     n_episodes_per_task: int = 10
     n_simulations: int = 10
     n_training_iterations: int = 100
-    action_temperature: float = 1
+    action_temperature: float = 0.95
 
 def pad_and_convert(states, actions, pad_value=0.0, device='cuda'):
     max_state_seq_length = max(state.shape[-1] for state in states)
@@ -77,7 +77,6 @@ class Agent():
             train_examples.append((state, actions, action_probs))
             action = root.select_action(temperature=temperature)
             state, reward, terminated = env.step(action=action, state=state)
-            print(env._decode(action))
             if terminated:
                 ret = []
                 solved = (reward == len(env.initial_states))
