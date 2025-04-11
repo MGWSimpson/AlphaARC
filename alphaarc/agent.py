@@ -77,6 +77,8 @@ class Agent():
             train_examples.append((state, actions, action_probs))
             action = root.select_action(temperature=temperature)
             state, reward, terminated = env.step(action=action, state=state)
+            print("****")
+            print(env._decode(state))
             if terminated:
                 ret = []
                 solved = (reward == len(env.initial_states))
