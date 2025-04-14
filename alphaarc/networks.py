@@ -70,9 +70,8 @@ class PolicyValueNetwork(nn.Module):
     def _compute_actions(self, task, state):
 
         if state.shape == (1,0): 
-            print(task)
             state = None
-            print("HERE!")
+
 
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids=state,
@@ -90,9 +89,14 @@ class PolicyValueNetwork(nn.Module):
         logits = outputs.logits
         logits = torch.stack(logits).to(self.device)
         logits = logits.permute(1, 0, 2)
-        # actions , logits = self._clean_outputs(actions, logits )
 
-        # action_probs = self._compute_score_from_logits(actions=actions, logits=logits)
+        print("****")
+        if state is not None:
+            print(state.shape)
+        print(task.shape)
+        print(actions.shape)
+        print(logits.shape)
+
         action_probs = torch.rand((5))
         return actions, action_probs
     
@@ -137,23 +141,4 @@ class PolicyValueNetwork(nn.Module):
 
     def value_forward(self, state):
         return self._batch_compute_values(states=state)
-    
-if __name__ == "__main__":
-    torch.manual_seed(0)
-    
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    network = PolicyValueNetwork()
-    network
-    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
-
-    state = """x1 = objects(I, T, F, F)
-    x2 = rbind(bordering, I)
-    x3 = compose(flip, x2)
-    x4 = mfilter(x1, x3)
-    x5 = fill(I, TWO, x4)"""
-
-    print(tokenizer(state, return_tensors='pt'))
-    #actions_probs, values = network.predict(state)
-    # actions = [x[0] for x in actions_probs]
-    # action_probs2 = network.forward(state, actions)
+ 
