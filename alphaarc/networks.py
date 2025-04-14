@@ -44,7 +44,7 @@ class PolicyValueNetwork(nn.Module):
 
 
         
-         
+    # TODO: considering changing this later.
     def _compute_score_from_logits(self, actions, logits): 
         probabilities = F.softmax(logits, dim=-1) 
         chosen_token_probs = probabilities.gather(dim=-1, index=actions.unsqueeze(-1)).squeeze(-1)
@@ -85,19 +85,13 @@ class PolicyValueNetwork(nn.Module):
                                             tokenizer= self.tokenizer,
                                             use_cache=False) 
 
-        actions = outputs.sequences[:, :-1] 
+        actions = outputs.sequences
         logits = outputs.logits
         logits = torch.stack(logits).to(self.device)
         logits = logits.permute(1, 0, 2)
-
-        print("****")
-        if state is not None:
-            print(state.shape)
-        print(task.shape)
-        print(actions.shape)
-        print(logits.shape)
-
-        action_probs = torch.rand((5))
+        new_actions_shape = logits.shape[1]
+        actions = actions[: , -new_actions_shape:]
+        action_probs = self._compute_score_from_logits(actions, logits)
         return actions, action_probs
     
     def _compute_values(self, state): 
@@ -111,7 +105,7 @@ class PolicyValueNetwork(nn.Module):
         last_hidden_states = self.model.encoder(input_ids=states, use_cache=False, output_hidden_states=True).hidden_states[-1]
         values = self.value(last_hidden_states).squeeze()
         return values[:, -1]
-    # predict expects everything as a tensor.
+    
     def predict(self, task, state): 
         self.eval()
         with torch.no_grad(): 

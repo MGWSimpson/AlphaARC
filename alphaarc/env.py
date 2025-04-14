@@ -80,6 +80,9 @@ class LineLevelArcEnv:
         terminated = False
         reward = 0
         program = self._decode(observation)
+
+        print(self._decode(state))
+        print(self._decode(action))
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
@@ -91,7 +94,6 @@ class LineLevelArcEnv:
                 # terminated = True
                 reward +=1
 
-        # print(program)
         terminated = (reward ==  len(self.initial_states)) or len(program.split("\n")) > 15
         reward /= len(self.initial_states)
         observation = self._encode(program)
