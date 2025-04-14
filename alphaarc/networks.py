@@ -26,21 +26,11 @@ class PolicyValueNetwork(nn.Module):
         self.stop_strings =['\n']
         self.input_state_max = input_state_max
     
-    def _clean_outputs(self, actions, logits): 
-        bos_id = self.tokenizer.bos_token_id
-        eos_id = self.tokenizer.eos_token_id
-        pad_token = self.tokenizer.pad_token_type_id
-        cleaned_actions = []
-        cleaned_logits = []
 
-        for act_seq, log_seq in zip(actions, logits):
-            mask = (act_seq != bos_id) # & (act_seq != eos_id) # & (act_seq != pad_token)
 
-            cleaned_actions.append(act_seq[mask])
-            cleaned_logits.append(log_seq[mask, :])
-            
-       
-        return torch.stack(cleaned_actions), torch.stack(cleaned_logits)
+    def _generate_attention_mask(self, state):
+        
+        pass
 
 
         
@@ -71,8 +61,6 @@ class PolicyValueNetwork(nn.Module):
 
         if state.shape == (1,0): 
             state = None
-
-
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,

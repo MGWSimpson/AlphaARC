@@ -67,7 +67,7 @@ class Agent():
         state = env.reset()
         train_examples = []
         terminated = False
-
+        
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
@@ -93,11 +93,12 @@ class Agent():
 
     def learn(self, env): 
         task_solved = False
-
         for eps in range(self.n_episodes):
             episode_history, solved = self.execute_episode(env, self.action_temperature)
+            
             if solved:
-                task_solved
+                task_solved = True
+            
             self.replay_buffer.add(episode_history)
 
         self.train() # TODO: where to train?

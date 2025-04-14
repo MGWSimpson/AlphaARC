@@ -29,6 +29,7 @@ def append_return(program):
     return program 
 
 
+NEW_LINE_TOKEN_ID = 203
 
 class LineLevelArcEnv:
     def __init__(self, task: Task, tokenizer):
@@ -48,41 +49,31 @@ class LineLevelArcEnv:
         self.n_actions = 5 # n lines of code allowed.
         self.tokenizer = tokenizer
 
-        self.new_line_arr = self.tokenizer("\n", return_tensors='np')['input_ids'].squeeze()
+        self.new_line_arr = np.array([NEW_LINE_TOKEN_ID])
         tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
         self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
-
-    def _state_tokenize(self, state):
-        task, program_lines = state
-        program_lines = "\n".join(program_lines)
-        task_tokens = torch.tensor(tokenize_task(task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids']).unsqueeze(0) 
         
-        if len(program_lines) == 0:
-            return task_tokens
-        
-        program_tokens = self.tokenizer(program_lines, return_tensors='pt')['input_ids'] 
-        return torch.cat((task_tokens, program_tokens), dim=-1) 
-
-    def _action_tokenize(self, actions):
-        return self.tokenizer(actions,padding='longest', return_tensors='pt')['input_ids']
-
+    
+    def _add_new_line_if_absent(self, action): 
+        if action[-1] != NEW_LINE_TOKEN_ID:
+            action = np.concatenate((action, self.new_line_arr))
+        return action
 
     def _decode(self, tokens):
-        return self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        return self.tokenizer.decode(tokens, skip_special_tokens=False, clean_up_tokenization_spaces=True)
 
     def _encode(self, program): 
-        return self.tokenizer( program, return_tensors='np')['input_ids'].squeeze()
+        return self.tokenizer( program, add_special_tokens=False, return_tensors='np')['input_ids'].squeeze()
 
     # action = new program tokens
     # state =  previous program tokens 
     def step(self, action, state): 
-        observation = np.concatenate((state, action, self.new_line_arr))
+        action = self._add_new_line_if_absent(action)
+        observation = np.concatenate((state, action))
         terminated = False
         reward = 0
         program = self._decode(observation)
-
-        print(self._decode(state))
-        print(self._decode(action))
+        print(program)
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
