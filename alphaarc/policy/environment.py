@@ -16,6 +16,7 @@ def execute_candidate_program(program_string, program_input, max_state_size=1_00
     program_string = program_string.rstrip("\n")
     valid_syntax = check_syntax(program_string)
     if valid_syntax != "Valid Syntax":
+        print(valid_syntax)
         return "Invalid Input"
     if not valid_grid(program_input):
         return "Invalid Input"
@@ -99,6 +100,7 @@ def check_syntax(program_string):
     for i, line in enumerate(lines):
         line_strip = line.lstrip().split(" = ")
         if len(line_strip) != 2:
+            print(lines)
             return f"Line {line} is not a variable assignment"
         variable, call = line_strip
         call_strip = call.rstrip().split("(")
@@ -107,6 +109,7 @@ def check_syntax(program_string):
         function, args = call_strip
         if i == len(lines) - 1:
             if variable != "O":
+                print(lines)
                 return f"Line {line} does not have variable name of O"
         if variable in primitive_functions:
             return f"Line {line} has a variable name that is a primitive function"

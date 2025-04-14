@@ -27,12 +27,6 @@ class PolicyValueNetwork(nn.Module):
         self.input_state_max = input_state_max
     
 
-
-    def _generate_attention_mask(self, state):
-        
-        pass
-
-
         
     # TODO: considering changing this later.
     def _compute_score_from_logits(self, actions, logits): 
@@ -57,8 +51,8 @@ class PolicyValueNetwork(nn.Module):
         
         return normalized_scores
 
-    def _compute_actions(self, task, state):
 
+    def _compute_actions(self, task, state):
         if state.shape == (1,0): 
             state = None
         outputs = self.model.generate(      input_ids=task,
