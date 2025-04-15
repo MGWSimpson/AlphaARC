@@ -25,7 +25,7 @@ class AlphaARCConfig:
     model_temperature: float = 0.95
     model_samples: int = 5
     
-    n_episodes_per_task: int = 10
+    n_episodes_per_task: int = 5
     n_simulations: int = 10
     n_training_iterations: int = 100
     action_temperature: float = 0.95
@@ -71,6 +71,7 @@ class Agent():
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
+            print(env._decode(root.state))
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
             action_probs = action_probs / np.sum(action_probs)
