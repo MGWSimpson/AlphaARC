@@ -79,7 +79,7 @@ class Agent():
             state, reward, terminated = env.step(action=action, state=state)
             if terminated:
                 ret = []
-                solved = (reward == len(env.initial_states))
+                solved = (reward == 1.0)
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     # [state, actions,  actionProbabilities, Reward]
                     # NOTE: It may be theoretically better to store each transition seperately.  
@@ -95,12 +95,11 @@ class Agent():
         task_solved = False
         for eps in range(self.n_episodes):
             episode_history, solved = self.execute_episode(env, self.action_temperature)
-            
+            self.replay_buffer.add(episode_history)
             if solved:
                 task_solved = True
-            
-            self.replay_buffer.add(episode_history)
-
+                break 
+        
         self.train() # TODO: where to train?
         return int(task_solved)
     
@@ -130,7 +129,7 @@ class Agent():
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-    task = Task.from_json('data/training/67385a82.json')
+    task = Task.from_json('data/training/67a3c6ac.json')
     print(task.program)
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
@@ -139,4 +138,4 @@ if __name__ == "__main__":
     model.to('cuda')
     agent = Agent(replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
     env = LineLevelArcEnv(task, tokenizer)
-    agent.learn(env)
+    print(agent.learn(env))
