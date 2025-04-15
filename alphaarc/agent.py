@@ -100,7 +100,8 @@ class Agent():
                 task_solved = True
                 break 
         
-        self.train() # TODO: where to train?
+        print(task_solved)
+        # self.train() # TODO: where to train?
         return int(task_solved)
     
     
@@ -129,7 +130,7 @@ class Agent():
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-    task = Task.from_json('data/training/67a3c6ac.json')
+    task = Task.from_json('data/training/42a50994.json')
     print(task.program)
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)

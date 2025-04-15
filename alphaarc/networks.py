@@ -76,8 +76,10 @@ class PolicyValueNetwork(nn.Module):
         action_probs = self._compute_score_from_logits(actions, logits)
         return actions, action_probs
     
-    def _compute_values(self, state): 
-        last_hidden_state = self.model.encoder(input_ids=state, use_cache=False, output_hidden_states=True).hidden_states[-1]
+    def _compute_values(self, task, state): 
+        if state.shape == (1, 0): # TODO: just patched over this for now.
+            return torch.tensor([0.0], device=self.device)
+        last_hidden_state = self.model.forward(input_ids=task, decoder_input_ids=state, output_hidden_states=True).decoder_hidden_states[-1]
         values = self.value(last_hidden_state)
         values = values.squeeze()
         values = values[-1] # just take the last value prediction
@@ -94,7 +96,7 @@ class PolicyValueNetwork(nn.Module):
             task = torch.tensor(task, device=self.device).unsqueeze(0)
             state = torch.tensor(state, device=self.device).unsqueeze(0)
             actions, action_probs =  self._compute_actions(task, state)
-            values = self._compute_values(task)
+            values = self._compute_values(task, state)
         return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy()
     
 
