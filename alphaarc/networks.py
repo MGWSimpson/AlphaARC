@@ -28,6 +28,8 @@ class PolicyValueNetwork(nn.Module):
     def _compute_actions(self, task, state):
         if state.shape == (1,0): # if first token, don't pass in decoder input ids
             state = None
+
+        
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,

@@ -1,11 +1,9 @@
-# Copyright (c) 2024 Qualcomm Technologies, Inc.
-# All Rights Reserved.
 
 from importlib import import_module
 from typing import Any, Dict, Iterable, List, Union
-
 from matplotlib import pyplot as plt
 
+import numpy as np
 
 
 
@@ -57,3 +55,17 @@ def get_num_pixels(grid):
     num_rows = len(grid)
     num_columns = len(grid[0]) if num_rows > 0 else 0
     return num_rows if num_columns == 0 else num_rows * num_columns
+
+
+def pad_and_convert(task, state, actions, pad_value=0.0, max_seq_length=1024):
+    
+    padded_task = np.pad(task, pad_width=(0, max_seq_length- task.shape[-1]), mode='constant', constant_values=pad_value)
+    padded_state = np.pad(state, pad_width=(0, max_seq_length - state.shape[-1]), mode='constant', constant_values=pad_value)
+    padded_actions = []
+    for action in actions:
+        pad_len = max_seq_length - action.shape[-1]
+        padded_action = np.pad(action, pad_width=((0, pad_len)), mode='constant', constant_values=pad_value)
+        padded_actions.append(padded_action)
+    
+    padded_actions = np.stack(padded_actions, axis=0)
+    return padded_task, padded_state, padded_actions

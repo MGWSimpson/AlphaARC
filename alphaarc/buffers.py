@@ -1,27 +1,58 @@
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 
-"""
-Continue from here.
-"""
+from alphaarc.utils import pad_and_convert
 
-class ReplayBuffer(): 
-    def __init__(self, sample_batch_size=2):
-        self.history = []
-        self.sample_batch_size = sample_batch_size
 
+
+
+
+# will need to add a capacity here . 
+class TrajectoryBuffer(Dataset): 
+    def __init__(self, capacity=100_000, n_actions=5,  max_n_tokens=1024):
+        self.capacity = capacity
+        self.idx = 0
+        self.n_actions = n_actions
+        self.max_n_tokens = max_n_tokens
+
+        self.tasks = np.empty((self.capacity, self.max_n_tokens))
+        self.states = np.empty((self.capacity, self.max_n_tokens))
+        self.actions = np.empty((self.capacity, self.n_actions, self.max_n_tokens))
+        self.action_probs = np.empty((self.capacity, self.n_actions))
+        self.rewards = np.empty((self.capacity, 1))
     
-    def add(self, new_data): 
-        self.history.extend(new_data)
+ 
+    def __len__(self):
+        return self.idx 
 
-    def sample(self):
-        sample_ids = np.random.randint(len(self.history), size=self.sample_batch_size)
-        states, actions, action_probs, values = list(zip(*[self.history[i] for i in sample_ids]))
-        return states ,actions, action_probs, values
+    def __getitem__(self, idx):
+        task = torch.tensor(self.tasks[idx])
+        state = torch.tensor(self.states[idx])
+        actions = torch.tensor ( self.actions[idx])
+        action_probs = torch.tensor( self.action_probs[idx])
+        rewards = torch.tensor(self.rewards[idx])
+        return task, state, actions, action_probs, rewards
     
 
-class TrajectoryBuffer(): 
-    pass
+    def _add_sample(self, task, state, action, action_prob, reward): 
+        self.idx +=1
+
+        if self.idx == self.capacity: 
+            self.idx = 0
+
+        self.tasks[self.idx] = task
+        self.states[self.idx] = state
+        self.actions[self.idx] = action
+        self.action_probs[self.idx] = action_prob
+        self.rewards[self.idx] = reward
+
+    def add_trajectory(self, trajectory): 
+        for sample in trajectory: 
+            task, state, actions, action_probs, rewards = sample
+            task, state, actions = pad_and_convert(task, state, actions)
+            self._add_sample(task, state, actions, action_probs, rewards)
+    
 
 
 class ReplayBuffer(): 

@@ -19,10 +19,6 @@ def ucb_score(parent, child):
 
 
 def normalize_actions(): 
-    # TODO: decide if I will mask moves here.
-        # valid_moves = self.game.get_valid_moves(state)
-        # action_probs = action_probs * valid_moves  # mask invalid moves
-        # action_probs /= np.sum(action_probs)
     pass
 
 class Node:
