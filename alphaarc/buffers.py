@@ -8,21 +8,22 @@ from torch.utils.data import Dataset
 
 
 class TrajectoryBuffer(Dataset): 
-    def __init__(self, capacity=100_000, n_actions=5,  max_state_size=1024, max_action_size=20):
+    def __init__(self, capacity=100_000, n_actions=5, max_task_size=1024,  max_state_size=512, max_action_size=20):
         self.capacity = capacity
         self.idx = 0
         self.n_actions = n_actions
         self.max_state_size = max_state_size
         self.max_action_size = max_action_size
-        self.tasks = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
+        self.max_task_size = max_task_size
+        self.tasks = np.empty((self.capacity, self.max_task_size), dtype=np.int64)
         self.states = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
         self.actions = np.empty((self.capacity, self.n_actions, self.max_action_size), dtype=np.int64)
-        self.action_probs = np.empty((self.capacity, self.n_actions), dtype=np.float64)
-        self.rewards = np.empty((self.capacity, 1), dtype=np.float64)
+        self.action_probs = np.empty((self.capacity, self.n_actions), dtype=np.float32)
+        self.rewards = np.empty((self.capacity, 1), dtype=np.float32)
     
     def _pad(self, task, state, actions, pad_value=0.0):
     
-        padded_task = np.pad(task, pad_width=(0, self.max_state_size- task.shape[-1]), mode='constant', constant_values=pad_value)
+        padded_task = np.pad(task, pad_width=(0, self.max_task_size - task.shape[-1]), mode='constant', constant_values=pad_value)
         padded_state = np.pad(state, pad_width=(0, self.max_state_size - state.shape[-1]), mode='constant', constant_values=pad_value)
         padded_actions = []
         for action in actions:

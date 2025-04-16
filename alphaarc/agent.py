@@ -98,9 +98,18 @@ class Agent():
         for batch in trajectory_dataloader:
             task, state, actions, target_pis, target_vs = batch
 
-            self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
+            target_pis = target_pis.to(self.model.device)
+            target_vs = target_vs.to(self.model.device)
+            predicted_pis, predicted_vs = self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
             
 
+            policy_loss = F.cross_entropy(predicted_pis, target_pis)
+            value_loss = F.mse_loss( predicted_vs, target_vs)
+
+            loss = policy_loss + value_loss 
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
 
 
