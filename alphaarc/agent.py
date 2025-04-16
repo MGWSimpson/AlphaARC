@@ -106,7 +106,7 @@ class Agent():
                 break 
         
         
-        # self.train() # TODO: where to train?
+        self.train() # TODO: where to train?
         return int(task_solved)
     
     

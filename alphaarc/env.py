@@ -83,14 +83,13 @@ class LineLevelArcEnv:
                terminated = True
 
             if output == self.goal_states[i]:
-                # terminated = True
                 reward +=1
 
 
         if reward == len(self.initial_states):
             reward = 1.0
         else:
-            reward = 0.0
+            reward = -1.0
             
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 15
         observation = self._encode(program)
