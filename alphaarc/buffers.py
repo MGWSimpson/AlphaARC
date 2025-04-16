@@ -6,7 +6,9 @@ from torch.utils.data import Dataset
 
 
 
-
+"""
+Stores the trajectories of a task.
+"""
 class TrajectoryBuffer(Dataset): 
     def __init__(self, capacity=100_000, n_actions=5, max_task_size=1024,  max_state_size=512, max_action_size=20):
         self.capacity = capacity
@@ -52,17 +54,22 @@ class TrajectoryBuffer(Dataset):
         return task, state, actions, action_probs, rewards
     
 
-    def _add_sample(self, task, state, action, action_prob, reward): 
+
+    def _idx_accounting(self): 
         self.idx +=1
 
         if self.idx == self.capacity: 
             self.idx = 0
 
+    def _add_sample(self, task, state, action, action_prob, reward): 
+        
         self.tasks[self.idx] = task
         self.states[self.idx] = state
         self.actions[self.idx] = action
         self.action_probs[self.idx] = action_prob
         self.rewards[self.idx] = reward
+
+        self._idx_accounting()
 
     def add_trajectory(self, trajectory): 
         for sample in trajectory: 
@@ -72,5 +79,43 @@ class TrajectoryBuffer(Dataset):
     
 
 
-class ReplayBuffer(): 
-    pass
+class ReplayBuffer(Dataset): 
+    def __init__(self, capacity=100_000, max_state_len=512, max_task_len=1024): 
+        self.idx = 0
+        
+        self.max_task_len = max_task_len
+        self.max_state_len = max_state_len
+        self.capacity = capacity
+
+        self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
+        self.states = np.empty((self.capacity, self.max_state_len), dtype=np.int64)
+
+    def __len__(self):
+        return self.idx 
+
+    def __getitem__(self, idx):
+        return torch.tensor(self.tasks[idx]), torch.tensor(self.states[idx])
+    
+    def _pad(self, task, program):
+        padded_program = np.pad(program, pad_width=(0, self.max_state_len - program.shape[-1]), mode='constant', constant_values=0)
+        padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1 ]), mode='constant', constant_values=0)
+        return padded_task, padded_program
+
+
+    def _idx_accounting(self): 
+        self.idx +=1
+
+        if self.idx == self.capacity: 
+            self.idx = 0
+
+
+    def add_program_and_task(self, task, program): 
+        task, program = self._pad(task, program)   
+
+        self.tasks[self.idx] = task
+        self.states [self.idx]= program
+        
+
+        self._idx_accounting()
+        
+    

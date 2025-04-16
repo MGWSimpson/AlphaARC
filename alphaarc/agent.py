@@ -37,13 +37,14 @@ class AlphaARCConfig:
 
 # save.
 class Agent(): 
-    def __init__(self, trajectory_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature):
+    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
         self.n_training_iterations = n_training_iterations
         self.action_temperature = action_temperature
 
         self.trajectory_buffer = trajectory_buffer
+        self.replay_buffer = replay_buffer
         self.model = model
         
     def execute_episode(self, env, temperature): 
@@ -64,10 +65,11 @@ class Agent():
             if terminated:
                 ret = []
                 solved = (reward == 1.0)
+                full_task_and_program = (env.tokenized_task, state)
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     ret.append(( env.tokenized_task, hist_state, hist_actions, hist_action_probs, reward))
-                
-                return ret, solved
+
+                return ret, solved, full_task_and_program
 
 
     def evaluate(self, env):
@@ -77,9 +79,11 @@ class Agent():
     def learn(self, env): 
         task_solved = False
         for eps in range(self.n_episodes):
-            episode_history, solved = self.execute_episode(env, self.action_temperature)
+            episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
             self.trajectory_buffer.add_trajectory(episode_history)
+
             if solved:
+                self.replay_buffer.add_program_and_task(full_task_and_program[0], full_task_and_program[1])
                 task_solved = True
                 break 
         
@@ -93,7 +97,7 @@ class Agent():
         self.model.train()
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
                                            batch_size=2)
-
+        replay_dataloader = DataLoader(self.replay_buffer, batch_size=2)
 
         for batch in trajectory_dataloader:
             task, state, actions, target_pis, target_vs = batch
@@ -111,6 +115,16 @@ class Agent():
             loss.backward()
             optimizer.step()
 
+        for batch in replay_dataloader:
+            task, state = batch
+
+            loss = self.model.model(   input_ids=task.to(self.model.device),
+                                labels=state.to(self.model.device)).loss
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
 
 
 
@@ -124,9 +138,9 @@ if __name__ == "__main__":
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
     trajectory_buffer =  TrajectoryBuffer()
-
+    replay_buffer = ReplayBuffer()
     model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
     model.to('cuda')
-    agent = Agent(trajectory_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
+    agent = Agent(trajectory_buffer, replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
     env = LineLevelArcEnv(task, tokenizer)
     print(agent.learn(env))
