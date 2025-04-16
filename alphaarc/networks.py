@@ -26,6 +26,7 @@ class PolicyValueNetwork(nn.Module):
         self.stop_strings =['\n']
         self.input_state_max = input_state_max
     
+# https://arxiv.org/pdf/2104.06303 
 
         
     # TODO: considering changing this later.

@@ -2,6 +2,9 @@ import math
 import numpy as np
 from alphaarc.env import LineLevelArcEnv
 import copy 
+
+import time 
+
 def ucb_score(parent, child):
     """
     The score for an action that would transition between the parent and child.

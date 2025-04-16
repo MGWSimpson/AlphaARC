@@ -14,7 +14,7 @@ from alphaarc.buffers import ReplayBuffer
 from alphaarc.networks import PolicyValueNetwork
 import torch.nn.functional as F
 from tqdm import tqdm
-
+import time
 from dataclasses import dataclass
 
 @dataclass
@@ -23,9 +23,9 @@ class AlphaARCConfig:
     model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
     tokenizer_path: str = 'Salesforce/codet5-small'
     model_temperature: float = 0.95
-    model_samples: int = 5
+    model_samples: int = 10
     
-    n_episodes_per_task: int = 5
+    n_episodes_per_task: int = 3
     n_simulations: int = 10
     n_training_iterations: int = 100
     action_temperature: float = 0.95
@@ -70,7 +70,11 @@ class Agent():
         
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
+
+            start_time = time.time()
             root = self.mcts.run(self.model, state)
+            print(f"forward pass time: {time.time() - start_time}")
+
             print(env._decode(root.state))
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
@@ -101,7 +105,7 @@ class Agent():
                 task_solved = True
                 break 
         
-        print(task_solved)
+        
         # self.train() # TODO: where to train?
         return int(task_solved)
     
