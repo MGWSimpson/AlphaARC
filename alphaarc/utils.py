@@ -57,13 +57,13 @@ def get_num_pixels(grid):
     return num_rows if num_columns == 0 else num_rows * num_columns
 
 
-def pad_and_convert(task, state, actions, pad_value=0.0, max_seq_length=1024):
+def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, max_action_size=20):
     
-    padded_task = np.pad(task, pad_width=(0, max_seq_length- task.shape[-1]), mode='constant', constant_values=pad_value)
-    padded_state = np.pad(state, pad_width=(0, max_seq_length - state.shape[-1]), mode='constant', constant_values=pad_value)
+    padded_task = np.pad(task, pad_width=(0, max_state_size- task.shape[-1]), mode='constant', constant_values=pad_value)
+    padded_state = np.pad(state, pad_width=(0, max_state_size - state.shape[-1]), mode='constant', constant_values=pad_value)
     padded_actions = []
     for action in actions:
-        pad_len = max_seq_length - action.shape[-1]
+        pad_len = max_action_size - action.shape[-1]
         padded_action = np.pad(action, pad_width=((0, pad_len)), mode='constant', constant_values=pad_value)
         padded_actions.append(padded_action)
     

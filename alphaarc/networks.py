@@ -28,8 +28,6 @@ class PolicyValueNetwork(nn.Module):
     def _compute_actions(self, task, state):
         if state.shape == (1,0): # if first token, don't pass in decoder input ids
             state = None
-
-        
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,
@@ -73,6 +71,28 @@ class PolicyValueNetwork(nn.Module):
         
         return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy()
     
+
+
+    def forward(self, task, state, actions):
+        B, A, AL = actions.shape
+
+        
+        for i in range(B): 
+            
+            task_i = task[i, ]
+            state_i = state[i, : ]
+            actions_i = actions[i, : ]
+
+
+
+
+            outputs = self.model.forward(   input_ids=task_i.repeat(A, 1), 
+                                            decoder_input_ids=torch.concat((state_i.repeat(A, 1), actions_i), dim=-1), 
+                                            use_cache=False,
+                                            output_hidden_states=True)
+
+
+        
 
    
  

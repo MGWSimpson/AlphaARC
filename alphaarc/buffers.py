@@ -2,30 +2,46 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from alphaarc.utils import pad_and_convert
+ 
 
 
 
 
-
-# will need to add a capacity here . 
 class TrajectoryBuffer(Dataset): 
-    def __init__(self, capacity=100_000, n_actions=5,  max_n_tokens=1024):
+    def __init__(self, capacity=100_000, n_actions=5,  max_state_size=1024, max_action_size=20):
         self.capacity = capacity
         self.idx = 0
         self.n_actions = n_actions
-        self.max_n_tokens = max_n_tokens
-
-        self.tasks = np.empty((self.capacity, self.max_n_tokens))
-        self.states = np.empty((self.capacity, self.max_n_tokens))
-        self.actions = np.empty((self.capacity, self.n_actions, self.max_n_tokens))
-        self.action_probs = np.empty((self.capacity, self.n_actions))
-        self.rewards = np.empty((self.capacity, 1))
+        self.max_state_size = max_state_size
+        self.max_action_size = max_action_size
+        self.tasks = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
+        self.states = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
+        self.actions = np.empty((self.capacity, self.n_actions, self.max_action_size), dtype=np.int64)
+        self.action_probs = np.empty((self.capacity, self.n_actions), dtype=np.float64)
+        self.rewards = np.empty((self.capacity, 1), dtype=np.float64)
     
- 
+    def _pad(self, task, state, actions, pad_value=0.0):
+    
+        padded_task = np.pad(task, pad_width=(0, self.max_state_size- task.shape[-1]), mode='constant', constant_values=pad_value)
+        padded_state = np.pad(state, pad_width=(0, self.max_state_size - state.shape[-1]), mode='constant', constant_values=pad_value)
+        padded_actions = []
+        for action in actions:
+            pad_len = self.max_action_size - action.shape[-1]
+            padded_action = np.pad(action, pad_width=((0, pad_len)), mode='constant', constant_values=pad_value)
+            padded_actions.append(padded_action)
+        
+        padded_actions = np.stack(padded_actions, axis=0)
+        return padded_task, padded_state, padded_actions
+
     def __len__(self):
         return self.idx 
 
+
+    # shrink the tensors to the largest non-padded within the batch.
+    def _unpad(self, task, state, actions, pad_value): 
+        # TODO: write this.
+        pass
+    
     def __getitem__(self, idx):
         task = torch.tensor(self.tasks[idx])
         state = torch.tensor(self.states[idx])
@@ -50,7 +66,7 @@ class TrajectoryBuffer(Dataset):
     def add_trajectory(self, trajectory): 
         for sample in trajectory: 
             task, state, actions, action_probs, rewards = sample
-            task, state, actions = pad_and_convert(task, state, actions)
+            task, state, actions = self._pad(task, state, actions)
             self._add_sample(task, state, actions, action_probs, rewards)
     
 

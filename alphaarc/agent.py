@@ -92,12 +92,18 @@ class Agent():
         optimizer = optim.Adam(self.model.parameters())
         self.model.train()
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
-                                           batch_size=2, 
-                                           collate_fn=self.trajectory_buffer._collate_fn)
+                                           batch_size=2)
 
 
-        for sample in trajectory_dataloader:
-            print(sample)
+        for batch in trajectory_dataloader:
+            task, state, actions, target_pis, target_vs = batch
+
+            self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
+            
+
+
+
+
 
 
 if __name__ == "__main__":
