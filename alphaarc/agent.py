@@ -25,8 +25,8 @@ class AlphaARCConfig:
     model_temperature: float = 0.95
     model_samples: int = 10
     
-    n_episodes_per_task: int = 3
-    n_simulations: int = 10
+    n_episodes_per_task: int = 1
+    n_simulations: int = 20
     n_training_iterations: int = 100
     action_temperature: float = 0.95
 

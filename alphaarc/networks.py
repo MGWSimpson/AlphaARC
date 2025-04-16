@@ -15,7 +15,6 @@ class PolicyValueNetwork(nn.Module):
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)        
         self.tokenizer =AutoTokenizer.from_pretrained(tokenizer_path)
         
-        # TODO: fix this
         self.value = nn.Linear(512, 1)    
         self.device = 'cuda'        
 
@@ -25,9 +24,6 @@ class PolicyValueNetwork(nn.Module):
         self.num_samples = num_samples
         self.stop_strings =['\n']
         self.input_state_max = input_state_max
-    
-# https://arxiv.org/pdf/2104.06303 
-
         
     # TODO: considering changing this later.
     def _compute_score_from_logits(self, actions, logits): 
