@@ -45,7 +45,7 @@ class LineLevelArcEnv:
         self.input_state_max = 1024
         self.max_length = 1024
 
-        self.n_actions = 10 # n lines of code allowed.
+        self.n_actions = 5 # n lines of code allowed.
         self.tokenizer = tokenizer
 
         self.new_line_arr = np.array([NEW_LINE_TOKEN_ID])

@@ -23,7 +23,7 @@ class AlphaARCConfig:
     model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
     tokenizer_path: str = 'Salesforce/codet5-small'
     model_temperature: float = 0.95
-    model_samples: int = 10
+    model_samples: int = 5
     
     n_episodes_per_task: int = 1
     n_simulations: int = 20

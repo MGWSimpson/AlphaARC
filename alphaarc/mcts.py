@@ -69,6 +69,8 @@ class Node:
         best_score = -np.inf
         best_action = -1
         best_child = None
+
+        
         for i in range(len(self.children)):
             score = ucb_score(self, self.children[i])
             if score > best_score:
