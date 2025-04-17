@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from torch.utils.data import DataLoader 
 
 from alphaarc.logger import Logger
-
+from collections import defaultdict
 import lightning.pytorch as pl
 
 @dataclass
@@ -50,6 +50,10 @@ class Agent():
         self.model = model
 
         self.logger = logger
+
+        self.optimizer = optim.Adam(self.model.parameters())
+
+        self.learning_count = 0
         
     def execute_episode(self, env, temperature): 
         
@@ -97,12 +101,13 @@ class Agent():
     
     
     def train(self):
-        optimizer = optim.Adam(self.model.parameters())
         self.model.train()
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
                                            batch_size=2)
         replay_dataloader = DataLoader(self.replay_buffer, batch_size=2)
 
+        batch_logs = defaultdict(list)
+        
         for batch in trajectory_dataloader:
             task, state, actions, target_pis, target_vs = batch
 
@@ -114,12 +119,15 @@ class Agent():
             value_loss = F.mse_loss( predicted_vs, target_vs)
         
             loss = policy_loss + value_loss 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
-            print(policy_loss)
-            print(value_loss)
+            batch_logs["policy"].append(policy_loss.item())
+            batch_logs["value"].append(value_loss.item())
+            batch_logs["trajectory_total"].append(loss.item())
+
+
 
 
         for batch in replay_dataloader:
@@ -127,13 +135,16 @@ class Agent():
             loss = self.model.model(   input_ids=task.to(self.model.device),
                                 labels=state.to(self.model.device)).loss
             
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
+            batch_logs["replay"].append(loss.item())
 
-            print(loss)
+        epoch_means = {k: sum(v)/len(v) for k, v in batch_logs.items()}
 
-
+        self.logger.log_training_data(epoch_means["policy"], 
+                                      epoch_means["value"], 
+                                      epoch_means["replay"])
 
 
 
