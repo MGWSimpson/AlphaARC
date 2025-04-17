@@ -18,6 +18,8 @@ import time
 from dataclasses import dataclass
 from torch.utils.data import DataLoader 
 
+from alphaarc.logger import Logger
+
 import lightning.pytorch as pl
 
 @dataclass
@@ -28,7 +30,7 @@ class AlphaARCConfig:
     model_temperature: float = 0.95
     model_samples: int = 5
     
-    n_episodes_per_task: int = 1
+    n_episodes_per_task: int = 3
     n_simulations: int = 10
     n_training_iterations: int = 100
     action_temperature: float = 0.95
@@ -37,7 +39,7 @@ class AlphaARCConfig:
 
 # save.
 class Agent(): 
-    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature):
+    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature, logger):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
         self.n_training_iterations = n_training_iterations
@@ -46,6 +48,8 @@ class Agent():
         self.trajectory_buffer = trajectory_buffer
         self.replay_buffer = replay_buffer
         self.model = model
+
+        self.logger = logger
         
     def execute_episode(self, env, temperature): 
         
@@ -105,25 +109,29 @@ class Agent():
             target_pis = target_pis.to(self.model.device)
             target_vs = target_vs.to(self.model.device)
             predicted_pis, predicted_vs = self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
-            
 
             policy_loss = F.cross_entropy(predicted_pis, target_pis)
             value_loss = F.mse_loss( predicted_vs, target_vs)
-
+        
             loss = policy_loss + value_loss 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+            print(policy_loss)
+            print(value_loss)
+
+
         for batch in replay_dataloader:
             task, state = batch
-
             loss = self.model.model(   input_ids=task.to(self.model.device),
                                 labels=state.to(self.model.device)).loss
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            print(loss)
 
 
 
@@ -135,12 +143,13 @@ if __name__ == "__main__":
     task = Task.from_json('data/training/42a50994.json')
     pl.seed_everything(0)
     print(task.program)
+    logger = Logger()
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
     trajectory_buffer =  TrajectoryBuffer()
     replay_buffer = ReplayBuffer()
     model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
     model.to('cuda')
-    agent = Agent(trajectory_buffer, replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature)
+    agent = Agent(trajectory_buffer, replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature, logger)
     env = LineLevelArcEnv(task, tokenizer)
     print(agent.learn(env))
