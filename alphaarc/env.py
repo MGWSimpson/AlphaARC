@@ -105,7 +105,8 @@ class LineLevelArcEnv:
 
 if __name__ == "__main__": 
     task = Task.from_json('data/training/67385a82.json')
-    env = LineLevelArcEnv(task)
+
+    #     env = LineLevelArcEnv(task)
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-small')
     result = tokenize_task(task, tokenizer, 100, 1024, 1024)
     print(result)

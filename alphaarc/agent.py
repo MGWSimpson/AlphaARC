@@ -22,6 +22,8 @@ from alphaarc.logger import Logger
 from collections import defaultdict
 import lightning.pytorch as pl
 
+from tqdm import tqdm
+
 @dataclass
 class AlphaARCConfig:
     batch_size: int = 2 
@@ -80,10 +82,6 @@ class Agent():
                 return ret, solved, full_task_and_program
 
 
-    def evaluate(self, env):
-        episode_history, solved = self.execute_episode(env, 0)
-        return int(solved)
-
     def learn(self, env): 
         task_solved = False
         for eps in range(self.n_episodes):
@@ -105,10 +103,9 @@ class Agent():
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
                                            batch_size=2)
         replay_dataloader = DataLoader(self.replay_buffer, batch_size=2)
-
         batch_logs = defaultdict(list)
         
-        for batch in trajectory_dataloader:
+        for batch in tqdm(trajectory_dataloader, desc="rl training"):
             task, state, actions, target_pis, target_vs = batch
 
             target_pis = target_pis.to(self.model.device)
@@ -130,7 +127,8 @@ class Agent():
 
 
 
-        for batch in replay_dataloader:
+        print(f"starting supervised training")
+        for batch in tqdm(replay_dataloader, desc="supervised training"):
             task, state = batch
             loss = self.model.model(   input_ids=task.to(self.model.device),
                                 labels=state.to(self.model.device)).loss
@@ -141,11 +139,14 @@ class Agent():
             batch_logs["replay"].append(loss.item())
 
         epoch_means = {k: sum(v)/len(v) for k, v in batch_logs.items()}
-
         self.logger.log_training_data(epoch_means["policy"], 
                                       epoch_means["value"], 
-                                      epoch_means["replay"])
+                                      epoch_means["replay"],
+                                      self.learning_count,
+                                      len(self.trajectory_buffer),
+                                      len(self.replay_buffer))
 
+        self.learning_count +=1
 
 
 if __name__ == "__main__":
@@ -153,12 +154,12 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     task = Task.from_json('data/training/42a50994.json')
     pl.seed_everything(0)
-    print(task.program)
     logger = Logger()
     config = AlphaARCConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
     trajectory_buffer =  TrajectoryBuffer()
     replay_buffer = ReplayBuffer()
+    replay_buffer.preload_tasks([task], tokenizer)
     model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
     model.to('cuda')
     agent = Agent(trajectory_buffer, replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature, logger)

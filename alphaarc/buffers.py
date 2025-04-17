@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from alphaarc.task import Task
+from alphaarc.policy.tokenize import tokenize_task
 
- 
 
 
 
@@ -82,13 +83,13 @@ class TrajectoryBuffer(Dataset):
 class ReplayBuffer(Dataset): 
     def __init__(self, capacity=100_000, max_state_len=512, max_task_len=1024): 
         self.idx = 0
-        
         self.max_task_len = max_task_len
         self.max_state_len = max_state_len
         self.capacity = capacity
 
         self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
         self.states = np.empty((self.capacity, self.max_state_len), dtype=np.int64)
+
 
     def __len__(self):
         return self.idx 
@@ -104,18 +105,21 @@ class ReplayBuffer(Dataset):
 
     def _idx_accounting(self): 
         self.idx +=1
-
         if self.idx == self.capacity: 
             self.idx = 0
 
 
+    def preload_tasks(self, tasks: list[Task], tokenizer): 
+        for task in tasks:
+            program_lines = task.program_lines
+            encoded_program = tokenizer( program_lines, return_tensors='np')['input_ids'].squeeze()
+            encoded_task = np.array(tokenize_task(task, tokenizer, 100, self.max_task_len, self.max_task_len)['input_ids'])
+            self.add_program_and_task(encoded_task, encoded_program)
+
     def add_program_and_task(self, task, program): 
         task, program = self._pad(task, program)   
-
         self.tasks[self.idx] = task
         self.states [self.idx]= program
-        
-
         self._idx_accounting()
         
     

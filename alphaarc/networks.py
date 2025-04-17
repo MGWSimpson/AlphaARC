@@ -83,7 +83,6 @@ class PolicyValueNetwork(nn.Module):
             state_i = state[i, : ]
             actions_i = actions[i, : ]
 
-
             outputs = self.model.forward(   input_ids=task_i.repeat(A, 1), 
                                             decoder_input_ids=torch.concat((state_i.repeat(A, 1), actions_i), dim=-1), 
                                             use_cache=False,

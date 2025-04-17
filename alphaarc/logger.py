@@ -39,6 +39,8 @@ class Logger:
                         "policy_loss",
                         "value_loss",
                         "supervised_loss",
+                        "trajectory_buffer_size",
+                        "supervised_buffer_size"
                     ])
 
    
@@ -59,9 +61,11 @@ class Logger:
         policy_loss: float,
         value_loss: float,
         supervised_loss: float,
+        trajectory_buffer_size,
+        supervised_buffer_size,
         step: int | None = None,
     ) -> None:
-        self._write_row(self._training_log_path, [step, policy_loss, value_loss, supervised_loss])
+        self._write_row(self._training_log_path, [step, policy_loss, value_loss, supervised_loss, trajectory_buffer_size, supervised_buffer_size])
 
   
 
