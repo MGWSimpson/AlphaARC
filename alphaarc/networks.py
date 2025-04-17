@@ -28,6 +28,8 @@ class PolicyValueNetwork(nn.Module):
     def _compute_actions(self, task, state):
         if state.shape == (1,0): # if first token, don't pass in decoder input ids
             state = None
+            value = torch.tensor([0])
+
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,
@@ -46,9 +48,14 @@ class PolicyValueNetwork(nn.Module):
         logits = outputs.logits
         new_actions_shape = len(logits)
         actions = actions[: , -new_actions_shape:]
-        first_hidden_states = torch.stack(outputs.decoder_hidden_states[0])[-1, -1, -1, :].squeeze()
         final_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1, :, -1, :]
-        return actions, self._compute_policy(final_hidden_states), self._compute_values(first_hidden_states)
+        
+
+        if state is not None:
+            first_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1, -1, -new_actions_shape-1, :].squeeze()
+            value = self._compute_values(first_hidden_states)
+        
+        return actions, self._compute_policy(final_hidden_states), value
     
     
 
@@ -89,7 +96,7 @@ class PolicyValueNetwork(nn.Module):
                                             output_hidden_states=True).decoder_hidden_states 
             
             outputs =  torch.stack(outputs)
-            first_hidden_state = outputs[-1, 0, -AL, :] # TODO: need to think really hard if this is the case.
+            first_hidden_state = outputs[-1, 0, -AL-1, :] 
             last_hidden_states =  outputs [-1, :, -1, :]
             
             v = self._compute_values(first_hidden_state)
