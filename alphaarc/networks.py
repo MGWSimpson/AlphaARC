@@ -13,8 +13,8 @@ class PolicyValueNetwork(nn.Module):
         super().__init__()
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)        
         self.tokenizer =AutoTokenizer.from_pretrained(tokenizer_path)
-        self.value = nn.Linear(512, 1)    
-        self.policy = nn.Linear(512, 1)
+        self.value = nn.Linear(768, 1)    
+        self.policy = nn.Linear(768, 1)
         self.device = 'cuda'        
 
         # model parameters

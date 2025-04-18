@@ -17,6 +17,8 @@ from tqdm import tqdm
 import time
 from dataclasses import dataclass
 from torch.utils.data import DataLoader 
+from torch.amp.grad_scaler import GradScaler
+from torch import autocast
 
 from alphaarc.logger import Logger
 from collections import defaultdict
@@ -88,61 +90,78 @@ class Agent():
         self.model.set_task(env.tokenized_task)
         
         for eps in range(self.n_episodes):
-
-            start_time = time.time()
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
-            print(f"episode time: {time.time() - start_time}")
             self.trajectory_buffer.add_trajectory(episode_history)
 
             if solved:
                 self.replay_buffer.add_program_and_task(full_task_and_program[0], full_task_and_program[1])
                 task_solved = True
                 break 
-        
-        
-        self.train() 
         return int(task_solved)
     
-    
-    def train(self):
-        self.model.train()
+
+    def _train_rl(self, batch_logs): 
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
-                                           batch_size=2)
-        replay_dataloader = DataLoader(self.replay_buffer, batch_size=2)
-        batch_logs = defaultdict(list)
+                                           batch_size=1)
         
+        scaler = GradScaler()
+
         for batch in tqdm(trajectory_dataloader, desc="rl training"):
             task, state, actions, target_pis, target_vs = batch
-
-            target_pis = target_pis.to(self.model.device)
-            target_vs = target_vs.to(self.model.device)
-            predicted_pis, predicted_vs = self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
-
-            policy_loss = F.cross_entropy(predicted_pis, target_pis)
-            value_loss = F.mse_loss( predicted_vs, target_vs)
-        
-            loss = policy_loss + value_loss 
             self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+            
 
-            batch_logs["policy"].append(policy_loss.item())
-            batch_logs["value"].append(value_loss.item())
-            batch_logs["trajectory_total"].append(loss.item())
+            with autocast(device_type='cuda', dtype=torch.float16):
+                target_pis = target_pis.to(self.model.device)
+                target_vs = target_vs.to(self.model.device)
+                predicted_pis, predicted_vs = self.model.forward( task.to(self.model.device), state.to(self.model.device), actions.to(self.model.device))
+
+                policy_loss = F.cross_entropy(predicted_pis, target_pis)
+                value_loss = F.mse_loss( predicted_vs, target_vs)
+                
+                loss = policy_loss + value_loss 
+                
+            scaler.scale(loss).backward()
+            scaler.step(self.optimizer)
+            scaler.update()
+
+
+            batch_logs["policy"].append(policy_loss.detach().item())
+            batch_logs["value"].append(value_loss.detach().item())
+            batch_logs["trajectory_total"].append(loss.detach().item())
 
 
 
+    def _train_supervised(self, batch_logs):
+        scaler = GradScaler()
+        replay_dataloader = DataLoader(self.replay_buffer, batch_size=1)
 
         print(f"starting supervised training")
         for batch in tqdm(replay_dataloader, desc="supervised training"):
             task, state = batch
-            loss = self.model.model(   input_ids=task.to(self.model.device),
-                                labels=state.to(self.model.device)).loss
-            
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            batch_logs["replay"].append(loss.item())
+            with autocast(device_type='cuda', dtype=torch.float16):
+                loss = self.model.model(   input_ids=task.to(self.model.device),
+                                    labels=state.to(self.model.device)).loss
+                
+            scaler.scale(loss).backward()
+            scaler.step(self. optimizer)
+            scaler.update()
+            batch_logs["replay"].append(loss.detach().item())
+
+
+        # TODO: add a check in here!
+        batch_logs['replay'].append(0)
+        
+
+
+
+
+    def train(self):
+        batch_logs = defaultdict(list)
+        self.model.train()
+
+        self._train_rl(batch_logs)
+        self._train_supervised(batch_logs)
 
         epoch_means = {k: sum(v)/len(v) for k, v in batch_logs.items()}
         self.logger.log_training_data(epoch_means["policy"], 
@@ -150,10 +169,11 @@ class Agent():
                                       epoch_means["replay"],
                                       self.learning_count,
                                       len(self.trajectory_buffer),
-                                      len(self.replay_buffer))
-
+                                      len(self.replay_buffer))        
         self.learning_count +=1
 
+
+       
 
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
