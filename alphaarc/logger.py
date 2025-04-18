@@ -9,10 +9,6 @@ from typing import Mapping, Any, Final
 
 
 
-class TrainingLogger:
-    pass
- 
-
 class Logger:
     def __init__(
         self,

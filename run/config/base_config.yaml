@@ -1,5 +1,5 @@
 defaults:
-  - models: codet5_small
+  - models: codet5p_220m
 
 experiment_name: ""
 seed: 17
@@ -52,9 +52,9 @@ replay_buffer:
   num_policy_experiences: 90_000
   num_mutated_experiences: 10_000
   mutated_train_tasks_file: './data/mutated_tasks_train_'
-  max_mutated_train_tasks: 19_200
+  max_mutated_train_tasks: 9_600
   mutated_file_start: 9_600
-  mutated_file_end: 19_200
+  mutated_file_end: 9_600
   mutated_file_interval: 9_600
   priority_in_mutated: True
 

@@ -81,7 +81,7 @@ class TrajectoryBuffer(Dataset):
 
 
 class ReplayBuffer(Dataset): 
-    def __init__(self, capacity=100_000, max_state_len=512, max_task_len=1024): 
+    def __init__(self, capacity=100_000, max_state_len=2048, max_task_len=2048): 
         self.idx = 0
         self.max_task_len = max_task_len
         self.max_state_len = max_state_len
@@ -89,17 +89,32 @@ class ReplayBuffer(Dataset):
 
         self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
         self.states = np.empty((self.capacity, self.max_state_len), dtype=np.int64)
+        self.task_lengths = np.empty((self.capacity), dtype=np.int16)
+        self.program_lengths = np.empty((self.capacity), dtype=np.int16)
 
+        self.pad_token = 0
 
     def __len__(self):
         return self.idx 
 
     def __getitem__(self, idx):
-        return torch.tensor(self.tasks[idx]), torch.tensor(self.states[idx])
+        task_length = self.task_lengths[idx]
+        program_length = self.program_lengths[idx]
+        return self.tasks[idx][:task_length], self.states[idx][:program_length]
     
+
+    @staticmethod
+    def collate_fn(batch, pad_token=0):
+        tasks, states = zip(*batch)
+        longest_task = max([len(x) for x in tasks])
+        longest_program = max([len(x) for x in states])
+        padded_tasks = [np.pad(x, pad_width=(0, longest_task - x.shape[-1]), mode='constant', constant_values=pad_token) for x in tasks ]
+        padded_states = [np.pad(x, pad_width=(0, longest_program - x.shape[-1]), mode='constant', constant_values=pad_token) for x in states]
+        return torch.stack([torch.tensor(x) for x in padded_tasks]), torch.stack([torch.tensor(x) for x in padded_states])
+
     def _pad(self, task, program):
-        padded_program = np.pad(program, pad_width=(0, self.max_state_len - program.shape[-1]), mode='constant', constant_values=0)
-        padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1 ]), mode='constant', constant_values=0)
+        padded_program = np.pad(program, pad_width=(0, self.max_state_len - program.shape[-1]), mode='constant', constant_values=self.pad_token)
+        padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1 ]), mode='constant', constant_values=self.pad_token)
         return padded_task, padded_program
 
 
@@ -113,13 +128,16 @@ class ReplayBuffer(Dataset):
         for task in tasks:
             program_lines = task.program_lines
             encoded_program = tokenizer( program_lines, return_tensors='np')['input_ids'].squeeze()
-            encoded_task = np.array(tokenize_task(task, tokenizer, 100, self.max_task_len, self.max_task_len)['input_ids'])
+            encoded_task = np.array(tokenize_task(task, tokenizer, 10, 512, 512)['input_ids'])
             self.add_program_and_task(encoded_task, encoded_program)
 
     def add_program_and_task(self, task, program): 
+        task_len, program_len = task.shape[-1], program.shape[-1]        
         task, program = self._pad(task, program)   
         self.tasks[self.idx] = task
         self.states [self.idx]= program
+        self.task_lengths[self.idx] = task_len
+        self.program_lengths[self.idx] = program_len
         self._idx_accounting()
         
     
