@@ -99,6 +99,7 @@ class MCTS:
 
         root = Node(0)
         actions, action_probs, value = model.predict(self.env.tokenized_task, state)
+        
         root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):

@@ -33,8 +33,8 @@ class AlphaARCConfig:
     model_samples: int = 5
     
     n_episodes_per_task: int = 3
-    n_simulations: int = 10
-    n_training_iterations: int = 100
+    n_simulations: int = 20
+    n_training_iterations: int = 3
     action_temperature: float = 0.95
 
 
@@ -84,8 +84,14 @@ class Agent():
 
     def learn(self, env): 
         task_solved = False
+
+        self.model.set_task(env.tokenized_task)
+        
         for eps in range(self.n_episodes):
+
+            start_time = time.time()
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
+            print(f"episode time: {time.time() - start_time}")
             self.trajectory_buffer.add_trajectory(episode_history)
 
             if solved:
@@ -151,7 +157,7 @@ class Agent():
 
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     task = Task.from_json('data/training/42a50994.json')
     pl.seed_everything(0)
     logger = Logger()

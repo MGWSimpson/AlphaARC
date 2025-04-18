@@ -6,7 +6,7 @@ import numpy as np
 from numpy import inf
 from alphaarc.policy.tokenize import tokenize_task
 import torch.nn.functional as F
-
+import copy
 
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, model_path, tokenizer_path, temperature=0.95, max_length=1024, num_samples=5, input_state_max=1024):
@@ -25,12 +25,18 @@ class PolicyValueNetwork(nn.Module):
         self.input_state_max = input_state_max
         
 
+
+
     def _compute_actions(self, task, state):
         if state.shape == (1,0): # if first token, don't pass in decoder input ids
             state = None
             value = torch.tensor([0])
-
-        outputs = self.model.generate(      input_ids=task,
+            embedding =  self.model.encoder(task)
+        else:
+            embedding = copy.copy(self.embedding)
+            
+             
+        outputs = self.model.generate(      encoder_outputs=embedding,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,
                                             do_sample=True,
@@ -74,11 +80,13 @@ class PolicyValueNetwork(nn.Module):
             task = torch.tensor(task, device=self.device).unsqueeze(0)
             state = torch.tensor(state, device=self.device).unsqueeze(0)
             actions, action_probs, values =  self._compute_actions(task, state)
-
         
         return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy()
-    
 
+    def set_task(self, task): 
+        self.eval()    
+        task = torch.tensor(task, device=self.device).unsqueeze(0)
+        self.embedding = self.model.encoder(task) 
 
     def forward(self, task, state, actions):
         B, A, AL = actions.shape

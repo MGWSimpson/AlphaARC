@@ -74,7 +74,7 @@ def run(config: FineTuneConfig):
 
     for epoch in tqdm(range(config.n_epochs)):
         losses = []
-        for input, target in dataloader:
+        for input, target in tqdm( dataloader):
             optimizer.zero_grad()
 
             with autocast(device_type='cuda', dtype=torch.float16):
@@ -83,9 +83,9 @@ def run(config: FineTuneConfig):
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            losses.append(loss.item())
+            losses.append(loss.detach().item())
         
-        logger.info(f"epoch {epoch}: avg loss: {sum(loss) / len(loss)}")
+        logger.info(f"epoch {epoch}: avg loss: {sum(losses) / len(losses)}")
         model.save_pretrained(log_dir / "model", from_pt=True)
 
 

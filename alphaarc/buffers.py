@@ -8,7 +8,7 @@ from alphaarc.policy.tokenize import tokenize_task
 
 
 """
-Stores the trajectories of a task.
+TODO: store the diff things.
 """
 class TrajectoryBuffer(Dataset): 
     def __init__(self, capacity=100_000, n_actions=5, max_task_size=1024,  max_state_size=512, max_action_size=20):
@@ -18,6 +18,7 @@ class TrajectoryBuffer(Dataset):
         self.max_state_size = max_state_size
         self.max_action_size = max_action_size
         self.max_task_size = max_task_size
+        
         self.tasks = np.empty((self.capacity, self.max_task_size), dtype=np.int64)
         self.states = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
         self.actions = np.empty((self.capacity, self.n_actions, self.max_action_size), dtype=np.int64)
@@ -41,10 +42,8 @@ class TrajectoryBuffer(Dataset):
         return self.idx 
 
 
-    # shrink the tensors to the largest non-padded within the batch.
-    def _unpad(self, task, state, actions, pad_value): 
-        # TODO: write this.
-        pass
+    
+
     
     def __getitem__(self, idx):
         task = torch.tensor(self.tasks[idx])
@@ -58,7 +57,6 @@ class TrajectoryBuffer(Dataset):
 
     def _idx_accounting(self): 
         self.idx +=1
-
         if self.idx == self.capacity: 
             self.idx = 0
 
