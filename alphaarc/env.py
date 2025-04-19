@@ -31,9 +31,9 @@ def append_return(program):
 NEW_LINE_TOKEN_ID = 203
 
 class LineLevelArcEnv:
-    def __init__(self, task: Task, tokenizer):
+    def __init__(self, task: Task, tokenizer, n_examples, max_task_len, max_state_len, n_actions):
+        self.n_examples = n_examples
         self.task = task
-        self.n_examples = 100
         self.initial_states = [
                 training_example["input"]
                 for training_example in task.training_examples[: self.n_examples]
@@ -42,10 +42,11 @@ class LineLevelArcEnv:
                 training_example["output"]
                 for training_example in task.training_examples[: self.n_examples]
         ]
-        self.input_state_max = 1024
-        self.max_length = 1024
+        self.n_examples = n_examples
+        self.input_state_max = max_task_len
+        self.max_length = max_state_len
 
-        self.n_actions = 5 # n lines of code allowed.
+        self.n_actions = n_actions
         self.tokenizer = tokenizer
 
         self.new_line_arr = np.array([NEW_LINE_TOKEN_ID])

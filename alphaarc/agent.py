@@ -41,7 +41,7 @@ class AlphaARCConfig:
 
 
 
-# save.
+# TODO: decide where to move all the train stuff.
 class Agent(): 
     def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, action_temperature, logger):
         self.n_episodes = n_episodes
@@ -51,13 +51,11 @@ class Agent():
         self.trajectory_buffer = trajectory_buffer
         self.replay_buffer = replay_buffer
         self.model = model
-
         self.logger = logger
-
-        self.optimizer = optim.Adam(self.model.parameters())
-
+        self.optimizer = optim.AdamW(self.model.parameters())
         self.learning_count = 0
         
+
     def execute_episode(self, env, temperature): 
         
         state = env.reset()

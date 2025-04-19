@@ -9,20 +9,18 @@ import torch.nn.functional as F
 import copy
 
 class PolicyValueNetwork(nn.Module): 
-    def __init__(self, model_path, tokenizer_path, temperature=0.95, max_length=1024, num_samples=5, input_state_max=1024):
+    def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
-        self.model= T5ForConditionalGeneration.from_pretrained(model_path)        
-        self.tokenizer =AutoTokenizer.from_pretrained(tokenizer_path)
-        self.value = nn.Linear(768, 1)    
+        self.model= T5ForConditionalGeneration.from_pretrained(model_path)
+        self.tokenizer = tokenizer        
+        self.value = nn.Linear(768, 1) # TODO: please fix this    
         self.policy = nn.Linear(768, 1)
-        self.device = 'cuda'        
+        self.device = device
 
         # model parameters
         self.temperature = temperature
-        self.max_length = max_length
         self.num_samples = num_samples
         self.stop_strings =['\n']
-        self.input_state_max = input_state_max
         
 
 

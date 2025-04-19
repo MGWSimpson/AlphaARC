@@ -5,6 +5,8 @@ from alphaarc.task import Task, from_dict
 class Curriculum:
     def __init__(self, dir_paths=[], file_paths=[]):
         self.tasks = []
+        self.solved_tasks = []
+        
         self. current_task_counter = 0
         self._add_data_sources(dirs=dir_paths, files=file_paths)
         print(f"loaded {len(self.tasks)} tasks")
@@ -30,16 +32,23 @@ class Curriculum:
             self._load_tasks_from_files(file_path)
 
     
-    # simply loop the tasks for now
-    # TODO: explore curriculum strategies 
-    def select_task(self): 
-        selected_task = self.tasks[self.current_task_counter]  
+    def _handle_idx_accounting(self): 
         self.current_task_counter +=1
         if self.current_task_counter > len(self.tasks): 
             self.current_task_counter = 0
         
+    
+    # simply loop the tasks for now
+    # TODO: explore curriculum strategies 
+    def select_task(self): 
+        selected_task = self.tasks[self.current_task_counter]  
+        self._handle_idx_accounting()
         return selected_task
+    
 
+    def mark_task_as_solved(self, task_idx):
+        self.solved_tasks.append(self.tasks[task_idx])
+        del self.tasks[task_idx]
 
 
 

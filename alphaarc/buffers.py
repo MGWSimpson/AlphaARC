@@ -7,31 +7,28 @@ from alphaarc.policy.tokenize import tokenize_task
 
 
 
-"""
-TODO: store the diff things.
-"""
 class TrajectoryBuffer(Dataset): 
-    def __init__(self, capacity=100_000, n_actions=5, max_task_size=1024,  max_state_size=512, max_action_size=20):
+    def __init__(self, capacity=100_000, n_actions=5, max_task_len=1024,  max_state_len=512, max_action_len=20):
         self.capacity = capacity
         self.idx = 0
         self.n_actions = n_actions
-        self.max_state_size = max_state_size
-        self.max_action_size = max_action_size
-        self.max_task_size = max_task_size
+        self.max_state_len = max_state_len
+        self.max_action_len = max_action_len
+        self.max_task_len = max_task_len
         
-        self.tasks = np.empty((self.capacity, self.max_task_size), dtype=np.int64)
-        self.states = np.empty((self.capacity, self.max_state_size), dtype=np.int64)
-        self.actions = np.empty((self.capacity, self.n_actions, self.max_action_size), dtype=np.int64)
+        self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
+        self.states = np.empty((self.capacity, self.max_state_len), dtype=np.int64)
+        self.actions = np.empty((self.capacity, self.n_actions, self.max_action_len), dtype=np.int64)
         self.action_probs = np.empty((self.capacity, self.n_actions), dtype=np.float32)
         self.rewards = np.empty((self.capacity, 1), dtype=np.float32)
     
     def _pad(self, task, state, actions, pad_value=0.0):
     
-        padded_task = np.pad(task, pad_width=(0, self.max_task_size - task.shape[-1]), mode='constant', constant_values=pad_value)
-        padded_state = np.pad(state, pad_width=(0, self.max_state_size - state.shape[-1]), mode='constant', constant_values=pad_value)
+        padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1]), mode='constant', constant_values=pad_value)
+        padded_state = np.pad(state, pad_width=(0, self.max_state_len - state.shape[-1]), mode='constant', constant_values=pad_value)
         padded_actions = []
         for action in actions:
-            pad_len = self.max_action_size - action.shape[-1]
+            pad_len = self.max_action_len - action.shape[-1]
             padded_action = np.pad(action, pad_width=((0, pad_len)), mode='constant', constant_values=pad_value)
             padded_actions.append(padded_action)
         
@@ -41,8 +38,6 @@ class TrajectoryBuffer(Dataset):
     def __len__(self):
         return self.idx 
 
-
-    
 
     
     def __getitem__(self, idx):
@@ -122,11 +117,11 @@ class ReplayBuffer(Dataset):
             self.idx = 0
 
 
-    def preload_tasks(self, tasks: list[Task], tokenizer): 
+    def preload_tasks(self, tasks: list[Task], tokenizer,n_examples, max_state_len, max_task_len ): 
         for task in tasks:
             program_lines = task.program_lines
             encoded_program = tokenizer( program_lines, return_tensors='np')['input_ids'].squeeze()
-            encoded_task = np.array(tokenize_task(task, tokenizer, 10, 512, 512)['input_ids'])
+            encoded_task = np.array(tokenize_task(task, tokenizer, n_examples, max_task_len, max_state_len)['input_ids'])
             self.add_program_and_task(encoded_task, encoded_program)
 
     def add_program_and_task(self, task, program): 
