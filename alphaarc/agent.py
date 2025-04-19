@@ -43,10 +43,9 @@ class AlphaARCConfig:
 
 # save.
 class Agent(): 
-    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, n_training_iterations, action_temperature, logger):
+    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, action_temperature, logger):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
-        self.n_training_iterations = n_training_iterations
         self.action_temperature = action_temperature
 
         self.trajectory_buffer = trajectory_buffer

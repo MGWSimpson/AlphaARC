@@ -30,7 +30,20 @@ from alphaarc.logger import Logger
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
-# will port to hydra later but quick class to store hyper-parameters.
+
+@dataclass
+class RLTrainingConfig:
+    pass
+
+@dataclass
+class SupervisedTrainingConfig:
+    pass
+
+@dataclass
+class ModelConfig:
+    pass
+
+
 @dataclass
 class AlphaARCConfig:
     batch_size: int = 2 
@@ -38,18 +51,26 @@ class AlphaARCConfig:
     tokenizer_path: str = 'Salesforce/codet5p-220m'
     model_temperature: float = 0.95
     model_samples: int = 5
-    n_episodes_per_task: int = 10
+    n_episodes_per_task: int = 1
     n_simulations: int = 20
-    n_training_iterations: int = 100
     action_temperature: float = 1
-    seed: int=0
+    seed: int = 0
+
+    trajectory_buffer_capacity
+    max_state_len
+    max_task_len
+    max_action_len
+
+
+
 
 def evaluate(agent, evaluation_set, tokenizer ):
     solved_tasks = 0
     for task in evaluation_set.tasks:
         env =  LineLevelArcEnv(task, tokenizer)
-        solve_rate += agent.evaluate(env)
-    print(f"solve rate on the evaluation set {float(solved_tasks/ len(evaluation_set.tasks))}")
+        solved_tasks += agent.evaluate(env)
+
+    print(f"solve rate on the evaluation set: {solved_tasks} / {len(evaluation_set.tasks)} ")
 
 def main() -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
@@ -77,10 +98,12 @@ def main() -> None:
         env = LineLevelArcEnv(task, tokenizer=tokenizer)
         tasks_solved += agent.learn(env)
         print(f"number of talks solved: {tasks_solved}")
+
         if task_iteration % test_every:
             agent.train()
             print("starting eval!")
             evaluate(evaluation, evaluation_set=evaluation, tokenizer=tokenizer)
+
 
 if __name__ == "__main__":
     main()
