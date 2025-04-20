@@ -57,11 +57,11 @@ class AlphaARCConfig:
     n_actions: int = 5
     n_examples: int = 10
     n_episodes_per_task: int = 1
-    n_simulations: int = 20
+    n_simulations: int = 10
     action_temperature: float = 1
     seed: int = 0
     max_state_len: int = 1024
-    max_task_len: int = 1024
+    max_task_len: int = 512
     max_action_len: int = 20
     trajectory_buffer_capacity = 100_000
     replay_buffer_capacity: int = 100_000
@@ -78,8 +78,7 @@ def evaluate(agent, evaluation_set, tokenizer, config):
                               n_actions=config.n_actions,
                               n_examples=config.n_examples)
         solved_tasks += agent.evaluate(env)
-
-    print(f"solve rate on the evaluation set: {solved_tasks} / {len(evaluation_set.tasks)} ")
+        print(f"solve rate on the evaluation set: {solved_tasks} / {len(evaluation_set.tasks)} ")
 
 def main() -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
@@ -119,6 +118,7 @@ def main() -> None:
                   action_temperature=config.action_temperature,
                   logger=logger)
 
+    evaluate(agent, evaluation_set=evaluation, tokenizer=tokenizer, config=config)
 
     terminated = False # TODO: decide on termination condition
     while not terminated:
@@ -137,12 +137,10 @@ def main() -> None:
                 curriculum.handle_solved_tasks(task)
                 print(f"number of tasks solved: {curriculum.get_n_solved()} / {curriculum.get_total_n()}")
 
-        """print(f"number of talks solved: {tasks_solved} / {task_iteration} ")
-        if task_iteration % test_every:
+        if task_iteration % config.train_every:
             agent.train()
             print("starting eval!")
-            evaluate(agent, evaluation_set=evaluation, tokenizer=tokenizer, config=config)
-        """
+            
 
 if __name__ == "__main__":
     main()

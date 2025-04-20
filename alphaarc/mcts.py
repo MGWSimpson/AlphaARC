@@ -103,6 +103,7 @@ class MCTS:
         root.expand(state, actions, action_probs)
         
         for _ in range(self.n_simulations):
+
             node = root
             search_path = [node]
             # SELECT
@@ -118,7 +119,11 @@ class MCTS:
             if not terminated:
                 # If the game has not ended:
                 # EXPAND
+
+                start_time = time.time()
                 actions, action_probs, value = model.predict(self.env.tokenized_task, next_state)
+                print(f"forward pass time: {time.time() - start_time}")
+
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs)
             self.backpropagate(search_path, value)

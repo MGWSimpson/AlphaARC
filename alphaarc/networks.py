@@ -29,10 +29,12 @@ class PolicyValueNetwork(nn.Module):
         if state.shape == (1,0): # if first token, don't pass in decoder input ids
             state = None
             value = torch.tensor([0])
+            task = torch.tensor(task, device=self.device).unsqueeze(0)
             embedding =  self.model.encoder(task)
         else:
             embedding = copy.copy(self.embedding)
-             
+
+
         outputs = self.model.generate(      encoder_outputs=embedding,
                                             decoder_input_ids=state,
                                             temperature=self.temperature,
@@ -43,10 +45,9 @@ class PolicyValueNetwork(nn.Module):
                                             output_logits=True,
                                             stop_strings=self.stop_strings,
                                             tokenizer= self.tokenizer,
-                                            use_cache=False,
+                                            use_cache=True,
                                             output_hidden_states= True
                                             ) 
-
         actions = outputs.sequences
         logits = outputs.logits
         new_actions_shape = len(logits)
@@ -74,7 +75,6 @@ class PolicyValueNetwork(nn.Module):
     def predict(self, task, state): 
         self.eval()
         with torch.no_grad(): 
-            task = torch.tensor(task, device=self.device).unsqueeze(0)
             state = torch.tensor(state, device=self.device).unsqueeze(0)
             actions, action_probs, values =  self._compute_actions(task, state)
         

@@ -91,7 +91,7 @@ class LineLevelArcEnv:
             reward = 1.0 
         else:
             reward = -1.0
-            
+        
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
         observation = self._encode(program)
         return observation, reward, terminated

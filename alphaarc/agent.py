@@ -26,18 +26,40 @@ import lightning.pytorch as pl
 
 from tqdm import tqdm
 
+
+@dataclass
+class RLTrainingConfig:
+    rl_batch_size: int =2
+
+@dataclass
+class SupervisedTrainingConfig:
+    supervised_batch_size: int = 2
+
+@dataclass
+class ModelConfig:
+    model_path: str = 'finetune/2025-04-18_12-38-42/model'
+    tokenizer_path: str = 'Salesforce/codet5p-220m'
+    model_temperature: float = 0.95
+    device: str = 'cuda'
+
 @dataclass
 class AlphaARCConfig:
-    batch_size: int = 2 
-    model_path: str = 'alphaarc/pretrained/last.ckpt.dir'
-    tokenizer_path: str = 'Salesforce/codet5-small'
-    model_temperature: float = 0.95
-    model_samples: int = 5
-    
-    n_episodes_per_task: int = 3
+    rl_training_config: RLTrainingConfig = RLTrainingConfig()
+    supervised_training_config: SupervisedTrainingConfig = SupervisedTrainingConfig()
+    model_config: ModelConfig = ModelConfig()
+    n_actions: int = 5
+    n_examples: int = 10
+    n_episodes_per_task: int = 1
     n_simulations: int = 20
-    n_training_iterations: int = 3
-    action_temperature: float = 0.95
+    action_temperature: float = 1
+    seed: int = 0
+    max_state_len: int = 1024
+    max_task_len: int = 512
+    max_action_len: int = 20
+    trajectory_buffer_capacity = 100_000
+    replay_buffer_capacity: int = 100_000
+    train_every: int = 100
+
 
 
 
@@ -99,7 +121,9 @@ class Agent():
         self.model.set_task(env.tokenized_task)
         
         for eps in range(self.n_episodes):
+            start_time = time.time()
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
+            print(f"time taken: {time.time() -start_time}")
             self.trajectory_buffer.add_trajectory(episode_history)
 
             if solved:
@@ -187,17 +211,44 @@ class Agent():
 
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-    task = Task.from_json('data/training/42a50994.json')
+    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+    task = Task.from_json('data/training/045e512c.json')
+    print(task.program)
     pl.seed_everything(0)
     logger = Logger()
     config = AlphaARCConfig()
-    tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_path)
-    trajectory_buffer =  TrajectoryBuffer()
-    replay_buffer = ReplayBuffer()
-    replay_buffer.preload_tasks([task], tokenizer)
-    model = PolicyValueNetwork( config. model_path, config.tokenizer_path, config.model_temperature, num_samples=config.model_samples)
-    model.to('cuda')
-    agent = Agent(trajectory_buffer, replay_buffer, model, config.n_episodes_per_task, config.n_simulations, config.n_training_iterations, config.action_temperature, logger)
-    env = LineLevelArcEnv(task, tokenizer)
+    tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
+    trajectory_buffer =  TrajectoryBuffer(capacity=config.trajectory_buffer_capacity,
+                                          n_actions=config.n_actions,
+                                          max_action_len=config.max_action_len,
+                                          max_state_len=config.max_state_len,
+                                          max_task_len=config.max_task_len)
+    
+    replay_buffer = ReplayBuffer(capacity=config.replay_buffer_capacity,
+                                 max_state_len=config.max_state_len,
+                                 max_task_len=config.max_task_len)
+    
+    tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
+    
+    model = PolicyValueNetwork(model_path=config.model_config.model_path,
+                               tokenizer=tokenizer,
+                               temperature=config.model_config.model_temperature,
+                               num_samples=config.n_actions,
+                               device= config.model_config.device)
+    
+    model = model.to('cuda')
+    agent = Agent(trajectory_buffer=trajectory_buffer,
+                  replay_buffer=replay_buffer, 
+                  model=model,
+                  n_episodes=config.n_episodes_per_task,
+                  n_simulations=config.n_simulations,
+                  action_temperature=config.action_temperature,
+                  logger=logger)
+
+    env = LineLevelArcEnv(task, 
+                                tokenizer=tokenizer, 
+                                max_task_len=config.max_task_len, 
+                                max_state_len=config.max_state_len, 
+                                n_actions=config.n_actions,
+                                n_examples=config.n_examples)
     print(agent.learn(env))

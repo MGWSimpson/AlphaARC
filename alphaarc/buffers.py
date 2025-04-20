@@ -8,13 +8,13 @@ from alphaarc.policy.tokenize import tokenize_task
 
 
 class TrajectoryBuffer(Dataset): 
-    def __init__(self, capacity=100_000, n_actions=5, max_task_len=1024,  max_state_len=512, max_action_len=20):
+    def __init__(self, capacity=100_000, n_actions=5, max_task_len=1024,  max_state_len=512, max_action_len=20, n_examples=10):
         self.capacity = capacity
         self.idx = 0
         self.n_actions = n_actions
-        self.max_state_len = max_state_len
-        self.max_action_len = max_action_len
-        self.max_task_len = max_task_len
+        self.max_state_len = max_state_len * n_examples
+        self.max_action_len = max_action_len * n_examples 
+        self.max_task_len = max_task_len * n_examples
         
         self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
         self.states = np.empty((self.capacity, self.max_state_len), dtype=np.int64)
@@ -27,7 +27,8 @@ class TrajectoryBuffer(Dataset):
 
 
     def _pad(self, task, state, actions, pad_value=0.0):
-    
+        
+        print(task.shape[-1])
         padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1]), mode='constant', constant_values=pad_value)
         padded_state = np.pad(state, pad_width=(0, self.max_state_len - state.shape[-1]), mode='constant', constant_values=pad_value)
         padded_actions = []
@@ -97,10 +98,10 @@ class TrajectoryBuffer(Dataset):
 
 
 class ReplayBuffer(Dataset): 
-    def __init__(self, capacity=100_000, max_state_len=2048, max_task_len=2048): 
+    def __init__(self, capacity=100_000, max_state_len=2048, max_task_len=2048, n_examples=10): 
         self.idx = 0
-        self.max_task_len = max_task_len
-        self.max_state_len = max_state_len
+        self.max_task_len = max_task_len * n_examples
+        self.max_state_len = max_state_len * n_examples
         self.capacity = capacity
 
         self.tasks = np.empty((self.capacity, self.max_task_len), dtype=np.int64)
