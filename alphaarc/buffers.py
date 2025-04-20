@@ -21,7 +21,11 @@ class TrajectoryBuffer(Dataset):
         self.actions = np.empty((self.capacity, self.n_actions, self.max_action_len), dtype=np.int64)
         self.action_probs = np.empty((self.capacity, self.n_actions), dtype=np.float32)
         self.rewards = np.empty((self.capacity, 1), dtype=np.float32)
-    
+
+        self.tasks_lens = np.empty((self.capacity), dtype= np.int16)
+        self.state_lens = np.empty((self.capacity), dtype=np.int16)
+
+
     def _pad(self, task, state, actions, pad_value=0.0):
     
         padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1]), mode='constant', constant_values=pad_value)
@@ -41,13 +45,31 @@ class TrajectoryBuffer(Dataset):
 
     
     def __getitem__(self, idx):
-        task = torch.tensor(self.tasks[idx])
-        state = torch.tensor(self.states[idx])
-        actions = torch.tensor ( self.actions[idx])
-        action_probs = torch.tensor( self.action_probs[idx])
-        rewards = torch.tensor(self.rewards[idx])
-        return task, state, actions, action_probs, rewards
+        task = self.tasks[idx]
+        state = self.states[idx]
+        actions = self.actions[idx]
+        action_probs = self.action_probs[idx]
+        rewards = self.rewards[idx]
+        
+        task_len = self.tasks_lens[idx]
+        state_len = self.state_lens[idx]
+
+        return task[:task_len], state[:state_len], actions, action_probs, rewards
     
+    @staticmethod
+    def collate_fn(batch, pad_token=0):
+        tasks, states, actions, action_probs, rewards = zip(*batch)
+        
+        longest_task = max(max([len(x) for x in tasks]), 1)
+        longest_program = max(max([len(x) for x in states]), 1)
+        padded_tasks = [np.pad(x, pad_width=(0, longest_task - x.shape[-1]), mode='constant', constant_values=pad_token) for x in tasks ]
+        padded_states = [np.pad(x, pad_width=(0, longest_program - x.shape[-1]), mode='constant', constant_values=pad_token) for x in states]
+        
+        return (torch.stack([torch.tensor(x) for x in padded_tasks]), 
+                  torch.stack([torch.tensor(x) for x in padded_states]),
+                  torch.stack([torch.tensor( x) for x in actions]),
+                  torch.stack([torch.tensor( x) for x in action_probs]),
+                  torch.stack([torch.tensor( x) for x in rewards]))
 
 
     def _idx_accounting(self): 
@@ -55,21 +77,22 @@ class TrajectoryBuffer(Dataset):
         if self.idx == self.capacity: 
             self.idx = 0
 
-    def _add_sample(self, task, state, action, action_prob, reward): 
-        
+    def _add_sample(self, task, state, action, action_prob, reward, task_len, state_len): 
         self.tasks[self.idx] = task
         self.states[self.idx] = state
         self.actions[self.idx] = action
         self.action_probs[self.idx] = action_prob
         self.rewards[self.idx] = reward
-
+        self.tasks_lens[self.idx]= task_len
+        self.state_lens[self.idx] = state_len
         self._idx_accounting()
 
     def add_trajectory(self, trajectory): 
         for sample in trajectory: 
             task, state, actions, action_probs, rewards = sample
+            task_len, state_len = task.shape[-1], state.shape[-1]
             task, state, actions = self._pad(task, state, actions)
-            self._add_sample(task, state, actions, action_probs, rewards)
+            self._add_sample(task, state, actions, action_probs, rewards, task_len=task_len, state_len=state_len)
     
 
 

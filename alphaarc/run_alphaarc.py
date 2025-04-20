@@ -27,6 +27,8 @@ from alphaarc.agent import Agent
 from alphaarc.buffers import ReplayBuffer, TrajectoryBuffer
 from alphaarc.networks import PolicyValueNetwork
 from alphaarc.logger import Logger
+
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
@@ -54,23 +56,27 @@ class AlphaARCConfig:
     model_config: ModelConfig = ModelConfig()
     n_actions: int = 5
     n_examples: int = 10
-    n_episodes_per_task: int = 1
+    n_episodes_per_task: int = 3
     n_simulations: int = 20
     action_temperature: float = 1
     seed: int = 0
-    max_state_len: int = 2048
-    max_task_len: int = 2048
+    max_state_len: int = 1024
+    max_task_len: int = 1024
     max_action_len: int = 20
     trajectory_buffer_capacity = 100_000
     replay_buffer_capacity: int = 100_000
     train_every: int = 100
 
 
-
-def evaluate(agent, evaluation_set, tokenizer ):
+def evaluate(agent, evaluation_set, tokenizer, config):
     solved_tasks = 0
-    for task in evaluation_set.tasks:
-        env =  LineLevelArcEnv(task, tokenizer)
+    for task in tqdm(evaluation_set.tasks):
+        env =  LineLevelArcEnv(task, 
+                              tokenizer=tokenizer, 
+                              max_task_len=config.max_task_len, 
+                              max_state_len=config.max_state_len, 
+                              n_actions=config.n_actions,
+                              n_examples=config.n_examples)
         solved_tasks += agent.evaluate(env)
 
     print(f"solve rate on the evaluation set: {solved_tasks} / {len(evaluation_set.tasks)} ")
@@ -115,7 +121,6 @@ def main() -> None:
 
 
     task_iteration = 0
-    test_every = 100
     tasks_solved = 0
     terminated = False # TODO: decide on termination condition
 
@@ -133,12 +138,12 @@ def main() -> None:
         
         task_iteration += 1 
 
-        print(f"number of talks solved: {tasks_solved} / {task_iteration} ")
+        """print(f"number of talks solved: {tasks_solved} / {task_iteration} ")
         if task_iteration % test_every:
             agent.train()
             print("starting eval!")
-            evaluate(evaluation, evaluation_set=evaluation, tokenizer=tokenizer)
-
+            evaluate(agent, evaluation_set=evaluation, tokenizer=tokenizer, config=config)
+        """
 
 if __name__ == "__main__":
     main()

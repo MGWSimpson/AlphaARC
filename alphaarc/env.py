@@ -88,7 +88,7 @@ class LineLevelArcEnv:
 
 
         if reward == len(self.initial_states):
-            reward = 1.0
+            reward = 1.0 
         else:
             reward = -1.0
             

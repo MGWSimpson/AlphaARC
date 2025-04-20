@@ -81,6 +81,18 @@ class Agent():
                 return ret, solved, full_task_and_program
 
 
+    def evaluate(self, env): 
+        task_solved = False
+        self.model.set_task(env.tokenized_task)
+        
+        for eps in range(self.n_episodes):
+            episode_history, solved, full_task_and_program = self.execute_episode(env, 0) # set temp to zero.
+            if solved:
+                task_solved = True
+                break 
+        
+        return int(task_solved)
+    
     def learn(self, env): 
         task_solved = False
 
@@ -99,7 +111,8 @@ class Agent():
 
     def _train_rl(self, batch_logs): 
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
-                                           batch_size=1)
+                                           batch_size=1,
+                                           collate_fn=TrajectoryBuffer.collate_fn)
         
         scaler = GradScaler()
 
@@ -131,7 +144,7 @@ class Agent():
 
     def _train_supervised(self, batch_logs):
         scaler = GradScaler()
-        replay_dataloader = DataLoader(self.replay_buffer, batch_size=1)
+        replay_dataloader = DataLoader(self.replay_buffer, batch_size=1, collate_fn=ReplayBuffer.collate_fn)
 
         print(f"starting supervised training")
         for batch in tqdm(replay_dataloader, desc="supervised training"):
