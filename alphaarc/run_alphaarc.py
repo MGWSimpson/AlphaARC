@@ -56,7 +56,7 @@ class AlphaARCConfig:
     model_config: ModelConfig = ModelConfig()
     n_actions: int = 5
     n_examples: int = 10
-    n_episodes_per_task: int = 3
+    n_episodes_per_task: int = 1
     n_simulations: int = 20
     action_temperature: float = 1
     seed: int = 0
@@ -120,23 +120,22 @@ def main() -> None:
                   logger=logger)
 
 
-    task_iteration = 0
-    tasks_solved = 0
     terminated = False # TODO: decide on termination condition
-
     while not terminated:
-        task = curriculum.select_task()
-        print(f"starting on task {task.task_key}")
-        env = LineLevelArcEnv(task, 
-                              tokenizer=tokenizer, 
-                              max_task_len=config.max_task_len, 
-                              max_state_len=config.max_state_len, 
-                              n_actions=config.n_actions,
-                              n_examples=config.n_examples)
-        
-        tasks_solved += agent.learn(env)
-        
-        task_iteration += 1 
+        for task_iteration, task in tqdm(enumerate(curriculum.generate_curriculum()), total=len(curriculum)):
+            print(f"starting on task {task.task_key}")
+            env = LineLevelArcEnv(task, 
+                                tokenizer=tokenizer, 
+                                max_task_len=config.max_task_len, 
+                                max_state_len=config.max_state_len, 
+                                n_actions=config.n_actions,
+                                n_examples=config.n_examples)
+            
+            tasks_solved = agent.learn(env)
+            
+            if tasks_solved:
+                curriculum.handle_solved_tasks(task)
+                print(f"number of tasks solved: {curriculum.get_n_solved()} / {curriculum.get_total_n()}")
 
         """print(f"number of talks solved: {tasks_solved} / {task_iteration} ")
         if task_iteration % test_every:

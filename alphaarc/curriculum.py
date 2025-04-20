@@ -7,7 +7,6 @@ class Curriculum:
         self.tasks = []
         self.solved_tasks = []
         
-        self. current_task_counter = 0
         self._add_data_sources(dirs=dir_paths, files=file_paths)
         print(f"loaded {len(self.tasks)} tasks")
 
@@ -31,25 +30,26 @@ class Curriculum:
         for file_path in files:
             self._load_tasks_from_files(file_path)
 
-    
-    def _handle_idx_accounting(self): 
-        self.current_task_counter +=1
-        if self.current_task_counter > len(self.tasks): 
-            self.current_task_counter = 0
-        
-    
-    # simply loop the tasks for now
-    # TODO: explore curriculum strategies 
-    def select_task(self): 
-        selected_task = self.tasks[self.current_task_counter]  
-        self._handle_idx_accounting()
-        return selected_task
-    
 
-    def mark_task_as_solved(self, task_idx):
-        self.solved_tasks.append(self.tasks[task_idx])
-        del self.tasks[task_idx]
+    # TODO: explore curriculum strats
+    def generate_curriculum(self): 
+        return self.tasks
 
+
+    def handle_solved_tasks(self, task):
+        self.solved_tasks.append(task)
+        self.tasks.remove(task)
+
+
+    def __len__(self): 
+        return len(self.tasks)
+    
+    def get_total_n(self):
+        return len(self.solved_tasks) + len(self.tasks)
+
+    def get_n_solved(self): 
+        return len(self.solved_tasks)
+    
 
 
 if __name__ == "__main__": 
