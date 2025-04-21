@@ -47,16 +47,15 @@ class PolicyValueNetwork(nn.Module):
 
 
     def _compute_actions(self, task, state, past_key_values):
-        if state.shape == (1,0): # if first token, don't pass in decoder input ids
+        if state.shape == (0,): # if first token, don't pass in decoder input ids
             state = None# torch.tensor([[self.tokenizer.pad_token_id]], device=self.device)
             value = torch.tensor([0])
             task = torch.tensor(task, device=self.device).unsqueeze(0)
             embedding =  self.model.encoder(task)
-            cache_position = None
         else:
             embedding = copy.copy(self.embedding)
-            cache_position = None
-        
+            state = torch.tensor(state, device=self.device).unsqueeze(0)
+
         outputs = self.model.generate(      encoder_outputs=embedding,
                                             decoder_input_ids   = state,
                                             past_key_values=past_key_values,
@@ -70,9 +69,7 @@ class PolicyValueNetwork(nn.Module):
                                             tokenizer= self.tokenizer,
                                             use_cache=True,
                                             output_hidden_states= True
-                                            ) 
-        
-        
+                                            )         
         actions = outputs.sequences
         logits = outputs.logits
         new_actions_shape = len(logits)
@@ -100,13 +97,12 @@ class PolicyValueNetwork(nn.Module):
 
 
     
-    def predict(self, task, state, past_key_values): 
-        self.n_calls +=1
+    def predict(self, task, state, past_key_values):
+        print(state.shape) 
         with torch.no_grad(): 
-            # task = torch.tensor(task, device=self.device).unsqueeze(0)
-            state = torch.tensor(state, device=self.device).unsqueeze(0)
             actions, action_probs, values, past_key_values =  self._compute_actions(task, state, past_key_values)
         
+        self.n_calls +=1
         return actions.cpu().numpy(), action_probs.cpu().numpy(), values.cpu().numpy(), past_key_values
 
     def set_task(self, task): 

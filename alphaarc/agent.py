@@ -50,7 +50,7 @@ class AlphaARCConfig:
     n_actions: int = 5
     n_examples: int = 10
     n_episodes_per_task: int = 1
-    n_simulations: int = 20
+    n_simulations: int = 10
     action_temperature: float = 1
     seed: int = 0
     max_state_len: int = 1024
@@ -212,7 +212,7 @@ class Agent():
 if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-    task = Task.from_json('data/training/045e512c.json')
+    task = Task.from_json('data/training/6ecd11f4.json')
     print(task.program)
     pl.seed_everything(0)
     logger = Logger()

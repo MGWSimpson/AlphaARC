@@ -124,9 +124,9 @@ class MCTS:
                 # If the game has not ended:
                 # EXPAND
 
-                start_time = time.time()
+                # start_time = time.time()
                 actions, action_probs, value, child_key_values = model.predict(self.env.tokenized_task, next_state, past_key_values=child_key_value)
-                # print(f"forward pass time: {time.time() - start_time}")
+                #print(f"forward pass time: {time.time() - start_time}")
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs, child_key_values)
             self.backpropagate(search_path, value)
