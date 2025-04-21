@@ -21,6 +21,8 @@ def ucb_score(parent, child):
 def normalize_actions(): 
     pass
 
+
+
 class Node:
     def __init__(self, prior):
         self.visit_count = 0
@@ -73,14 +75,16 @@ class Node:
                 best_score = score
                 best_action = self.child_actions[i]
                 best_child = self.children[i]
-            
-        return best_action, best_child
+                best_child_key_value = copy.deepcopy(self.child_key_values).batch_select_indices(i)
 
-    def expand(self, state, actions, action_probs):
+
+        return best_action, best_child, best_child_key_value
+
+    def expand(self, state, actions, action_probs, child_key_values):
         self.state = state.copy()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(prior=prob) for prob in action_probs]
-
+        self.child_key_values =  copy.deepcopy(child_key_values)
 
     def __repr__(self):
         """
@@ -98,9 +102,9 @@ class MCTS:
     def run(self, model, state):
 
         root = Node(0)
-        actions, action_probs, value = model.predict(self.env.tokenized_task, state)
+        actions, action_probs, value, child_key_values = model.predict(self.env.tokenized_task, state, past_key_values=None)
         
-        root.expand(state, actions, action_probs)
+        root.expand(state, actions, action_probs, child_key_values)
         
         for _ in range(self.n_simulations):
 
@@ -108,7 +112,7 @@ class MCTS:
             search_path = [node]
             # SELECT
             while node.expanded():
-                action, node = node.select_child()
+                action, node, child_key_value = node.select_child()
                 search_path.append(node)
 
             parent = search_path[-2]
@@ -121,11 +125,10 @@ class MCTS:
                 # EXPAND
 
                 start_time = time.time()
-                actions, action_probs, value = model.predict(self.env.tokenized_task, next_state)
-                print(f"forward pass time: {time.time() - start_time}")
-
+                actions, action_probs, value, child_key_values = model.predict(self.env.tokenized_task, next_state, past_key_values=child_key_value)
+                # print(f"forward pass time: {time.time() - start_time}")
                 # normalize_actions()
-                node.expand(next_state, actions, action_probs)
+                node.expand(next_state, actions, action_probs, child_key_values)
             self.backpropagate(search_path, value)
 
         return root
