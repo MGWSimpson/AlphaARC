@@ -214,10 +214,10 @@ class ModelResponder():
                                     past_key_values))
 
 
-def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig): 
+def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig, trajectory_buffer_q: mp.Queue, replay_buffer_q: mp.Queue): 
     model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
 
-    agent = Agent(model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
+    agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
     tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
 
     while True:
@@ -237,13 +237,8 @@ def gpu_worker_fn(model_responder: ModelResponder):
 
 
 """
-Buffers -> locks and stuff.
+Buffers -> locks and stuff. X 
 Tasks solved -> shared value between tasks.
-Pass in the encoder inputs rather than the task state.
-    -> store it on the agent. send it across instead of the input ids.
-    -> how does it get a hold of it in the first place:
-        -> I will run it on the gpu. 
-        -> make an encoder gpu queue. which will just quickly handle anything. 
 """
 if __name__ == "__main__": 
     n_tree_workers = 4
@@ -254,6 +249,13 @@ if __name__ == "__main__":
     curriculum_q = mp.JoinableQueue(maxsize=len(curriculum))
     gpu_request_q = mp.Queue()
     encode_request_q = mp.Queue()
+
+    trajectory_buffer_q = mp.Queue()
+    replay_buffer_q = mp.Queue()
+    
+
+    replay_buffer = ReplayBuffer()
+    trajectory_buffer = TrajectoryBuffer()
 
     model = PolicyValueNetwork(config.model_config.model_path, 
                                AutoTokenizer.from_pretrained(config.model_config.tokenizer_path),
@@ -266,7 +268,7 @@ if __name__ == "__main__":
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
 
-    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config), daemon=True) for _ in range(n_tree_workers)]
+    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q), daemon=True) for _ in range(n_tree_workers)]
 
     # can break up the eval by just passing in these queues basically.
     for task in curriculum.generate_curriculum():

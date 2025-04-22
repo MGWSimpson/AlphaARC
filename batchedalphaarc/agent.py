@@ -64,7 +64,9 @@ class batchedalphaarcConfig:
 
 # TODO: decide where to move all the train stuff.
 class Agent(): 
-    def __init__(self, #trajectory_buffer, 
+    def __init__(self, trajectory_q,
+                 replay_q,
+                 #trajectory_buffer, 
                         #replay_buffer, 
                     model, 
                     n_episodes, n_simulations, action_temperature, #logger
@@ -75,6 +77,9 @@ class Agent():
 
         # self.trajectory_buffer = trajectory_buffer
         # self.replay_buffer = replay_buffer
+        
+        self.trajectory_q = trajectory_q
+        self.replay_q = replay_q
         self.model = model
         # self.logger = logger
         # self.optimizer = optim.AdamW(self.model.parameters())
@@ -124,9 +129,10 @@ class Agent():
         for eps in range(self.n_episodes):
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
             # self.trajectory_buffer.add_trajectory(episode_history)
-
+            self.trajectory_q.put(episode_history)
             if solved:
                 # self.replay_buffer.add_program_and_task(full_task_and_program[0], full_task_and_program[1])
+                self.replay_q.put((full_task_and_program[0], full_task_and_program[1]))
                 task_solved = True
                 break 
         return int(task_solved)
