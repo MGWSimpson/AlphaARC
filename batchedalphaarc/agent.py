@@ -88,7 +88,7 @@ class Agent():
         terminated = False
         
         while not terminated:
-            self.mcts = MCTS(env , n_simulations=self.n_simulations)
+            self.mcts = MCTS(env , encoder_output=self.encoder_output,  n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
@@ -120,7 +120,7 @@ class Agent():
     
     def learn(self, env): 
         task_solved = False
-        # self.model_queue.set_task(env.tokenized_task)
+        self.encoder_output = self.model.encode(env.tokenized_task).squeeze()
         for eps in range(self.n_episodes):
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
             # self.trajectory_buffer.add_trajectory(episode_history)

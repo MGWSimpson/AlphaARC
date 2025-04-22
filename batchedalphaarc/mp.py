@@ -66,7 +66,7 @@ from batchedalphaarc.policy.tokenize import tokenize_task
 import torch.nn.functional as F
 import copy
 import time
-
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
@@ -87,7 +87,7 @@ class PolicyValueNetwork(nn.Module):
     def _compute_actions(self, task, state, past_key_values):
         
         batch_size = task.shape[0] 
-        outputs = self.model.generate(      input_ids=task,
+        outputs = self.model.generate(      encoder_outputs=BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=task), # TODO: this may introduce a bug!
                                             decoder_input_ids   = state,
                                             temperature=self.temperature,
                                             do_sample=True,
@@ -99,7 +99,6 @@ class PolicyValueNetwork(nn.Module):
                                             tokenizer= self.tokenizer,
                                             use_cache=True,
                                             output_hidden_states= True
-
                                             )         
         actions = outputs.sequences.view(batch_size, self.num_samples, -1)
         logits = outputs.logits
@@ -136,8 +135,9 @@ class PolicyValueNetwork(nn.Module):
 
 class ModelRequester():
 
-    def __init__(self, gpu_request_q):
+    def __init__(self, gpu_request_q, encode_request_q):
         self.gpu_request_q = gpu_request_q
+        self.encode_request_q = encode_request_q
         self.read_conn , self.send_conn = mp.Pipe(duplex=False)
 
     def _make_gpu_request(self, task_data): 
@@ -152,22 +152,51 @@ class ModelRequester():
     def predict(self, task, state, past_key_values):
         return self._make_gpu_request((torch.tensor(task), torch.tensor(state), past_key_values))
 
+    
+    def _make_encode_request(self, task): 
+        task = torch.tensor(task).unsqueeze(0)
+        self.encode_request_q.put_nowait((task, self.send_conn))
+        print("awaiting encode response....")
+        result = self.read_conn.recv()
+        print("received encode response....")
+        return result.cpu()
+
+    def encode(self, task): 
+        return self._make_encode_request(task)
 
 class ModelResponder(): 
-    def __init__(self, gpu_request_q, batch_size, model):
+    def __init__(self, gpu_request_q, encode_request_q, batch_size, model):
         
         self.gpu_request_q = gpu_request_q
+        self.encode_request_q = encode_request_q
         self.batch_size = batch_size
         self.model = model
 
 
+    def _handle_encode_request(self, request): 
+        task, connection = request
+        task = task.to(self.model.device)
+        with torch.no_grad(): 
+            result = self.model.model.encoder(task)
+        result = result.last_hidden_state
+        connection.send(result)
+
+    # TODO: rewrite this to cope with encoding.
     def serve(self): 
         while True: 
             batch = []
-
             while len(batch) < self.batch_size:
-                request = self.gpu_request_q.get()
-                batch.append(request)
+                try:
+                    encode_request = self.encode_request_q.get_nowait()
+                    self._handle_encode_request(encode_request)
+                except Empty: 
+                    pass
+                
+                try: 
+                    request = self.gpu_request_q.get_nowait()
+                    batch.append(request)
+                except Empty: 
+                    pass
 
             data, connections = zip(*batch)
             # packet everything up. and then pass it to the network class
@@ -185,8 +214,8 @@ class ModelResponder():
                                     past_key_values))
 
 
-def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, config: batchedalphaarcConfig): 
-    model = ModelRequester(gpu_request_q=gpu_request_q)
+def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig): 
+    model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
 
     agent = Agent(model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
     tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
@@ -201,7 +230,6 @@ def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, config: ba
 
 
 
-# dummy gpu function.
 def gpu_worker_fn(model_responder: ModelResponder): 
     model_responder.serve()
 
@@ -209,9 +237,13 @@ def gpu_worker_fn(model_responder: ModelResponder):
 
 
 """
-Model -> model queue.
 Buffers -> locks and stuff.
 Tasks solved -> shared value between tasks.
+Pass in the encoder inputs rather than the task state.
+    -> store it on the agent. send it across instead of the input ids.
+    -> how does it get a hold of it in the first place:
+        -> I will run it on the gpu. 
+        -> make an encoder gpu queue. which will just quickly handle anything. 
 """
 if __name__ == "__main__": 
     n_tree_workers = 4
@@ -221,18 +253,20 @@ if __name__ == "__main__":
     curriculum = Curriculum(dir_paths=['data/evaluation'])
     curriculum_q = mp.JoinableQueue(maxsize=len(curriculum))
     gpu_request_q = mp.Queue()
+    encode_request_q = mp.Queue()
 
     model = PolicyValueNetwork(config.model_config.model_path, 
                                AutoTokenizer.from_pretrained(config.model_config.tokenizer_path),
                                config.model_config.model_temperature,
                                config.n_actions,
                                config.model_config.device)
+    
     model = model.to(model.device)
-    model_responder = ModelResponder(gpu_request_q=gpu_request_q, batch_size=n_tree_workers, model=model)
+    model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=n_tree_workers, model=model)
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
 
-    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, config), daemon=True) for _ in range(n_tree_workers)]
+    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config), daemon=True) for _ in range(n_tree_workers)]
 
     # can break up the eval by just passing in these queues basically.
     for task in curriculum.generate_curriculum():

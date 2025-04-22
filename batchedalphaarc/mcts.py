@@ -95,14 +95,15 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, env: LineLevelArcEnv, n_simulations):
+    def __init__(self, env: LineLevelArcEnv, encoder_output, n_simulations):
         self.env = env
         self.n_simulations = n_simulations
+        self.encoder_output = encoder_output
 
     def run(self, model, state):
 
         root = Node(0)
-        actions, action_probs, value, child_key_values =  model.predict(self.env.tokenized_task, state, past_key_values=None)
+        actions, action_probs, value, child_key_values =  model.predict(self.encoder_output, state, past_key_values=None)
         
         root.expand(state, actions, action_probs, child_key_values)
         
@@ -125,7 +126,7 @@ class MCTS:
                 # EXPAND
 
                 # start_time = time.time()
-                actions, action_probs, value, child_key_values = model.predict(self.env.tokenized_task, next_state, past_key_values=child_key_value)
+                actions, action_probs, value, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=child_key_value)
                 #print(f"forward pass time: {time.time() - start_time}")
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs, child_key_values)
