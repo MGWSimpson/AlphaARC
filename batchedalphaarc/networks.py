@@ -4,7 +4,7 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import os
 import numpy as np
 from numpy import inf
-from alphaarc.policy.tokenize import tokenize_task
+from batchedalphaarc.policy.tokenize import tokenize_task
 import torch.nn.functional as F
 import copy
 import time

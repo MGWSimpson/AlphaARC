@@ -1,6 +1,6 @@
 import os
 import json
-from alphaarc.task import Task, from_dict
+from batchedalphaarc.task import Task, from_dict
 
 class Curriculum:
     def __init__(self, dir_paths=[], file_paths=[]):

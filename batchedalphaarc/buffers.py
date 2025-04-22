@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from alphaarc.task import Task
-from alphaarc.policy.tokenize import tokenize_task
+from batchedalphaarc.task import Task
+from batchedalphaarc.policy.tokenize import tokenize_task
 
 
 

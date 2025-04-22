@@ -1,6 +1,6 @@
-from alphaarc.policy.environment import execute_candidate_program
-from alphaarc.task import Task
-from alphaarc.policy.tokenize import tokenize_task, TextEncoder
+from batchedalphaarc.policy.environment import execute_candidate_program
+from batchedalphaarc.task import Task
+from batchedalphaarc.policy.tokenize import tokenize_task, TextEncoder
 from transformers import AutoTokenizer
 import copy
 import numpy as np

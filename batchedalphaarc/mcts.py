@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from alphaarc.env import LineLevelArcEnv
+from batchedalphaarc.env import LineLevelArcEnv
 import copy 
 
 import time 

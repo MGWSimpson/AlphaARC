@@ -1,17 +1,17 @@
 import numpy as np
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
-from alphaarc.policy.environment import execute_candidate_program
-from alphaarc.task import Task
-from alphaarc.env import LineLevelArcEnv
-from alphaarc.mcts import MCTS
+from batchedalphaarc.policy.environment import execute_candidate_program
+from batchedalphaarc.task import Task
+from batchedalphaarc.env import LineLevelArcEnv
+from batchedalphaarc.mcts import MCTS
 import os
 import torch.optim as optim
 import torch
-from alphaarc.env import LineLevelArcEnv
-from alphaarc.curriculum import Curriculum
-from alphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from alphaarc.networks import PolicyValueNetwork
+from batchedalphaarc.env import LineLevelArcEnv
+from batchedalphaarc.curriculum import Curriculum
+from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
+from batchedalphaarc.networks import PolicyValueNetwork
 import torch.nn.functional as F
 from tqdm import tqdm
 import time
@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from torch.amp.grad_scaler import GradScaler
 from torch import autocast
 
-from alphaarc.logger import Logger
+from batchedalphaarc.logger import Logger
 from collections import defaultdict
 import lightning.pytorch as pl
 
@@ -43,7 +43,7 @@ class ModelConfig:
     device: str = 'cuda'
 
 @dataclass
-class AlphaARCConfig:
+class batchedalphaarcConfig:
     rl_training_config: RLTrainingConfig = RLTrainingConfig()
     supervised_training_config: SupervisedTrainingConfig = SupervisedTrainingConfig()
     model_config: ModelConfig = ModelConfig()
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     print(task.program)
     pl.seed_everything(0)
     logger = Logger()
-    config = AlphaARCConfig()
+    config = batchedalphaarcConfig()
     tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
     trajectory_buffer =  TrajectoryBuffer(capacity=config.trajectory_buffer_capacity,
                                           n_actions=config.n_actions,

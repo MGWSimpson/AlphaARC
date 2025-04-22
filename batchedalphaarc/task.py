@@ -15,9 +15,9 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from tqdm import tqdm
 
-from alphaarc.dsl.arc_types import *
-from alphaarc.dsl.solvers import *
-from alphaarc.utils import get_grid_size
+from batchedalphaarc.dsl.arc_types import *
+from batchedalphaarc.dsl.solvers import *
+from batchedalphaarc.utils import get_grid_size
 
 # Create a custom colormap with adjusted green shades
 colors = [(0, "blue"), (0.35, "blue"), (0.5, "green"), (0.75, "yellow"), (1, "red")]

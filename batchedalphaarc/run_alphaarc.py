@@ -21,12 +21,12 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 
 
-from alphaarc.env import LineLevelArcEnv
-from alphaarc.curriculum import Curriculum
-from alphaarc.agent import Agent
-from alphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from alphaarc.networks import PolicyValueNetwork
-from alphaarc.logger import Logger
+from batchedalphaarc.env import LineLevelArcEnv
+from batchedalphaarc.curriculum import Curriculum
+from batchedalphaarc.agent import Agent
+from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
+from batchedalphaarc.networks import PolicyValueNetwork
+from batchedalphaarc.logger import Logger
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -50,7 +50,7 @@ class ModelConfig:
 
 
 @dataclass
-class AlphaARCConfig:
+class batchedalphaarcConfig:
     rl_training_config: RLTrainingConfig = RLTrainingConfig()
     supervised_training_config: SupervisedTrainingConfig = SupervisedTrainingConfig()
     model_config: ModelConfig = ModelConfig()
@@ -82,7 +82,7 @@ def evaluate(agent, evaluation_set, tokenizer, config):
 
 def main() -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
-    config = AlphaARCConfig()
+    config = batchedalphaarcConfig()
     logger = Logger()
 
     pl.seed_everything(config.seed)

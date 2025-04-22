@@ -8,10 +8,10 @@ from torch import autocast
 
 from tqdm import tqdm
 from dataclasses import dataclass
-from alphaarc.buffers import ReplayBuffer
+from batchedalphaarc.buffers import ReplayBuffer
 from torch.utils.data import DataLoader
 from transformers import T5ForConditionalGeneration, AutoTokenizer, PretrainedConfig
-from alphaarc.task import Task, from_dict
+from batchedalphaarc.task import Task, from_dict
 import json
 import os
 
