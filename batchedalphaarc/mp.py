@@ -1,5 +1,7 @@
 import torch
-import multiprocessing as mp
+import torch.multiprocessing as mp
+import os
+
 from multiprocessing import Process
 from batchedalphaarc.agent import Agent
 from batchedalphaarc.curriculum import Curriculum
@@ -17,6 +19,8 @@ from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
 from batchedalphaarc.networks import PolicyValueNetwork
 from batchedalphaarc.logger import Logger
 
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 @dataclass
 class RLTrainingConfig:
@@ -58,6 +62,7 @@ def make_gpu_request(gpu_request_q, task_data):
     gpu_request_q.put_nowait((task_data, child_conn))
     print("awaiting response....")
     result = parent_conn.recv()
+    result = result.cpu()
     print("received response....")
 
 
@@ -72,7 +77,7 @@ def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue):
 
 
 
-def gpu_worker_fn(gpu_request_q: mp.Queue, batch_size=4): 
+def gpu_worker_fn(gpu_request_q: mp.Queue, model: T5ForConditionalGeneration,  batch_size=4): 
     while True: 
         batch = []
 
@@ -80,15 +85,14 @@ def gpu_worker_fn(gpu_request_q: mp.Queue, batch_size=4):
             request = gpu_request_q.get()
             batch.append(request)
         
-        print("processing batch!")
 
-        # do some computation
+        data, connections = zip(*batch)
+        data = torch.stack(data).to('cuda').squeeze()
+        outputs = model.generate(data)
+        
+        for i, connections in enumerate(connections):
+            connections.send(outputs[i, :])
 
-        for item in batch:
-            task_data, conn = item
-            conn.send(task_data)
-
- 
     
 
 
@@ -99,13 +103,15 @@ Buffers -> locks and stuff.
 """
 if __name__ == "__main__": 
     n_tree_workers = 4
-    
-    
+    mp.set_start_method('spawn', force=True)
     curriculum = Curriculum(dir_paths=['data/evaluation'])
     curriculum_q = mp.JoinableQueue(maxsize=len(curriculum))
     gpu_request_q = mp.Queue()
 
-    gpu_worker = Process(target=gpu_worker_fn, args=(gpu_request_q, ))
+    model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
+    model.to('cuda')
+
+    gpu_worker = Process(target=gpu_worker_fn, args=(gpu_request_q, model ))
     gpu_worker.start()
 
     tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q), daemon=True) for _ in range(n_tree_workers)]
