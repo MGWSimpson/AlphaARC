@@ -65,16 +65,20 @@ class batchedalphaarcConfig:
 
 # TODO: decide where to move all the train stuff.
 class Agent(): 
-    def __init__(self, trajectory_buffer, replay_buffer, model, n_episodes, n_simulations, action_temperature, logger):
+    def __init__(self, #trajectory_buffer, 
+                        #replay_buffer, 
+                    model_queue, 
+                    n_episodes, n_simulations, action_temperature, #logger
+                    ):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
         self.action_temperature = action_temperature
 
-        self.trajectory_buffer = trajectory_buffer
-        self.replay_buffer = replay_buffer
-        self.model = model
-        self.logger = logger
-        self.optimizer = optim.AdamW(self.model.parameters())
+        # self.trajectory_buffer = trajectory_buffer
+        # self.replay_buffer = replay_buffer
+        self.model_queue = model_queue
+        # self.logger = logger
+        # self.optimizer = optim.AdamW(self.model.parameters())
         self.learning_count = 0
         
 
@@ -86,7 +90,7 @@ class Agent():
         
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
-            root = self.mcts.run(self.model, state)
+            root = self.mcts.run(self.model_queue, state)
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
             action_probs = action_probs / np.sum(action_probs)
@@ -103,7 +107,7 @@ class Agent():
                 return ret, solved, full_task_and_program
 
 
-    def evaluate(self, env): 
+    """def evaluate(self, env): 
         task_solved = False
         self.model.set_task(env.tokenized_task)
         
@@ -113,27 +117,27 @@ class Agent():
                 task_solved = True
                 break 
         
-        return int(task_solved)
+        return int(task_solved)"""
     
     def learn(self, env): 
         task_solved = False
 
-        self.model.set_task(env.tokenized_task)
+        self.model_queue.set_task(env.tokenized_task)
         
         for eps in range(self.n_episodes):
             start_time = time.time()
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
             print(f"time taken: {time.time() -start_time}")
-            self.trajectory_buffer.add_trajectory(episode_history)
+            # self.trajectory_buffer.add_trajectory(episode_history)
 
             if solved:
-                self.replay_buffer.add_program_and_task(full_task_and_program[0], full_task_and_program[1])
+                # self.replay_buffer.add_program_and_task(full_task_and_program[0], full_task_and_program[1])
                 task_solved = True
                 break 
         return int(task_solved)
     
 
-    def _train_rl(self, batch_logs): 
+    """def _train_rl(self, batch_logs): 
         trajectory_dataloader = DataLoader(self.trajectory_buffer, 
                                            batch_size=1,
                                            collate_fn=TrajectoryBuffer.collate_fn)
@@ -206,7 +210,7 @@ class Agent():
                                       len(self.replay_buffer))        
         self.learning_count +=1
 
-
+    """
        
 
 if __name__ == "__main__":
