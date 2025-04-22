@@ -75,7 +75,7 @@ class Node:
                 best_score = score
                 best_action = self.child_actions[i]
                 best_child = self.children[i]
-                best_child_key_value = copy.deepcopy(self.child_key_values).batch_select_indices(i)
+                best_child_key_value = None # copy.deepcopy(self.child_key_values).batch_select_indices(i)
 
 
         return best_action, best_child, best_child_key_value
@@ -84,7 +84,7 @@ class Node:
         self.state = state.copy()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(prior=prob) for prob in action_probs]
-        self.child_key_values =  copy.deepcopy(child_key_values)
+        self.child_key_values =  None #copy.deepcopy(child_key_values)
 
     def __repr__(self):
         """
@@ -102,7 +102,7 @@ class MCTS:
     def run(self, model, state):
 
         root = Node(0)
-        actions, action_probs, value, child_key_values = model.predict(self.env.tokenized_task, state, past_key_values=None)
+        actions, action_probs, value, child_key_values =  model.predict(self.env.tokenized_task, state, past_key_values=None)
         
         root.expand(state, actions, action_probs, child_key_values)
         

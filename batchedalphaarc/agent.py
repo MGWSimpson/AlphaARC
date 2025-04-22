@@ -11,7 +11,6 @@ import torch
 from batchedalphaarc.env import LineLevelArcEnv
 from batchedalphaarc.curriculum import Curriculum
 from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from batchedalphaarc.networks import PolicyValueNetwork
 import torch.nn.functional as F
 from tqdm import tqdm
 import time
@@ -67,7 +66,7 @@ class batchedalphaarcConfig:
 class Agent(): 
     def __init__(self, #trajectory_buffer, 
                         #replay_buffer, 
-                    model_queue, 
+                    model, 
                     n_episodes, n_simulations, action_temperature, #logger
                     ):
         self.n_episodes = n_episodes
@@ -76,7 +75,7 @@ class Agent():
 
         # self.trajectory_buffer = trajectory_buffer
         # self.replay_buffer = replay_buffer
-        self.model_queue = model_queue
+        self.model = model
         # self.logger = logger
         # self.optimizer = optim.AdamW(self.model.parameters())
         self.learning_count = 0
@@ -90,7 +89,7 @@ class Agent():
         
         while not terminated:
             self.mcts = MCTS(env , n_simulations=self.n_simulations)
-            root = self.mcts.run(self.model_queue, state)
+            root = self.mcts.run(self.model, state)
             actions = root.child_actions
             action_probs = [v.visit_count for v in root.children]
             action_probs = action_probs / np.sum(action_probs)
@@ -121,13 +120,9 @@ class Agent():
     
     def learn(self, env): 
         task_solved = False
-
-        self.model_queue.set_task(env.tokenized_task)
-        
+        # self.model_queue.set_task(env.tokenized_task)
         for eps in range(self.n_episodes):
-            start_time = time.time()
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
-            print(f"time taken: {time.time() -start_time}")
             # self.trajectory_buffer.add_trajectory(episode_history)
 
             if solved:

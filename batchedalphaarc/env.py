@@ -101,7 +101,7 @@ class LineLevelArcEnv:
         return self.n_actions
  
     def reset(self):
-        return np.array([], dtype=np.int64)
+        return np.array([0], dtype=np.int64)
 
 
 if __name__ == "__main__": 
