@@ -20,4 +20,7 @@ Tools to use:
 
 
 
-
+- Order of completion: 
+    -> create a queue which will feed them tasks.
+    -> create a process for each agent.
+    -> keeps taking tasks off the queue of tasks when its complete.
