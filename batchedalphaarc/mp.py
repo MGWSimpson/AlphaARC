@@ -86,6 +86,7 @@ class PolicyValueNetwork(nn.Module):
     
     def _compute_actions(self, task, state, past_key_values):
         
+        batch_size = task.shape[0] 
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids   = state,
                                             temperature=self.temperature,
@@ -100,19 +101,37 @@ class PolicyValueNetwork(nn.Module):
                                             output_hidden_states= True
 
                                             )         
-
-        actions = outputs.sequences
-
+        actions = outputs.sequences.view(batch_size, self.num_samples, -1)
         logits = outputs.logits
         new_actions_shape = len(logits)
-        past_key_values = outputs.past_key_values
-        actions = actions[: , -new_actions_shape:]
+        #past_key_values = outputs.past_key_values
+        actions = actions[:, : , -new_actions_shape:]
+
+
+        final_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1]
+        final_hidden_states = final_hidden_states.view(batch_size, self.num_samples, -1)
+
+
+        """ first_hidden_states =  torch.stack(outputs.decoder_hidden_states[0])[-1]
+        first_hidden_states = first_hidden_states.view(batch_size, self.num_samples, -1)
+        first_hidden_states = first_hidden_states[:, -1, :]"""
+
+
+        return actions, self._compute_policy(final_hidden_states),self._compute_values(final_hidden_states[:, -1, :]), past_key_values
+
+    def _compute_values(self, first_hidden_state): 
+        return F.tanh(self.value(first_hidden_state))
+        
+        
+    def _compute_policy(self, last_hidden_state):
+        return F.softmax(self.policy(last_hidden_state).squeeze(), dim=-1)
+
 
     def predict(self, task, state, past_key_values):
         with torch.no_grad(): 
             actions, action_probs, values, past_key_values =  self._compute_actions(task, state, past_key_values)
         
-        return actions, action_probs ,values, past_key_values
+        return actions, action_probs ,values, None
 
 
 class ModelRequester():
@@ -158,11 +177,12 @@ class ModelResponder():
             state = pad_sequence(state, batch_first=True)
 
             task, state = task.to(self.model.device), state.to(self.model.device)
-
-            results = self.model.predict(task, state, past_key_values)
-
+            actions, action_probs ,values, past_key_values = self.model.predict(task, state, past_key_values)
             for i, connections in enumerate(connections):
-                connections.send(results[i])
+                connections.send(  ( actions[i], 
+                                    action_probs[i], 
+                                    values[i],
+                                    past_key_values))
 
 
 def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, config: batchedalphaarcConfig): 
