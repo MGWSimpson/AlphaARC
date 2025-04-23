@@ -54,8 +54,8 @@ class batchedalphaarcConfig:
     max_action_len: int = 20
     trajectory_buffer_capacity = 100_000
     replay_buffer_capacity: int = 100_000
-    train_every: int = 100
-    n_epochs: int = 2
+    train_every: int = 50
+    n_epochs: int = 1
 
 import torch
 import torch.nn as nn
@@ -274,19 +274,16 @@ if __name__ == "__main__":
         full_curriculum = curriculum.generate_curriculum()
         
         for i in range(0, len(full_curriculum), train_every):
+            print("starting new chunk!")
             curriculum_chunk = full_curriculum[i:i + train_every]
-
             for task in curriculum_chunk:
                 curriculum_q.put(task, block=True)
 
             for worker in tree_workers:
                 worker.start()
-        
 
             curriculum_q.join()
-            
-            # enqueues the data into da buffers
-            # trains on the da data
+            print("HERE!")
             
   
 
