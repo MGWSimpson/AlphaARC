@@ -18,6 +18,8 @@ from batchedalphaarc.agent import Agent
 from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
 from batchedalphaarc.logger import Logger
 from multiprocessing import Process, Value, Lock
+import traceback
+from batchedalphaarc.train import Trainer 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -54,7 +56,7 @@ class batchedalphaarcConfig:
     max_action_len: int = 20
     trajectory_buffer_capacity = 100_000
     replay_buffer_capacity: int = 100_000
-    train_every: int = 50
+    train_every: int = 11
     n_epochs: int = 1
 
 import torch
@@ -156,6 +158,7 @@ class ModelRequester():
         task = torch.tensor(task).unsqueeze(0)
         self.encode_request_q.put_nowait((task, self.send_conn))
         result = self.read_conn.recv()
+
         return result.cpu()
 
     def encode(self, task): 
@@ -169,6 +172,7 @@ class ModelResponder():
         self.batch_size = batch_size
         self.model = model
 
+        self.time_out_time = 1
 
     def _handle_encode_request(self, request): 
         task, connection = request
@@ -178,10 +182,10 @@ class ModelResponder():
         result = result.last_hidden_state
         connection.send(result)
 
-    # TODO: rewrite this to cope with encoding.
     def serve(self): 
         while True: 
             batch = []
+            start_time = None
             while len(batch) < self.batch_size:
                 try:
                     encode_request = self.encode_request_q.get_nowait()
@@ -192,9 +196,15 @@ class ModelResponder():
                 try: 
                     request = self.gpu_request_q.get_nowait()
                     batch.append(request)
+                    if start_time  is None:
+                        start_time = time.time()
                 except Empty: 
                     pass
-
+                        # If timeout has started and expired, break
+                
+                if start_time is not None and (time.time() - start_time > self.time_out_time):
+                    break
+ 
             data, connections = zip(*batch)
             # packet everything up. and then pass it to the network class
             
@@ -202,8 +212,14 @@ class ModelResponder():
             task = pad_sequence(task, batch_first=True)
             state = pad_sequence(state, batch_first=True)
 
+
             task, state = task.to(self.model.device), state.to(self.model.device)
             actions, action_probs ,values, past_key_values = self.model.predict(task, state, past_key_values)
+
+
+            if len(batch) == 1:
+                action_probs = action_probs.unsqueeze(0)
+
             for i, connections in enumerate(connections):
                 connections.send(  ( actions[i], 
                                     action_probs[i], 
@@ -212,28 +228,56 @@ class ModelResponder():
 
 
 def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig, trajectory_buffer_q: mp.Queue, replay_buffer_q: mp.Queue, tasks_solved, lock): 
-    model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
+    try:
+        model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
+        agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
+        tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
 
-    agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
-    tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
+        while True:
+            task = task_q.get()
+            env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)
+            result = agent.learn(env) 
+            #with lock: # update the number of tasks solved
+            #    tasks_solved.value += result
 
-    while True:
-        task = task_q.get()
-        env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)
-        result = agent.learn(env) 
-        with lock: # update the number of tasks solved
-            tasks_solved.value += result
-
-        task_q.task_done()
-         
+            task_q.task_done()
+    except Exception as e:
+        print(f"[CPU THREAD ERROR] {e}")
+        traceback.print_exc()
 
 
 
 
 def gpu_worker_fn(model_responder: ModelResponder): 
-    model_responder.serve()
+    try:
+        model_responder.serve()
+    except Exception as e:
+        print(f"[GPU THREAD ERROR] {e}")
+        traceback.print_exc()
 
-    
+
+
+
+def drain_q(q): 
+    items = []
+    while True:
+        try:
+            item = q.get_nowait()
+            items.append(item)
+        except Empty:
+            break
+    return items
+
+def transfer_queues_to_buffers(trajectory_buffer, trajectory_q, replay_buffer, replay_q):
+    trajectory_items = drain_q(trajectory_q)
+    replay_items = drain_q(replay_q)
+
+    for item in trajectory_items:
+        trajectory_buffer.add_trajectory(item)
+
+    for item in replay_items:
+        task, program = item
+        replay_buffer.add_program_and_task(task, program)
 
 if __name__ == "__main__": 
     n_tree_workers = 4
@@ -244,13 +288,15 @@ if __name__ == "__main__":
 
     config = batchedalphaarcConfig()
     curriculum = Curriculum(dir_paths=['data/evaluation'])
-    curriculum_q = mp.JoinableQueue(maxsize=len(curriculum))
+    curriculum_q = mp.JoinableQueue()
     gpu_request_q = mp.Queue()
     encode_request_q = mp.Queue()
 
     trajectory_buffer_q = mp.Queue()
     replay_buffer_q = mp.Queue()
     
+    logger = Logger()
+    trainer = Trainer(logger=logger)
 
     replay_buffer = ReplayBuffer()
     trajectory_buffer = TrajectoryBuffer()
@@ -265,8 +311,13 @@ if __name__ == "__main__":
     model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=n_tree_workers, model=model)
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
+
     tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q, tasks_solved, lock), daemon=True) for _ in range(n_tree_workers)]
 
+
+
+    for worker in tree_workers:
+        worker.start()
 
 
     for epoch in range(config.n_epochs):
@@ -274,30 +325,22 @@ if __name__ == "__main__":
         full_curriculum = curriculum.generate_curriculum()
         
         for i in range(0, len(full_curriculum), train_every):
-            print("starting new chunk!")
             curriculum_chunk = full_curriculum[i:i + train_every]
+
             for task in curriculum_chunk:
                 curriculum_q.put(task, block=True)
 
-            for worker in tree_workers:
-                worker.start()
-
             curriculum_q.join()
-            print("HERE!")
-            
+            transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
+                                       trajectory_q=trajectory_buffer_q,
+                                       replay_buffer=replay_buffer,
+                                       replay_q=replay_buffer_q
+                                       )
+
+            trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+
   
-
-
-
-
     
-    
-
-    
-
-
-
-
     gpu_worker.kill()
     print("workers done")
     print("all done!")

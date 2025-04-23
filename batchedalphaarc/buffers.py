@@ -27,8 +27,6 @@ class TrajectoryBuffer(Dataset):
 
 
     def _pad(self, task, state, actions, pad_value=0.0):
-        
-        print(task.shape[-1])
         padded_task = np.pad(task, pad_width=(0, self.max_task_len - task.shape[-1]), mode='constant', constant_values=pad_value)
         padded_state = np.pad(state, pad_width=(0, self.max_state_len - state.shape[-1]), mode='constant', constant_values=pad_value)
         padded_actions = []
