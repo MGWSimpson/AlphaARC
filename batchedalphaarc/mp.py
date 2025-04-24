@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
             for task in curriculum_chunk:
                 curriculum_q.put(task, block=True)
-
+            
             curriculum_q.join()
             transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
                                        trajectory_q=trajectory_buffer_q,
