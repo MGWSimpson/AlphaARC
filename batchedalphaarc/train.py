@@ -15,6 +15,7 @@ class Trainer:
     
     def __init__(self, logger: Logger):
         self.logger = logger
+        self.learning_count = 0
  
     def _train_rl(self, model, trajectory_buffer,batch_logs): 
         trajectory_dataloader = DataLoader(trajectory_buffer, 
@@ -22,7 +23,16 @@ class Trainer:
                                            collate_fn=TrajectoryBuffer.collate_fn)
         
         scaler = GradScaler()
-        optimizer = optim.AdamW() # TODO: need to add just the lower layers here.
+
+            
+                # Freeze LM head
+        for param in model.model.lm_head.parameters():
+            param.requires_grad = False
+
+        # Create optimizer (backbone + heads)
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+
+        optimizer = optim.AdamW(trainable_params) # TODO: need to add just the lower layers here.
 
         for batch in tqdm(trajectory_dataloader, desc="rl training"):
             task, state, actions, target_pis, target_vs = batch
@@ -53,7 +63,13 @@ class Trainer:
     def _train_supervised(self, model, supervised_buffer, batch_logs):
         scaler = GradScaler()
         replay_dataloader = DataLoader(supervised_buffer, batch_size=1, collate_fn=ReplayBuffer.collate_fn)
-        optimizer = optim.AdamW() # TODO: need to add just the lower layers here.
+        
+            
+        for param in model.model.lm_head.parameters():
+            param.requires_grad = True
+
+
+        optimizer = optim.AdamW(model.model.parameters()) # TODO: need to add just the lower layers here.
 
         print(f"starting supervised training")
         for batch in tqdm(replay_dataloader, desc="supervised training"):
@@ -80,15 +96,17 @@ class Trainer:
         batch_logs = defaultdict(list)
         model.train()
 
-        self._train_rl(model, trajectory_buffer, supervised_buffer, batch_logs)
-        self._train_supervised(model, trajectory_buffer, supervised_buffer, batch_logs)
-
+        self._train_rl(model, trajectory_buffer, batch_logs)
+        self._train_supervised(model, supervised_buffer, batch_logs)
+    
         epoch_means = {k: sum(v)/len(v) for k, v in batch_logs.items()}
         self.logger.log_training_data(epoch_means["policy"], 
                                       epoch_means["value"], 
                                       epoch_means["replay"],
                                       self.learning_count,
-                                      len(self.trajectory_buffer),
-                                      len(self.replay_buffer))        
+                                      len(trajectory_buffer),
+                                      len(supervised_buffer))        
+        
+        self.learning_count +=1
 
     

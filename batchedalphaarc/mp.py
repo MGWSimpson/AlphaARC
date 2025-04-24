@@ -135,6 +135,34 @@ class PolicyValueNetwork(nn.Module):
         return actions, action_probs ,values, None
 
 
+    def forward(self, task, state, actions):
+        B, A, AL = actions.shape
+
+        values = []
+        policies = []        
+        for i in range(B): 
+            task_i = task[i, ]
+            state_i = state[i, : ]
+            actions_i = actions[i, : ]
+
+            outputs = self.model.forward(   input_ids=task_i.repeat(A, 1), 
+                                            decoder_input_ids=torch.concat((state_i.repeat(A, 1), actions_i), dim=-1), 
+                                            use_cache=False,
+                                            output_hidden_states=True).decoder_hidden_states 
+            
+            outputs =  torch.stack(outputs)
+            first_hidden_state = outputs[-1, 0, -AL-1, :] 
+            last_hidden_states =  outputs [-1, :, -1, :]
+            
+            v = self._compute_values(first_hidden_state)
+            p = self._compute_policy(last_hidden_states)
+
+            values.append(v)
+            policies.append(p)
+
+        return torch.stack(policies),  torch.stack( values)
+    
+
 class ModelRequester():
 
     def __init__(self, gpu_request_q, encode_request_q):
@@ -185,7 +213,7 @@ class ModelResponder():
         while True: 
             batch = []
             start_time = None
-            while len(batch) < self.batch_size:
+            while len(batch) < self.batch_size.value:
                 try:
                     encode_request = self.encode_request_q.get_nowait()
                     self._handle_encode_request(encode_request)
@@ -202,7 +230,7 @@ class ModelResponder():
                         # If timeout has started and expired, break
                 
                 if start_time is not None and (time.time() - start_time > self.time_out_time):
-                    self.batch_size = len(batch)
+                    self.batch_size.value = len(batch)
                     break
                     
             data, connections = zip(*batch)
@@ -341,7 +369,7 @@ if __name__ == "__main__":
                                        replay_q=replay_buffer_q
                                        )
 
-            current_batch_size = n_tree_workers
+            current_batch_size.value = n_tree_workers
             trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
 
   
