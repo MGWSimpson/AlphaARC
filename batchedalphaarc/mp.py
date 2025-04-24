@@ -90,7 +90,6 @@ class PolicyValueNetwork(nn.Module):
         
         batch_size = task.shape[0] 
 
-        print(state.shape)
         outputs = self.model.generate(      encoder_outputs=BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=task), # TODO: this may introduce a bug!
                                             decoder_input_ids   = state,
                                             temperature=self.temperature,
@@ -107,7 +106,6 @@ class PolicyValueNetwork(nn.Module):
         actions = outputs.sequences.view(batch_size, self.num_samples, -1)
         logits = outputs.logits
         new_actions_shape = len(logits)
-        #past_key_values = outputs.past_key_values
         actions = actions[:, : , -new_actions_shape:]
 
         first_hidden_states = outputs.decoder_hidden_states[0][-1] # index into first gen step + last hidden state
@@ -204,8 +202,9 @@ class ModelResponder():
                         # If timeout has started and expired, break
                 
                 if start_time is not None and (time.time() - start_time > self.time_out_time):
+                    self.batch_size = len(batch)
                     break
- 
+                    
             data, connections = zip(*batch)
             # packet everything up. and then pass it to the network class
             
@@ -284,6 +283,10 @@ if __name__ == "__main__":
     n_tree_workers = 4
     mp.set_start_method('spawn', force=True)
 
+
+    current_batch_size = Value('i', n_tree_workers)
+
+
     tasks_solved = Value('i', 0)
     lock = Lock()
 
@@ -309,7 +312,7 @@ if __name__ == "__main__":
                                config.model_config.device)
     
     model = model.to(model.device)
-    model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=n_tree_workers, model=model)
+    model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=current_batch_size, model=model)
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
 
@@ -338,6 +341,7 @@ if __name__ == "__main__":
                                        replay_q=replay_buffer_q
                                        )
 
+            current_batch_size = n_tree_workers
             trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
 
   
