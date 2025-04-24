@@ -86,10 +86,11 @@ class PolicyValueNetwork(nn.Module):
         self.stop_strings =['\n']
         self.n_calls = 0
 
-    
     def _compute_actions(self, task, state, past_key_values):
         
         batch_size = task.shape[0] 
+
+        print(state.shape)
         outputs = self.model.generate(      encoder_outputs=BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=task), # TODO: this may introduce a bug!
                                             decoder_input_ids   = state,
                                             temperature=self.temperature,
@@ -109,17 +110,17 @@ class PolicyValueNetwork(nn.Module):
         #past_key_values = outputs.past_key_values
         actions = actions[:, : , -new_actions_shape:]
 
+        first_hidden_states = outputs.decoder_hidden_states[0][-1] # index into first gen step + last hidden state
+        first_hidden_states = first_hidden_states[: , -1, : ]
+        first_hidden_states.view(batch_size, self.num_samples, -1)
 
         final_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1]
         final_hidden_states = final_hidden_states.view(batch_size, self.num_samples, -1)
 
 
-        """ first_hidden_states =  torch.stack(outputs.decoder_hidden_states[0])[-1]
-        first_hidden_states = first_hidden_states.view(batch_size, self.num_samples, -1)
-        first_hidden_states = first_hidden_states[:, -1, :]"""
+        
 
-
-        return actions, self._compute_policy(final_hidden_states),self._compute_values(final_hidden_states[:, -1, :]), past_key_values
+        return actions, self._compute_policy(final_hidden_states),self._compute_values(first_hidden_states), past_key_values
 
     def _compute_values(self, first_hidden_state): 
         return F.tanh(self.value(first_hidden_state))
