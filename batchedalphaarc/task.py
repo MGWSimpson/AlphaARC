@@ -74,7 +74,7 @@ def get_tasks_with_keys(file_path, keys):
     return task_population
 
 
-def from_dict(task_data):
+def from_dict(task_data, is_eval=False):
     if "parent_key" in task_data:
         parent_key = task_data["parent_key"]
     else:
@@ -94,13 +94,16 @@ def from_dict(task_data):
         task_key=task_data["task_key"],
         extra_info=task_data["extra_info"],
         parent_key=parent_key,
+        is_eval=is_eval, 
     )
 
 
 class Task:
     def __init__(
-        self, program, training_examples, test_examples, task_key, parent_key=None, extra_info=""
+        self, program, training_examples, test_examples, task_key, parent_key=None, extra_info="", is_eval=False,
     ):
+        
+        self.is_eval = is_eval 
         self.program = program
         if program:
             self.program_lines = program_to_program_lines(program)
@@ -131,10 +134,10 @@ class Task:
             json.dump(self.to_dict(), json_file)
 
     @staticmethod
-    def from_json(file_path):
+    def from_json(file_path, is_eval=False):
         with open(file_path, "r") as json_file:
             task_data = json.load(json_file)
-        return from_dict(task_data)
+        return from_dict(task_data, is_eval=is_eval)
 
     def display_task(self):
         num_training_examples = len(self.training_examples)

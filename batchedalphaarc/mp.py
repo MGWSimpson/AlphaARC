@@ -23,6 +23,10 @@ from batchedalphaarc.train import Trainer
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
+import wandb
+
+
+
 @dataclass
 class RLTrainingConfig:
     rl_batch_size: int =2
@@ -265,11 +269,16 @@ def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_req
 
         while True:
             task = task_q.get()
-            env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)
-            result = agent.learn(env) 
-            with lock: # update the number of tasks solved
-                tasks_solved.value += result
+            env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)            
 
+            if task.is_eval:
+               result = agent.eval(env)
+            else:
+                result = agent.learn(env) 
+                with lock: # update the number of tasks solved
+                    tasks_solved.value += result
+                
+                
             task_q.task_done()
     except Exception as e:
         print(f"[CPU THREAD ERROR] {e}")
@@ -323,8 +332,8 @@ if __name__ == "__main__":
     lock = Lock()
 
     config = batchedalphaarcConfig()
-    curriculum = Curriculum(dir_paths=['data/evaluation'])
-    # eval_set = Curriculum(dir_paths=['data/evaluation'])
+    curriculum = Curriculum(dir_paths=['data/evaluation'], is_eval=False)
+    eval_set = Curriculum(dir_paths=['data/evaluation'], is_eval=True)
     curriculum_q = mp.JoinableQueue()
     gpu_request_q = mp.Queue()
     encode_request_q = mp.Queue()
@@ -350,7 +359,7 @@ if __name__ == "__main__":
 
     tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q, tasks_solved, lock), daemon=True) for _ in range(n_tree_workers)]
 
-
+    # set up the wandb stuff.
 
     for worker in tree_workers:
         worker.start()
