@@ -70,6 +70,9 @@ import copy
 import time
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
+
+from batchedalphaarc.logger import make_run_log 
+
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
@@ -308,21 +311,12 @@ def transfer_queues_to_buffers(trajectory_buffer, trajectory_q, replay_buffer, r
 
 
 
-
-
-"""
-Assuming that I don't change anything, I can just use the same workers on the same queue.
-"""
-def evaluate(evaluation_set): 
-    pass
-
-
 if __name__ == "__main__": 
     n_tree_workers = 4
     mp.set_start_method('spawn', force=True)
-
-
     current_batch_size = Value('i', n_tree_workers)
+
+    run_log = make_run_log()
 
 
     tasks_solved = Value('i', 0)
@@ -380,8 +374,11 @@ if __name__ == "__main__":
                                        )
 
             current_batch_size.value = n_tree_workers
-            trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
-            # need a section for evaluating here.
+            train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+            eval_log = trainer.eval(model=model)
+
+            run_log['training_logs'].append(train_log)
+            run_log['eval_logs'].append(eval_log)
 
   
     

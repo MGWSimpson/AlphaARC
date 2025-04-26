@@ -19,8 +19,6 @@ from torch.utils.data import DataLoader
 from torch.amp.grad_scaler import GradScaler
 from torch import autocast
 
-from batchedalphaarc.logger import Logger
-from collections import defaultdict
 import lightning.pytorch as pl
 
 from tqdm import tqdm

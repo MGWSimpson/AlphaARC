@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from batchedalphaarc.logger import make_train_log, make_train_log_means
+from batchedalphaarc.logger import make_train_log, make_train_log_means, make_eval_log
 import torch.optim as optim
 
 class Trainer: 
@@ -31,7 +31,7 @@ class Trainer:
         # Create optimizer (backbone + heads)
         trainable_params = [p for p in model.parameters() if p.requires_grad]
 
-        optimizer = optim.AdamW(trainable_params) # TODO: need to add just the lower layers here.
+        optimizer = optim.AdamW(trainable_params) 
 
         for batch in tqdm(trajectory_dataloader, desc="rl training"):
             task, state, actions, target_pis, target_vs = batch
@@ -53,10 +53,9 @@ class Trainer:
             scaler.update()
 
 
-            batch_logs["policy"].append(policy_loss.detach().item())
-            batch_logs["value"].append(value_loss.detach().item())
-            batch_logs["trajectory_total"].append(loss.detach().item())
-
+            batch_logs["policy_batch_loss"].append(policy_loss.detach().item())
+            batch_logs["value_batch_loss"].append(value_loss.detach().item())
+            batch_logs['total_batch_loss'].append(loss.detach().item()) 
 
 
     def _train_supervised(self, model, supervised_buffer, batch_logs):
@@ -81,11 +80,9 @@ class Trainer:
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            batch_logs["replay"].append(loss.detach().item())
+            batch_logs["supervised_batch_loss"].append(loss.detach().item())
 
 
-        # TODO: add a check in here!
-        batch_logs['replay'].append(0)
         
 
 
@@ -94,15 +91,21 @@ class Trainer:
     def train(self, model, trajectory_buffer, supervised_buffer):
 
         train_log = make_train_log(self.learning_count)
-
         model.train()
 
         self._train_rl(model, trajectory_buffer, train_log)
         self._train_supervised(model, supervised_buffer, train_log)
     
         train_log =   make_train_log_means(train_log)
-        
-        self.learning_count +=1
 
+        self.learning_count +=1
+        
+        train_log['supervised_buffer_capacity'] = len(supervised_buffer)
+        train_log['rl_buffer_capacity'] = len(trajectory_buffer)
         return train_log
-    
+
+    def eval(self, model ): 
+        
+        eval_log =  make_eval_log()
+
+        return eval_log
