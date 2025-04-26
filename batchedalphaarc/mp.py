@@ -16,7 +16,6 @@ from batchedalphaarc.env import LineLevelArcEnv
 from batchedalphaarc.curriculum import Curriculum
 from batchedalphaarc.agent import Agent
 from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from batchedalphaarc.logger import Logger
 from multiprocessing import Process, Value, Lock
 import traceback
 from batchedalphaarc.train import Trainer 
@@ -265,8 +264,8 @@ def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_req
             task = task_q.get()
             env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)
             result = agent.learn(env) 
-            #with lock: # update the number of tasks solved
-            #    tasks_solved.value += result
+            with lock: # update the number of tasks solved
+                tasks_solved.value += result
 
             task_q.task_done()
     except Exception as e:
@@ -307,6 +306,17 @@ def transfer_queues_to_buffers(trajectory_buffer, trajectory_q, replay_buffer, r
         task, program = item
         replay_buffer.add_program_and_task(task, program)
 
+
+
+
+
+"""
+Assuming that I don't change anything, I can just use the same workers on the same queue.
+"""
+def evaluate(evaluation_set): 
+    pass
+
+
 if __name__ == "__main__": 
     n_tree_workers = 4
     mp.set_start_method('spawn', force=True)
@@ -320,6 +330,7 @@ if __name__ == "__main__":
 
     config = batchedalphaarcConfig()
     curriculum = Curriculum(dir_paths=['data/evaluation'])
+    # eval_set = Curriculum(dir_paths=['data/evaluation'])
     curriculum_q = mp.JoinableQueue()
     gpu_request_q = mp.Queue()
     encode_request_q = mp.Queue()
@@ -327,8 +338,7 @@ if __name__ == "__main__":
     trajectory_buffer_q = mp.Queue()
     replay_buffer_q = mp.Queue()
     
-    logger = Logger()
-    trainer = Trainer(logger=logger)
+    trainer = Trainer()
 
     replay_buffer = ReplayBuffer()
     trajectory_buffer = TrajectoryBuffer()
@@ -371,6 +381,7 @@ if __name__ == "__main__":
 
             current_batch_size.value = n_tree_workers
             trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+            # need a section for evaluating here.
 
   
     

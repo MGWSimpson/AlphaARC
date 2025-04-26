@@ -8,13 +8,12 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from batchedalphaarc.buffers import ReplayBuffer, TrajectoryBuffer
-from batchedalphaarc.logger import Logger
+from batchedalphaarc.logger import make_train_log, make_train_log_means
 import torch.optim as optim
 
 class Trainer: 
     
-    def __init__(self, logger: Logger):
-        self.logger = logger
+    def __init__(self):
         self.learning_count = 0
  
     def _train_rl(self, model, trajectory_buffer,batch_logs): 
@@ -93,20 +92,17 @@ class Trainer:
 
 
     def train(self, model, trajectory_buffer, supervised_buffer):
-        batch_logs = defaultdict(list)
+
+        train_log = make_train_log(self.learning_count)
+
         model.train()
 
-        self._train_rl(model, trajectory_buffer, batch_logs)
-        self._train_supervised(model, supervised_buffer, batch_logs)
+        self._train_rl(model, trajectory_buffer, train_log)
+        self._train_supervised(model, supervised_buffer, train_log)
     
-        epoch_means = {k: sum(v)/len(v) for k, v in batch_logs.items()}
-        self.logger.log_training_data(epoch_means["policy"], 
-                                      epoch_means["value"], 
-                                      epoch_means["replay"],
-                                      self.learning_count,
-                                      len(trajectory_buffer),
-                                      len(supervised_buffer))        
+        train_log =   make_train_log_means(train_log)
         
         self.learning_count +=1
 
+        return train_log
     
