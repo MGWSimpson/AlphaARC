@@ -2,13 +2,23 @@
 
 # log file for tracking all the stats
 # also just track the more meta level stuff.
-def make_run_log():
+def make_run_log(train_log, train_episodes_log,
+                 eval_log, eval_episodes_log):
+    
+
+
+
     return {
-        "training_logs": [],
-        "eval_logs": [], 
-        "training_episode_logs": [],
-        "eval_episode_logs": []
+        "policy_epoch_mean": train_log['policy_epoch_mean'],
+        "value_epoch_mean": train_log['value_epoch_mean'],
+        "supervised_epoch_mean": train_log['supervised_epoch_mean'],
+        "supervised_buffer_capacity": train_log['supervised_buffer_capacity'],
+        "rl_buffer_capacity": train_log['rl_buffer_capacity'] ,   
+        "train_solve_rate": summarize_episodes(train_episodes_log),
+        "eval_solve_rate": eval_log['solve_rate'],
+
     }
+
 
 def make_train_log(epoch): 
     return {
@@ -21,9 +31,9 @@ def make_train_log(epoch):
         "total_batch_loss": [],
         "supervised_batch_loss": [],
         "supervised_buffer_capacity": 0,
-        "rl_buffer_capacity":0
-        
+        "rl_buffer_capacity": 0   
     }
+
 
 
 
@@ -54,10 +64,12 @@ def make_episode_log(task_id):
 
 def summarize_episodes(episode_logs):
     solve_rate = sum([x['solved'] for x in episode_logs]) / len(episode_logs)
-    return {"solve_rate": solve_rate, }
+    return solve_rate
 
 
 
 
 def make_eval_log(): 
-    pass
+    return {
+        "solve_rate": 0.0,
+    }

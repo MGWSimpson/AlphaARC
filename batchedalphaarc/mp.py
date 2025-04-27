@@ -7,7 +7,7 @@ from batchedalphaarc.agent import Agent
 from batchedalphaarc.curriculum import Curriculum
 from queue import Empty
 from batchedalphaarc.env import LineLevelArcEnv
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 from torch.nn.utils.rnn import pad_sequence
@@ -26,6 +26,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 from tqdm import tqdm
 import wandb
 
+from pprint import pp
+
 import torch
 import torch.nn as nn
 from transformers import T5ForConditionalGeneration, AutoTokenizer
@@ -39,7 +41,8 @@ import time
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 
-from batchedalphaarc.logger import make_run_log 
+from batchedalphaarc.logger import make_run_log, summarize_episodes
+
 
 @dataclass
 class RLTrainingConfig:
@@ -73,7 +76,7 @@ class batchedalphaarcConfig:
     max_action_len: int = 20
     trajectory_buffer_capacity = 100_000
     replay_buffer_capacity: int = 100_000
-    train_every: int = 11
+    train_every: int = 10
     n_epochs: int = 1
     evaluation_action_temperature: float = 0
 
@@ -336,21 +339,23 @@ def evaluate(eval_set, curriculum_q, episode_results_q):
         curriculum_q.put(task, block=True)
     curriculum_q.join()
     episode_logs = drain_q(episode_results_q)
-    return eval_log
+    
+    eval_log['solve_rate'] = summarize_episodes(episode_logs)
+    return eval_log, episode_logs
 
 if __name__ == "__main__": 
     n_tree_workers = 4
     mp.set_start_method('spawn', force=True)
     current_batch_size = Value('i', n_tree_workers)
 
-    run_log = make_run_log()
 
 
     tasks_solved = Value('i', 0)
     lock = Lock()
 
     config = batchedalphaarcConfig()
-    curriculum = Curriculum(dir_paths=['data/training'],file_paths=['data/mutated_tasks_train_19200.json'], is_eval=False)
+    
+    curriculum = Curriculum(dir_paths=['data/training'], is_eval=False)
     eval_set = Curriculum(dir_paths=['data/evaluation'], is_eval=True)
     curriculum_q = mp.JoinableQueue()
     gpu_request_q = mp.Queue()
@@ -360,7 +365,6 @@ if __name__ == "__main__":
     replay_buffer_q = mp.Queue()
 
     episode_results_q = mp.Queue()
-    
     trainer = Trainer()
 
     replay_buffer = ReplayBuffer()
@@ -372,16 +376,23 @@ if __name__ == "__main__":
                                config.n_actions,
                                config.model_config.device)
     
+
+
     load_model_event = mp.Event()
 
     model = model.to(model.device)
     model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=current_batch_size, model=model, load_model_event=load_model_event)
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
+    
+    run = wandb.init(
+    project="alphaarc",
+    config=asdict(config))
+    
+    
+    
     gpu_worker.start()
-
     tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q, episode_results_q), daemon=True) for _ in range(n_tree_workers)]
 
-    # set up the wandb stuff.
 
     for worker in tree_workers:
         worker.start()
@@ -410,14 +421,18 @@ if __name__ == "__main__":
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
             load_model_event.set()
             
-            print("starting evaluation.")
-            eval_log = evaluate(eval_set, curriculum_q, episode_results_q)
-            
-            run_log['training_logs'].append(train_log)
-            run_log['eval_logs'].append(eval_log)
 
+            
+            print("starting evaluation.")
+            eval_log, eval_episode_logs = evaluate(eval_set, curriculum_q, episode_results_q)
+
+            run_log = make_run_log(train_log, episode_logs, eval_log, eval_episode_logs)
+            run.log(run_log)
   
     
+
+
     gpu_worker.kill()
+    run.finish()
     print("workers done")
     print("all done!")
