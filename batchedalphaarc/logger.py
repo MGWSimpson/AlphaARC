@@ -38,11 +38,25 @@ def make_train_log_means(train_log):
     return train_log
 
 # collect information at the start of the episode
-def make_episode_log(task_id, solved): 
+# 
+def make_episode_log(task_id): 
     return {
         "task_id": task_id,
-        "solved": 0,
+        "solved": 0.0,
+        "min_depth": 0,
+        "max_depth": 0,
+        "average_depth": 0,
+        "n_incorrect_syntax": 0,
+        "n_correct_syntax": 0,
     }
+
+
+
+def summarize_episodes(episode_logs):
+    solve_rate = sum([x['solved'] for x in episode_logs]) / len(episode_logs)
+    return {"solve_rate": solve_rate, }
+
+
 
 
 def make_eval_log(): 

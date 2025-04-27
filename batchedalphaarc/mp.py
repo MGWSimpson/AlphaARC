@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 from torch.nn.utils.rnn import pad_sequence
-
+from logger import make_eval_log 
 from batchedalphaarc.env import LineLevelArcEnv
 from batchedalphaarc.curriculum import Curriculum
 from batchedalphaarc.agent import Agent
@@ -25,7 +25,20 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 import wandb
 
+import torch
+import torch.nn as nn
+from transformers import T5ForConditionalGeneration, AutoTokenizer
+import os
+import numpy as np
+from numpy import inf
+from batchedalphaarc.policy.tokenize import tokenize_task
+import torch.nn.functional as F
+import copy
+import time
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
+
+from batchedalphaarc.logger import make_run_log 
 
 @dataclass
 class RLTrainingConfig:
@@ -61,21 +74,9 @@ class batchedalphaarcConfig:
     replay_buffer_capacity: int = 100_000
     train_every: int = 11
     n_epochs: int = 1
-
-import torch
-import torch.nn as nn
-from transformers import T5ForConditionalGeneration, AutoTokenizer
-import os
-import numpy as np
-from numpy import inf
-from batchedalphaarc.policy.tokenize import tokenize_task
-import torch.nn.functional as F
-import copy
-import time
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+    evaluation_action_temperature: float = 0
 
 
-from batchedalphaarc.logger import make_run_log 
 
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
@@ -261,10 +262,10 @@ class ModelResponder():
                                     past_key_values))
 
 
-def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig, trajectory_buffer_q: mp.Queue, replay_buffer_q: mp.Queue, tasks_solved, lock): 
+def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_request_q: mp.Queue, config: batchedalphaarcConfig, trajectory_buffer_q: mp.Queue, replay_buffer_q: mp.Queue, episode_results_q: mp.Queue): 
     try:
         model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
-        agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature)
+        agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature, config.evaluation_action_temperature)
         tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
 
         while True:
@@ -272,13 +273,11 @@ def tree_worker_fn(task_q: mp.JoinableQueue, gpu_request_q: mp.Queue, encode_req
             env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)            
 
             if task.is_eval:
-               result = agent.eval(env)
+                result = agent.evaluate(env)
             else:
                 result = agent.learn(env) 
-                with lock: # update the number of tasks solved
-                    tasks_solved.value += result
-                
-                
+            
+            episode_results_q.put_nowait(result)
             task_q.task_done()
     except Exception as e:
         print(f"[CPU THREAD ERROR] {e}")
@@ -319,6 +318,15 @@ def transfer_queues_to_buffers(trajectory_buffer, trajectory_q, replay_buffer, r
         replay_buffer.add_program_and_task(task, program)
 
 
+def evaluate(eval_set, curriculum_q, episode_results_q): 
+    eval_log = make_eval_log()
+    
+    # enqueue the curriculum.
+    for task in eval_set.generate_curriculum():
+        curriculum_q.put(task, block=True)
+    curriculum_q.join()
+    episode_logs = drain_q(episode_results_q)
+    return eval_log
 
 if __name__ == "__main__": 
     n_tree_workers = 4
@@ -332,7 +340,7 @@ if __name__ == "__main__":
     lock = Lock()
 
     config = batchedalphaarcConfig()
-    curriculum = Curriculum(dir_paths=['data/evaluation'], is_eval=False)
+    curriculum = Curriculum(dir_paths=['data/training'],file_paths=['data/mutated_tasks_train_19200.json'], is_eval=False)
     eval_set = Curriculum(dir_paths=['data/evaluation'], is_eval=True)
     curriculum_q = mp.JoinableQueue()
     gpu_request_q = mp.Queue()
@@ -340,6 +348,8 @@ if __name__ == "__main__":
 
     trajectory_buffer_q = mp.Queue()
     replay_buffer_q = mp.Queue()
+
+    episode_results_q = mp.Queue()
     
     trainer = Trainer()
 
@@ -357,7 +367,7 @@ if __name__ == "__main__":
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
 
-    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q, tasks_solved, lock), daemon=True) for _ in range(n_tree_workers)]
+    tree_workers = [Process(target=tree_worker_fn, args=(curriculum_q, gpu_request_q, encode_request_q, config, trajectory_buffer_q, replay_buffer_q, episode_results_q), daemon=True) for _ in range(n_tree_workers)]
 
     # set up the wandb stuff.
 
@@ -383,11 +393,13 @@ if __name__ == "__main__":
                                        )
 
             current_batch_size.value = n_tree_workers
+            episode_logs = drain_q(episode_results_q)
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
-            eval_log = trainer.eval(model=model)
-
+            
+            eval_log = evaluate(eval_set, curriculum_q, episode_results_q)
             run_log['training_logs'].append(train_log)
             run_log['eval_logs'].append(eval_log)
+            # update the gpu workers model.
 
   
     

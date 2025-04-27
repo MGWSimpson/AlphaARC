@@ -104,8 +104,4 @@ class Trainer:
         train_log['rl_buffer_capacity'] = len(trajectory_buffer)
         return train_log
 
-    def eval(self, model ): 
-        
-        eval_log =  make_eval_log()
-
-        return eval_log
+    

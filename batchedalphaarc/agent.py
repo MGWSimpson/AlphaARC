@@ -18,10 +18,11 @@ from dataclasses import dataclass
 from torch.utils.data import DataLoader 
 from torch.amp.grad_scaler import GradScaler
 from torch import autocast
-
 import lightning.pytorch as pl
-
 from tqdm import tqdm
+
+from batchedalphaarc.logger import make_episode_log
+
 
 
 @dataclass
@@ -68,21 +69,19 @@ class Agent():
                         #replay_buffer, 
                     model, 
                     n_episodes, n_simulations, action_temperature, #logger
+                    evaluation_action_temperature,
                     ):
         self.n_episodes = n_episodes
         self.n_simulations  = n_simulations
         self.action_temperature = action_temperature
 
-        # self.trajectory_buffer = trajectory_buffer
-        # self.replay_buffer = replay_buffer
         
         self.trajectory_q = trajectory_q
         self.replay_q = replay_q
         self.model = model
-        # self.logger = logger
-        # self.optimizer = optim.AdamW(self.model.parameters())
         self.learning_count = 0
-        
+        self.evaluation_action_temperature = evaluation_action_temperature
+
 
     def execute_episode(self, env, temperature): 
         
@@ -121,9 +120,27 @@ class Agent():
         
         return int(task_solved)"""
     
+    def evaluate(self, env):
+        task_solved = False
+        episode_log = make_episode_log(env.task.task_key)
+        self.encoder_output = self.model.encode(env.tokenized_task).squeeze()
+        for eps in range(self.n_episodes): 
+            episode_history, solved, full_task_and_program = self.execute_episode(env, self.evaluation_action_temperature) # set temp to zero.
+
+            if solved:
+                task_solved = True
+                break
+        
+
+        episode_log['solved'] = float(task_solved)
+        return episode_log
+
+
     def learn(self, env): 
         task_solved = False
         self.encoder_output = self.model.encode(env.tokenized_task).squeeze()
+        episode_log = make_episode_log(env.task.task_key)
+
         for eps in range(self.n_episodes):
             episode_history, solved, full_task_and_program = self.execute_episode(env, self.action_temperature)
             # self.trajectory_buffer.add_trajectory(episode_history)
@@ -133,51 +150,11 @@ class Agent():
                 self.replay_q.put((full_task_and_program[0], full_task_and_program[1]))
                 task_solved = True
                 break 
-        return int(task_solved)
+        
+        episode_log['solved'] = float(task_solved)
+        return episode_log
+
     
 
        
-
-if __name__ == "__main__":
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-    task = Task.from_json('data/training/6ecd11f4.json')
-    print(task.program)
-    pl.seed_everything(0)
-    logger = Logger()
-    config = batchedalphaarcConfig()
-    tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
-    trajectory_buffer =  TrajectoryBuffer(capacity=config.trajectory_buffer_capacity,
-                                          n_actions=config.n_actions,
-                                          max_action_len=config.max_action_len,
-                                          max_state_len=config.max_state_len,
-                                          max_task_len=config.max_task_len)
-    
-    replay_buffer = ReplayBuffer(capacity=config.replay_buffer_capacity,
-                                 max_state_len=config.max_state_len,
-                                 max_task_len=config.max_task_len)
-    
-    tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
-    
-    model = PolicyValueNetwork(model_path=config.model_config.model_path,
-                               tokenizer=tokenizer,
-                               temperature=config.model_config.model_temperature,
-                               num_samples=config.n_actions,
-                               device= config.model_config.device)
-    
-    model = model.to('cuda')
-    agent = Agent(trajectory_buffer=trajectory_buffer,
-                  replay_buffer=replay_buffer, 
-                  model=model,
-                  n_episodes=config.n_episodes_per_task,
-                  n_simulations=config.n_simulations,
-                  action_temperature=config.action_temperature,
-                  logger=logger)
-
-    env = LineLevelArcEnv(task, 
-                                tokenizer=tokenizer, 
-                                max_task_len=config.max_task_len, 
-                                max_state_len=config.max_state_len, 
-                                n_actions=config.n_actions,
-                                n_examples=config.n_examples)
-    print(agent.learn(env))
+ 
