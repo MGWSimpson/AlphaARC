@@ -95,7 +95,7 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, env: LineLevelArcEnv, encoder_output, n_simulations):
+    def __init__(self, env: LineLevelArcEnv, encoder_output, n_simulations, is_debugging=True):
         self.env = env
         self.n_simulations = n_simulations
         self.encoder_output = encoder_output

@@ -5,9 +5,6 @@
 def make_run_log(train_log, train_episodes_log,
                  eval_log, eval_episodes_log):
     
-
-
-
     return {
         "policy_epoch_mean": train_log['policy_epoch_mean'],
         "value_epoch_mean": train_log['value_epoch_mean'],
@@ -16,7 +13,7 @@ def make_run_log(train_log, train_episodes_log,
         "rl_buffer_capacity": train_log['rl_buffer_capacity'] ,   
         "train_solve_rate": summarize_episodes(train_episodes_log),
         "eval_solve_rate": eval_log['solve_rate'],
-
+        "training_correct_syntax_rate": summarize_syntax_rate(train_episodes_log),
     }
 
 
@@ -53,12 +50,9 @@ def make_episode_log(task_id):
     return {
         "task_id": task_id,
         "solved": 0.0,
-        "min_depth": 0,
-        "max_depth": 0,
-        "average_depth": 0,
-        "n_incorrect_syntax": 0,
-        "n_correct_syntax": 0,
-    }
+        "depth": 0,
+        "correct_syntax_ratio": 0.0
+        }
 
 
 
@@ -67,7 +61,9 @@ def summarize_episodes(episode_logs):
     return solve_rate
 
 
-
+def summarize_syntax_rate(episode_logs): 
+    syntax_rate = sum(x['correct_syntax_ratio'] for x in episode_logs) / len(episode_logs)
+    return syntax_rate
 
 def make_eval_log(): 
     return {

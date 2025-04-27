@@ -13,12 +13,17 @@ import torch.optim as optim
 
 class Trainer: 
     
-    def __init__(self):
+    def __init__(self, rl_batch_size, rl_lr, supervised_batch_size, supervised_lr):
         self.learning_count = 0
+
+        self.rl_batch_size = rl_batch_size
+        self.rl_lr = rl_lr
+        self.supervised_batch_size = supervised_batch_size
+        self.supervised_lr = supervised_lr
  
     def _train_rl(self, model, trajectory_buffer,batch_logs): 
         trajectory_dataloader = DataLoader(trajectory_buffer, 
-                                           batch_size=1,
+                                           batch_size=self.rl_batch_size,
                                            collate_fn=TrajectoryBuffer.collate_fn)
         
         scaler = GradScaler()
@@ -31,7 +36,7 @@ class Trainer:
         # Create optimizer (backbone + heads)
         trainable_params = [p for p in model.parameters() if p.requires_grad]
 
-        optimizer = optim.AdamW(trainable_params) 
+        optimizer = optim.AdamW(trainable_params, lr=self.rl_lr) 
 
         for batch in tqdm(trajectory_dataloader, desc="rl training"):
             task, state, actions, target_pis, target_vs = batch
@@ -60,14 +65,14 @@ class Trainer:
 
     def _train_supervised(self, model, supervised_buffer, batch_logs):
         scaler = GradScaler()
-        replay_dataloader = DataLoader(supervised_buffer, batch_size=1, collate_fn=ReplayBuffer.collate_fn)
+        replay_dataloader = DataLoader(supervised_buffer, batch_size=self.supervised_batch_size, collate_fn=ReplayBuffer.collate_fn)
         
             
         for param in model.model.lm_head.parameters():
             param.requires_grad = True
 
 
-        optimizer = optim.AdamW(model.model.parameters()) # TODO: need to add just the lower layers here.
+        optimizer = optim.AdamW(model.model.parameters(), self.supervised_lr) 
 
         print(f"starting supervised training")
         for batch in tqdm(replay_dataloader, desc="supervised training"):

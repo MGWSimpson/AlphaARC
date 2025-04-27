@@ -46,11 +46,13 @@ from batchedalphaarc.logger import make_run_log, summarize_episodes
 
 @dataclass
 class RLTrainingConfig:
-    rl_batch_size: int =2
+    rl_batch_size: int =1
+    rl_lr: float= 5e-5
 
 @dataclass
 class SupervisedTrainingConfig:
-    supervised_batch_size: int = 2
+    supervised_batch_size: int = 1
+    supervised_lr: float = 5e-5
 
 @dataclass
 class ModelConfig:
@@ -365,7 +367,10 @@ if __name__ == "__main__":
     replay_buffer_q = mp.Queue()
 
     episode_results_q = mp.Queue()
-    trainer = Trainer()
+    trainer = Trainer(rl_batch_size=config.rl_training_config.rl_batch_size, 
+                      rl_lr=config.rl_training_config.rl_lr,
+                     supervised_batch_size=config.supervised_training_config.supervised_batch_size,
+                     supervised_lr=config.supervised_training_config.supervised_lr)
 
     replay_buffer = ReplayBuffer()
     trajectory_buffer = TrajectoryBuffer()
