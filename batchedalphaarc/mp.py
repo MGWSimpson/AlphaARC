@@ -23,6 +23,7 @@ from batchedalphaarc.train import Trainer
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
+from tqdm import tqdm
 import wandb
 
 import torch
@@ -185,7 +186,7 @@ class ModelRequester():
         return actions.numpy(), action_probs.numpy(), value.numpy(), child_key_values
 
     def predict(self, task, state, past_key_values):
-        return self._make_gpu_request((torch.tensor(task), torch.tensor(state), past_key_values))
+        return self._make_gpu_request((task.clone(), torch.tensor(state), past_key_values))
 
     
     def _make_encode_request(self, task): 
@@ -305,7 +306,6 @@ def gpu_worker_fn(model_responder: ModelResponder):
 
 
 
-
 def drain_q(q): 
     items = []
     while True:
@@ -391,9 +391,9 @@ if __name__ == "__main__":
         train_every = config.train_every
         full_curriculum = curriculum.generate_curriculum()
         
-        for i in range(0, len(full_curriculum), train_every):
+        for i in tqdm(range(0, len(full_curriculum), train_every)):
+
             curriculum_chunk = full_curriculum[i:i + train_every]
-            print(f"on task {i} / {len(full_curriculum)}")
             for task in curriculum_chunk:
                 curriculum_q.put(task, block=True)
             
