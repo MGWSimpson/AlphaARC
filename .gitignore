@@ -33,3 +33,5 @@ pretrained
 data/*
 
 finetune/*
+
+*.pth

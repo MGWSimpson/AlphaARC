@@ -199,12 +199,14 @@ class ModelRequester():
         return self._make_encode_request(task)
 
 class ModelResponder(): 
-    def __init__(self, gpu_request_q, encode_request_q, batch_size, model):
+    def __init__(self, gpu_request_q, encode_request_q, batch_size, model, load_model_event):
         
         self.gpu_request_q = gpu_request_q
         self.encode_request_q = encode_request_q
         self.batch_size = batch_size
         self.model = model
+
+        self.load_model_event = load_model_event
 
         self.time_out_time = 1
 
@@ -216,11 +218,19 @@ class ModelResponder():
         result = result.last_hidden_state
         connection.send(result)
 
+    def _handle_load_model(self): 
+        self.model = torch.load('model.pth', weights_only=False)
+
     def serve(self): 
         while True: 
             batch = []
             start_time = None
             while len(batch) < self.batch_size.value:
+                
+                if self.load_model_event.is_set():
+                    self._handle_load_model()
+                    self.load_model_event.clear()
+
                 try:
                     encode_request = self.encode_request_q.get_nowait()
                     self._handle_encode_request(encode_request)
@@ -362,8 +372,10 @@ if __name__ == "__main__":
                                config.n_actions,
                                config.model_config.device)
     
+    load_model_event = mp.Event()
+
     model = model.to(model.device)
-    model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=current_batch_size, model=model)
+    model_responder = ModelResponder(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q, batch_size=current_batch_size, model=model, load_model_event=load_model_event)
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     gpu_worker.start()
 
@@ -381,7 +393,7 @@ if __name__ == "__main__":
         
         for i in range(0, len(full_curriculum), train_every):
             curriculum_chunk = full_curriculum[i:i + train_every]
-
+            print(f"on task {i} / {len(full_curriculum)}")
             for task in curriculum_chunk:
                 curriculum_q.put(task, block=True)
             
@@ -394,12 +406,15 @@ if __name__ == "__main__":
 
             current_batch_size.value = n_tree_workers
             episode_logs = drain_q(episode_results_q)
+
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+            load_model_event.set()
             
+            print("starting evaluation.")
             eval_log = evaluate(eval_set, curriculum_q, episode_results_q)
+            
             run_log['training_logs'].append(train_log)
             run_log['eval_logs'].append(eval_log)
-            # update the gpu workers model.
 
   
     

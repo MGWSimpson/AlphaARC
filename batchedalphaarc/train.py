@@ -95,11 +95,12 @@ class Trainer:
 
         self._train_rl(model, trajectory_buffer, train_log)
         self._train_supervised(model, supervised_buffer, train_log)
-    
         train_log =   make_train_log_means(train_log)
-
         self.learning_count +=1
-        
+
+        # make a save of the model.
+        torch.save(model, 'model.pth')
+
         train_log['supervised_buffer_capacity'] = len(supervised_buffer)
         train_log['rl_buffer_capacity'] = len(trajectory_buffer)
         return train_log
