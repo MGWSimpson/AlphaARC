@@ -10,6 +10,25 @@ import copy
 import time
 
 
+def format_cache_for_storage(past_key_values): 
+    new_past = []
+
+    for layer_idx, layer_past in enumerate(past_key_values):
+        
+        if layer_idx == len(past_key_values) -1:
+            break
+
+        self_k, self_v, cross_k, cross_v = layer_past
+        sliced = (
+            self_k[:, :, :-1, :],     # shape: (1, n_heads, seq_len, head_dim)
+            self_v[:, :, :-1, :],
+            cross_k[: , :, :, :],    # shape: (1, n_heads, enc_seq_len, head_dim)
+            cross_v[: , :, :, :],
+        )
+        new_past.append(sliced)
+
+    return tuple(new_past)
+
 class PolicyValueNetwork(nn.Module): 
     def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
@@ -79,6 +98,7 @@ class PolicyValueNetwork(nn.Module):
 
     
     def predict(self, task, state, past_key_values):
+        print(state.shape) 
         with torch.no_grad(): 
             actions, action_probs, values, past_key_values =  self._compute_actions(task, state, past_key_values)
         

@@ -50,7 +50,7 @@ class ModelConfig:
 
 
 @dataclass
-class alphaarcConfig:
+class AlphaARCConfig:
     rl_training_config: RLTrainingConfig = RLTrainingConfig()
     supervised_training_config: SupervisedTrainingConfig = SupervisedTrainingConfig()
     model_config: ModelConfig = ModelConfig()
@@ -82,7 +82,7 @@ def evaluate(agent, evaluation_set, tokenizer, config):
 
 def main() -> None:
     print("\n" + "=" * 10, "Configuration", "=" * 10)
-    config = alphaarcConfig()
+    config = AlphaARCConfig()
     logger = Logger()
 
     pl.seed_everything(config.seed)

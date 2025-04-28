@@ -95,27 +95,13 @@ class LineLevelArcEnv:
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
         observation = self._encode(program)
         return observation, reward, terminated
-
-
-    def is_valid_syntax(self, action, state): 
-        action = self._add_new_line_if_absent(action)
-        observation = np.concatenate((state, action))
-        program = self._decode(observation)
-        for i, st in enumerate(self.initial_states):
-            candidate_program = append_return(program)
-            # candidate_program = program
-            output = execute_candidate_program(program_string=candidate_program, program_input=st)
-            if output == "Invalid Input": 
-                return False   
-
-        return True
+    
 
     def get_action_space(self):
         return self.n_actions
  
-
     def reset(self):
-        return np.array([0], dtype=np.int64)
+        return np.array([], dtype=np.int64)
 
 
 if __name__ == "__main__": 
