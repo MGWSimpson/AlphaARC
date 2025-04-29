@@ -1,9 +1,8 @@
-from alphaarc.task import Task, from_dict
 import os
 import json
+from alphaarc.task import Task, from_dict
 
-
-class BaseCurriculum:
+class Curriculum:
     def __init__(self, dir_paths=[], file_paths=[], is_eval=False):
         self.tasks = []
         self.solved_tasks = []
@@ -33,6 +32,15 @@ class BaseCurriculum:
             self._load_tasks_from_files(file_path)
 
 
+    # TODO: explore curriculum strats
+    def generate_curriculum(self): 
+        return self.tasks
+
+
+    def handle_solved_tasks(self, task):
+        self.solved_tasks.append(task)
+        self.tasks.remove(task)
+
 
     def __len__(self): 
         return len(self.tasks)
@@ -44,21 +52,8 @@ class BaseCurriculum:
         return len(self.solved_tasks)
     
 
-    def handle_solved_tasks(self, task):
-        self.solved_tasks.append(task)
-        self.tasks.remove(task)
 
-
-    def generate_curriculum(self) -> list[Task]: 
-        raise NotImplementedError
-
-
-
-
-class BaselineCurriculum(BaseCurriculum):
-    def __init__(self, dir_paths=[], file_paths=[], is_eval=False):
-        super().__init__(dir_paths, file_paths, is_eval)
-    
-
-    def generate_curriculum(self) -> list[Task]:
-        return self.tasks
+if __name__ == "__main__": 
+    directories = ['data/training', 'data/evaluation']
+    files = ['data/mutated_tasks_train_9600.json']
+    c = Curriculum(dir_paths=directories, file_paths=files)

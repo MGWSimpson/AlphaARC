@@ -8,25 +8,19 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from alphaarc.buffers import ReplayBuffer, TrajectoryBuffer
+from alphaarc.logger import make_train_log, make_train_log_means, make_eval_log
 import torch.optim as optim
 
-from alphaarc.logger import make_train_log, make_train_log_means, make_eval_log
-
-class BaseTrainer:
-    def __init__(self):
-        pass
-
-    def train(self, model, trajectory_buffer, supervised_buffer):
-        raise NotImplementedError
-
-
-
-
-class JointTrainer(BaseTrainer): 
-    def __init__(self):
-        super().__init__()
-
+class Trainer: 
     
+    def __init__(self, rl_batch_size, rl_lr, supervised_batch_size, supervised_lr):
+        self.learning_count = 0
+
+        self.rl_batch_size = rl_batch_size
+        self.rl_lr = rl_lr
+        self.supervised_batch_size = supervised_batch_size
+        self.supervised_lr = supervised_lr
+ 
     def _train_rl(self, model, trajectory_buffer,batch_logs): 
         trajectory_dataloader = DataLoader(trajectory_buffer, 
                                            batch_size=self.rl_batch_size,
@@ -115,3 +109,5 @@ class JointTrainer(BaseTrainer):
         train_log['supervised_buffer_capacity'] = len(supervised_buffer)
         train_log['rl_buffer_capacity'] = len(trajectory_buffer)
         return train_log
+
+    
