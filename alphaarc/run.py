@@ -10,6 +10,45 @@ from alphaarc.logger import make_run_log, summarize_episodes, make_eval_log
 from tqdm import tqdm
 import wandb
 from dataclasses import dataclass, asdict
+import traceback
+from alphaarc.mp import ModelRequester, ModelResponder
+
+
+
+def tree_worker_fn(config: AlphaARCConfig, 
+                   mp_context: MultiProcessingContext,
+                   
+                   ): 
+    
+    try:
+        model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
+        agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature, config.evaluation_action_temperature)
+        tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
+
+        while True:
+            task = task_q.get()
+            env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)            
+
+            if task.is_eval:
+                result = agent.evaluate(env)
+            else:
+                result = agent.learn(env) 
+            
+            episode_results_q.put_nowait(result)
+            task_q.task_done()
+    except Exception as e:
+        print(f"[CPU THREAD ERROR] {e}")
+        traceback.print_exc()
+
+
+
+
+def gpu_worker_fn(model_responder: ModelResponder): 
+    try:
+        model_responder.serve()
+    except Exception as e:
+        print(f"[GPU THREAD ERROR] {e}")
+        traceback.print_exc()
 
 
 
@@ -24,8 +63,6 @@ def evaluate(eval_set, curriculum_q, episode_results_q):
     
     eval_log['solve_rate'] = summarize_episodes(episode_logs)
     return eval_log, episode_logs
-
-
 
 
 def run_experiment( config: AlphaARCConfig, 
