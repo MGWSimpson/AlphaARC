@@ -128,8 +128,24 @@ def build_mp_context():
     return context
 
 
-def transfer_queues_to_buffers(): 
-    pass
 
-def drain_q():
-    pass
+def drain_q(q): 
+    items = []
+    while True:
+        try:
+            item = q.get_nowait()
+            items.append(item)
+        except Empty:
+            break
+    return items
+
+def transfer_queues_to_buffers(trajectory_buffer, trajectory_q, replay_buffer, replay_q):
+    trajectory_items = drain_q(trajectory_q)
+    replay_items = drain_q(replay_q)
+
+    for item in trajectory_items:
+        trajectory_buffer.add_trajectory(item)
+
+    for item in replay_items:
+        task, program = item
+        replay_buffer.add_program_and_task(task, program)

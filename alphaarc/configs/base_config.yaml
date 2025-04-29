@@ -1,0 +1,55 @@
+model_config:
+  type: PolicyValueNetwork
+  params:
+    model_path: 'finetune/2025-04-18_12-38-42/model'
+    tokenizer_path:  'Salesforce/codet5p-220m'
+    model_temperature: 0.95
+    device: 'cuda'
+
+
+
+
+trainer_config:
+  type: JointTrainer
+  params:
+    rl_batch_size: 1
+    rl_lr:  5e-5
+    supervised_batch_size: 1
+    supervised_lr:   5e-5
+
+
+policy_config:
+  type: 
+  params:
+    n_simulations:  10
+    action_temperature:  1
+    max_action_len:  20
+    evaluation_action_temperature:  0.0
+
+
+alpha_arc_config:
+  seed: 0
+  n_tree_workers: 4
+  n_examples:  10
+  train_every: 10
+  max_task_len: 512
+  max_state_len:  1024
+  n_actions:  5
+  n_episodes_per_task:  1
+  trajectory_buffer_capacity: 100_000
+  replay_buffer_capacity: 100_000
+  n_epochs: 1
+
+
+
+training_curriculum_config:
+  type:
+  params:
+    
+
+evaluation_curriculum_config:
+  type:
+  params:
+
+
+

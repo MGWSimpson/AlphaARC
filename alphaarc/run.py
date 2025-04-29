@@ -1,5 +1,5 @@
 import argparse
-
+from multiprocessing import Process # TODO: swap this over to torch mp.
 from alphaarc.configs import load_config, AlphaARCConfig
 from alphaarc.mp import build_mp_context, MultiProcessingContext, transfer_queues_to_buffers, drain_q
 from alphaarc.curriculum import BaseCurriculum
@@ -12,30 +12,30 @@ import wandb
 from dataclasses import dataclass, asdict
 import traceback
 from alphaarc.mp import ModelRequester, ModelResponder
+from alphaarc.agent import Agent
+from alphaarc.env import BaseEnv
+from alphaarc.configs import build_alpha_arc_config
 
-
-
-def tree_worker_fn(config: AlphaARCConfig, 
+def tree_worker_fn( 
                    mp_context: MultiProcessingContext,
-                   
+                   agent: Agent,
+                   env: BaseEnv,
                    ): 
     
     try:
-        model = ModelRequester(gpu_request_q=gpu_request_q, encode_request_q=encode_request_q)
-        agent = Agent(trajectory_buffer_q, replay_buffer_q, model,config.n_episodes_per_task, config.n_simulations, config.action_temperature, config.evaluation_action_temperature)
-        tokenizer = AutoTokenizer.from_pretrained(config.model_config.tokenizer_path)
-
+        
         while True:
-            task = task_q.get()
-            env = LineLevelArcEnv(task, tokenizer, config.n_examples, config.max_task_len, config.max_state_len, config.n_actions)            
-
+            task = mp_context.task_q.get()
+            env.load_task(task)
+            
             if task.is_eval:
                 result = agent.evaluate(env)
             else:
                 result = agent.learn(env) 
             
-            episode_results_q.put_nowait(result)
-            task_q.task_done()
+            mp_context.episode_results_q.put_nowait(result)
+            mp_context.task_q.task_done()
+    
     except Exception as e:
         print(f"[CPU THREAD ERROR] {e}")
         traceback.print_exc()
@@ -112,13 +112,36 @@ def main():
 
     args = parser.parse_args()
     config = load_config()
-    
+
+    alpha_arc_config = build_alpha_arc_config()
     mp_context = build_mp_context()
     
     run = wandb.init(
     project="alphaarc",
     config=asdict(config))
 
+
+    gpu_worker = Process(target=gpu_worker_fn, args=())
+    tree_workers = [Process(target=tree_worker_fn, args=(), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
+
+
+    # spin up workers
+    for worker in tree_workers:
+        worker.start()
+
+    gpu_worker.start()
+
+
+    # run experiment
+    run_experiment()
+
+    [worker.kill() for worker in tree_workers]
+    gpu_worker.kill()
+    run.finish()
+    print("workers done")
+    print("all done!")
+
+    
     
     
 

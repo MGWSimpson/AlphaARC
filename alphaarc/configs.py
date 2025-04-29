@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 import yaml
+from alphaarc.networks import BaseNetwork, PolicyValueNetwork
+from alphaarc.policies import BasePolicy
+from alphaarc.train import BaseTrainer, JointTrainer
+from alphaarc.curriculum import BaseCurriculum
 
 @dataclass
 class RLTrainingConfig:
@@ -42,6 +46,10 @@ class AlphaARCConfig:
 
 
 
+
+
+
+
 def load_config(path: str) -> AlphaARCConfig:
     with open(path, 'r') as f:
         cfg_dict = yaml.safe_load(f)
@@ -51,3 +59,36 @@ def load_config(path: str) -> AlphaARCConfig:
 
 def override_config(config: AlphaARCConfig, args): 
     raise NotImplementedError
+
+
+
+# would take in some network or something then
+def build_network(model_config: dict) -> BaseNetwork:
+    NETWORK_REGISTRY = {"PolicyValueNetwork": PolicyValueNetwork }
+    network_type = model_config['type']
+    params = model_config.get('params', {})
+
+    network_cls = NETWORK_REGISTRY.get(network_type)
+    if network_cls is None:
+        raise ValueError(f"Unknown network type '{network_type}'")
+
+    return network_cls(**params)
+
+
+
+def build_policy(policy_config: dict) -> BasePolicy:
+    POLICY_REGISTRY = {""}
+
+
+def build_trainer(trainer_config: dict) -> BaseTrainer: 
+    TRAINER_REGISTRY = {""}
+
+
+def build_curriculum(curriculum_config: dict)-> BaseCurriculum: 
+    CURRICULUM_REGISTRY = {""}
+
+
+
+
+def build_alpha_arc_config(config_dict: dict) -> AlphaARCConfig
+    pass
