@@ -3,8 +3,9 @@ model_config:
   params:
     model_path: 'finetune/2025-04-18_12-38-42/model'
     tokenizer_path:  'Salesforce/codet5p-220m'
-    model_temperature: 0.95
+    temperature: 0.95
     device: 'cuda'
+    num_samples: 5
 
 
 
@@ -30,15 +31,22 @@ policy_config:
 alpha_arc_config:
   seed: 0
   n_tree_workers: 4
-  n_examples:  10
   train_every: 10
-  max_task_len: 512
-  max_state_len:  1024
-  n_actions:  5
   n_episodes_per_task:  1
   trajectory_buffer_capacity: 100_000
   replay_buffer_capacity: 100_000
   n_epochs: 1
+  n_actions:  5
+
+
+env_config:
+  type: LineLevelArcEnv
+  params:
+    tokenizer_path: 'Salesforce/codet5p-220m'
+    n_examples:  10
+    max_task_len: 512
+    max_state_len:  1024
+    n_actions:  5
 
 
 

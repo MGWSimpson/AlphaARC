@@ -17,10 +17,10 @@ class BaseNetwork(nn.Module):
 
 
 class PolicyValueNetwork(BaseNetwork): 
-    def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
+    def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)
-        self.tokenizer = tokenizer        
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.value = nn.Linear(768, 1) 
         self.policy = nn.Linear(768, 1)
         self.device = device

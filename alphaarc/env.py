@@ -39,27 +39,15 @@ class BaseEnv:
         raise NotImplementedError
 
 class LineLevelArcEnv (BaseEnv):
-    def __init__(self, task: Task, tokenizer, n_examples, max_task_len, max_state_len, n_actions):
+    def __init__(self, tokenizer_path, n_examples, max_task_len, max_state_len, n_actions):
         self.n_examples = n_examples
-        self.task = task
-        self.initial_states = [
-                training_example["input"]
-                for training_example in task.training_examples[: self.n_examples]
-        ]
-        self.goal_states = [
-                training_example["output"]
-                for training_example in task.training_examples[: self.n_examples]
-        ]
         self.n_examples = n_examples
         self.input_state_max = max_task_len
         self.max_length = max_state_len
-
         self.n_actions = n_actions
-        self.tokenizer = tokenizer
-
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.new_line_arr = np.array([NEW_LINE_TOKEN_ID])
-        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
-        self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
+        
         
     
     def _add_new_line_if_absent(self, action): 
@@ -125,6 +113,19 @@ class LineLevelArcEnv (BaseEnv):
     def reset(self):
         return np.array([0], dtype=np.int64)
 
+
+    def set_task(self, task: Task): 
+        self.task = task
+        self.initial_states = [
+                training_example["input"]
+                for training_example in task.training_examples[: self.n_examples]
+        ]
+        self.goal_states = [
+                training_example["output"]
+                for training_example in task.training_examples[: self.n_examples]
+        ]
+        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
+        self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
 
 if __name__ == "__main__": 
     task = Task.from_json('data/training/67385a82.json')

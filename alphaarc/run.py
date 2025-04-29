@@ -14,7 +14,7 @@ import traceback
 from alphaarc.mp import ModelRequester, ModelResponder
 from alphaarc.agent import Agent
 from alphaarc.env import BaseEnv
-from alphaarc.configs import build_alpha_arc_config
+from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy
 
 def tree_worker_fn( 
                    mp_context: MultiProcessingContext,
@@ -108,23 +108,34 @@ def run_experiment( config: AlphaARCConfig,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='')
-
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/base_config.yaml')
     args = parser.parse_args()
-    config = load_config()
 
-    alpha_arc_config = build_alpha_arc_config()
+    config = load_config(args.config_path)
+    
+    alpha_arc_config = build_alpha_arc_config(config['alpha_arc_config'])
     mp_context = build_mp_context()
     
-    run = wandb.init(
+
+    model = build_network(config['model_config'])
+    model_responder = ModelResponder(gpu_request_q=mp_context.gpu_request_q,
+                                     encode_request_q=mp_context.encode_request_q,
+                                     batch_size=alpha_arc_config.n_tree_workers,
+                                     load_model_event=mp_context.load_model_event,
+                                     model=model)
+    
+    env = build_env(config['env_config'])
+
+    policy = build_policy(config['policy_config'])
+    # agent = Agent()
+
+    """run = wandb.init(
     project="alphaarc",
-    config=asdict(config))
+    config=config)"""
+    gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
+    tree_workers = [Process(target=tree_worker_fn, args=(mp_context,), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
 
-
-    gpu_worker = Process(target=gpu_worker_fn, args=())
-    tree_workers = [Process(target=tree_worker_fn, args=(), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
-
-
+    """
     # spin up workers
     for worker in tree_workers:
         worker.start()
@@ -139,7 +150,7 @@ def main():
     gpu_worker.kill()
     run.finish()
     print("workers done")
-    print("all done!")
+    print("all done!")"""
 
     
     
