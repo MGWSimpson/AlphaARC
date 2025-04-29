@@ -126,3 +126,10 @@ class MultiProcessingContext:
 def build_mp_context(): 
     context = MultiProcessingContext()
     return context
+
+
+def transfer_queues_to_buffers(): 
+    pass
+
+def drain_q():
+    pass
