@@ -7,11 +7,16 @@ from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttenti
 import torch.nn.functional as F
 
 
+class BaseNetwork(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def predict(self, task, state, past_key_values):
+        raise NotImplementedError
 
 
 
-
-class PolicyValueNetwork(nn.Module): 
+class PolicyValueNetwork(BaseNetwork): 
     def __init__(self, model_path, tokenizer, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)
