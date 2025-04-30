@@ -17,6 +17,19 @@ def make_run_log(train_log, train_episodes_log,
     }
 
 
+def make_train_only_run_log(train_log, train_episodes_log): 
+    return {
+        "policy_epoch_mean": train_log['policy_epoch_mean'],
+        "value_epoch_mean": train_log['value_epoch_mean'],
+        "supervised_epoch_mean": train_log['supervised_epoch_mean'],
+        "supervised_buffer_capacity": train_log['supervised_buffer_capacity'],
+        "rl_buffer_capacity": train_log['rl_buffer_capacity'] ,   
+        "train_solve_rate": summarize_episodes(train_episodes_log),
+        "training_correct_syntax_rate": summarize_syntax_rate(train_episodes_log),
+    }
+
+
+
 def make_train_log(epoch): 
     return {
         "epoch": epoch,

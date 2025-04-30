@@ -1,12 +1,12 @@
 import argparse
-from multiprocessing import Process # TODO: swap this over to torch mp.
+from multiprocessing import Process  
 from alphaarc.configs import load_config, AlphaARCConfig
 from alphaarc.mp import build_mp_context, MultiProcessingContext, transfer_queues_to_buffers, drain_q
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.train import BaseTrainer
 from alphaarc.buffers import TrajectoryBuffer, ReplayBuffer
 from alphaarc.networks import BaseNetwork
-from alphaarc.logger import make_run_log, summarize_episodes, make_eval_log
+from alphaarc.logger import make_run_log, make_train_only_run_log,  summarize_episodes, make_eval_log
 from tqdm import tqdm
 import wandb
 from dataclasses import dataclass, asdict
@@ -98,9 +98,7 @@ def run_experiment( config: AlphaARCConfig,
             episode_logs = drain_q(mp_context. episode_results_q)
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
             mp_context.load_model_event.set()
-            eval_log, eval_episode_logs = evaluate(evaluation_set, mp_context.task_q, mp_context.episode_results_q)
-
-            run_log = make_run_log(train_log, episode_logs, eval_log, eval_episode_logs)
+            run_log = make_train_only_run_log(train_log, episode_logs)
             run.log(run_log)
 
 
@@ -126,9 +124,9 @@ def main():
                                      model=model)
     
 
-    run = None #wandb.init(
-    #project="alphaarc",
-    #config=config)
+    run = wandb.init(
+    project="alphaarc",
+    config=config)
 
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     tree_workers = [Process(target=tree_worker_fn, args=(config, mp_context,), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
