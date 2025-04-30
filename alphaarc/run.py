@@ -48,8 +48,7 @@ def gpu_worker_fn(model_responder: ModelResponder):
     except Exception as e:
         print(f"[GPU THREAD ERROR] {e}")
         traceback.print_exc()
-
-
+        
 
 def evaluate(eval_set, task_q, episode_results_q): 
     eval_log = make_eval_log()
@@ -91,7 +90,6 @@ def run_experiment( config: AlphaARCConfig,
                                        replay_q=mp_context.replay_buffer_q
                                        )
 
-            # TODO: make sure you add this back in current_batch_size.value = n_tree_workers 
             episode_logs = drain_q(mp_context. episode_results_q)
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
             mp_context.load_model_event.set()
@@ -105,6 +103,7 @@ def run_experiment( config: AlphaARCConfig,
 
 
 def main(): 
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/base_config.yaml')
     args = parser.parse_args()
@@ -116,6 +115,8 @@ def main():
     
 
     model = build_network(config['model_config'])
+    model = model.to(model.device)
+
     model_responder = ModelResponder(gpu_request_q=mp_context.gpu_request_q,
                                      encode_request_q=mp_context.encode_request_q,
                                      batch_size=alpha_arc_config.n_tree_workers,
@@ -126,21 +127,21 @@ def main():
                                      encode_request_q=mp_context.encode_request_q)
     env = build_env(config['env_config'])
     policy = build_policy(model_requester, env, config['policy_config'])
-    agent = Agent(policy=policy)
+    agent = Agent(policy=policy, replay_q=mp_context.replay_buffer_q, trajectory_q=mp_context.trajectory_buffer_q)
 
-    run = wandb.init(
-    project="alphaarc",
-    config=config)
+    run = None #wandb.init(
+    #project="alphaarc",
+    #config=config)
 
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
     tree_workers = [Process(target=tree_worker_fn, args=(mp_context,agent, env), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
 
-    
+    gpu_worker.start()
+
     # spin up workers
     for worker in tree_workers:
         worker.start()
 
-    gpu_worker.start()
 
     
     trainer = build_trainer(config['trainer_config'])

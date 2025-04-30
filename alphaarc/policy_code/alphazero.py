@@ -28,8 +28,6 @@ class Node:
         self.visit_count = 0
         self.prior = prior
         self.value_sum = 0
-
-
         self.child_actions = None
         self.children = []
         self.state = None

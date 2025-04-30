@@ -33,14 +33,12 @@ NEW_LINE_TOKEN_ID = 203
 class BaseEnv:
     def __init__(self):
         pass
-    
 
     def set_task(self, task): 
         raise NotImplementedError
 
 class LineLevelArcEnv (BaseEnv):
     def __init__(self, tokenizer_path, n_examples, max_task_len, max_state_len, n_actions):
-        self.n_examples = n_examples
         self.n_examples = n_examples
         self.input_state_max = max_task_len
         self.max_length = max_state_len

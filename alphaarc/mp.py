@@ -3,8 +3,8 @@ import torch.multiprocessing as mp
 import time
 from torch.nn.utils.rnn import pad_sequence
 from queue import Empty
-
 from dataclasses import dataclass
+from multiprocessing.synchronize import Event as EventType  # for type hints
 
 class ModelRequester():
 
@@ -42,9 +42,7 @@ class ModelResponder():
         self.batch_size = batch_size
         self.original_batch_size = batch_size
         self.model = model
-
         self.load_model_event = load_model_event
-
         self.time_out_time = 5
 
     def _handle_encode_request(self, request): 
@@ -82,12 +80,11 @@ class ModelResponder():
                         start_time = time.time()
                 except Empty: 
                     pass
-                        # If timeout has started and expired, break
                 
                 if start_time is not None and (time.time() - start_time > self.time_out_time):
                     self.batch_size = len(batch)
                     break
-                    
+
             data, connections = zip(*batch)
             # packet everything up. and then pass it to the network class
             
@@ -119,8 +116,8 @@ class MultiProcessingContext:
     trajectory_buffer_q:  mp.Queue
     replay_buffer_q:  mp.Queue
     episode_results_q:  mp.Queue
-    task_q:  mp.Queue
-    load_model_event: None
+    task_q:  mp.JoinableQueue
+    load_model_event: EventType
 
 
 
@@ -131,6 +128,7 @@ class MultiProcessingContext:
 
 
 def build_mp_context(): 
+    mp.set_start_method('spawn', force=True)
     gpu_request_q = mp.Queue ( )
     encode_request_q =  mp.Queue ( )
     trajectory_buffer_q =  mp.Queue ( )
