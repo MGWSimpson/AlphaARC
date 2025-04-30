@@ -79,28 +79,26 @@ def run_experiment( config: AlphaARCConfig,
                     run): 
     
 
-    for meta_epoch in range(config.n_epochs):
+    for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
 
+        for task in full_curriculum:
+            mp_context.task_q .put(task, block=True)
+        mp_context.task_q.join()
             
-        for i in tqdm(range(0, len(full_curriculum), config.train_every)):
-            curriculum_chunk = full_curriculum[i:i + config.train_every]
-
-            for task in curriculum_chunk:
-                mp_context.task_q .put(task, block=True)
-            
-            mp_context.task_q.join()
-            transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
+        transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
                                        trajectory_q=mp_context.trajectory_buffer_q,
                                        replay_buffer=replay_buffer,
                                        replay_q=mp_context.replay_buffer_q
                                        )
 
-            episode_logs = drain_q(mp_context. episode_results_q)
-            train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
-            mp_context.load_model_event.set()
-            run_log = make_train_only_run_log(train_log, episode_logs)
-            run.log(run_log)
+        episode_logs = drain_q(mp_context. episode_results_q)
+        train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+        mp_context.load_model_event.set()
+        run_log = make_train_only_run_log(train_log, episode_logs)
+
+        print(f"On meta epoch: {meta_epoch}. Solved: {run_log['train_solve_rate']}")
+        run.log(run_log)
 
 
 def main(): 

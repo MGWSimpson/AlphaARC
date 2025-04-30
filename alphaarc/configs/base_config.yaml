@@ -33,7 +33,7 @@ alpha_arc_config:
   n_episodes_per_task:  1
   trajectory_buffer_capacity: 100_000
   replay_buffer_capacity: 100_000
-  n_epochs: 1
+  n_epochs: 100
   n_actions:  5
 
 
@@ -51,7 +51,7 @@ env_config:
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/training, data/evaluation]
+    dir_paths: [ data/evaluation]
     
 
 evaluation_curriculum_config:
