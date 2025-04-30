@@ -2,11 +2,16 @@ from alphaarc.logger import make_episode_log
 from alphaarc.env import BaseEnv
 from alphaarc.policies import BasePolicy
 
+
+from transformers import T5ForConditionalGeneration, AutoTokenizer
+
+
 class Agent():
     def __init__(self, policy: BasePolicy, replay_q, trajectory_q):
         self.policy = policy
         self.replay_q = replay_q 
         self.trajectory_q = trajectory_q
+
     
     def _execute_episode(self, env: BaseEnv ):
         terminated = False
@@ -17,7 +22,6 @@ class Agent():
         while not terminated:
             action, actions, action_probs = self.policy.get_action(state)
             train_examples.append((state, actions, action_probs))
-
             state, reward, terminated = env.step(action=action, state=state)
             if terminated:
                 ret = []

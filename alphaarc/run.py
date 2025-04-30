@@ -15,6 +15,10 @@ from alphaarc.mp import ModelRequester, ModelResponder
 from alphaarc.agent import Agent
 from alphaarc.env import BaseEnv
 from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
+import os
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 def tree_worker_fn(config, 
                    mp_context: MultiProcessingContext,
@@ -96,7 +100,6 @@ def run_experiment( config: AlphaARCConfig,
         train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
         mp_context.load_model_event.set()
         run_log = make_train_only_run_log(train_log, episode_logs)
-
         print(f"On meta epoch: {meta_epoch}. Solved: {run_log['train_solve_rate']}")
         run.log(run_log)
 

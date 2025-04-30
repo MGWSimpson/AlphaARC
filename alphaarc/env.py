@@ -67,6 +67,9 @@ class LineLevelArcEnv (BaseEnv):
         terminated = False
         reward = 0
         program = self._decode(observation)
+        
+        print(self.task.task_key)
+        print(append_return(program))
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -122,7 +125,7 @@ class LineLevelArcEnv (BaseEnv):
                 training_example["output"]
                 for training_example in task.training_examples[: self.n_examples]
         ]
-        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
+        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max-1, self.max_length)['input_ids'])
         self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
 
 if __name__ == "__main__": 
