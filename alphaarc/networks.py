@@ -48,6 +48,7 @@ class PolicyValueNetwork(BaseNetwork):
                                             use_cache=True,
                                             output_hidden_states= True
                                             )         
+        
         actions = outputs.sequences.view(batch_size, self.num_samples, -1)
         logits = outputs.logits
         new_actions_shape = len(logits)

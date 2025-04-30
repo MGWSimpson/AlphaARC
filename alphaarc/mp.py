@@ -89,7 +89,7 @@ class ModelResponder():
             # packet everything up. and then pass it to the network class
             
             task, state, past_key_values = zip(*data)
-            task = pad_sequence(task, batch_first=True)
+            task = torch.stack(task)
             state = pad_sequence(state, batch_first=True)
 
 

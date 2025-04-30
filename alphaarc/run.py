@@ -86,7 +86,7 @@ def run_experiment( config: AlphaARCConfig,
     for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
 
-        for task in full_curriculum:
+        for task in full_curriculum[-2:]:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
             
