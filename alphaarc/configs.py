@@ -5,7 +5,7 @@ from alphaarc.policies import BasePolicy
 from alphaarc.train import BaseTrainer, JointTrainer
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.env import BaseEnv, LineLevelArcEnv
-
+from alphaarc.policies import BasePolicy, AlphaZero
 
 @dataclass
 class AlphaARCConfig:
@@ -48,8 +48,15 @@ def build_network(model_config: dict) -> BaseNetwork:
 
 
 def build_policy(policy_config: dict) -> BasePolicy:
-    POLICY_REGISTRY = {""}
+    POLICY_REGISTRY = {"AlphaZero": AlphaZero }
 
+    env_type = policy_config['type']
+    params = policy_config.get('params', {})
+    env_cls = POLICY_REGISTRY.get(env_type)
+    if env_cls is None:
+        raise ValueError(f"Unknown policy type '{env_type}'")
+
+    return env_cls(**params)
 
 def build_trainer(trainer_config: dict) -> BaseTrainer: 
     TRAINER_REGISTRY = {""}

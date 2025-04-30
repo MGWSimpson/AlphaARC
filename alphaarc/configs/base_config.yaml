@@ -20,7 +20,7 @@ trainer_config:
 
 
 policy_config:
-  type: 
+  type: AlphaZero
   params:
     n_simulations:  10
     action_temperature:  1
