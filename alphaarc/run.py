@@ -81,7 +81,8 @@ def run_experiment( config: AlphaARCConfig,
 
     for meta_epoch in range(config.n_epochs):
         full_curriculum = curriculum.generate_curriculum()
-        
+
+            
         for i in tqdm(range(0, len(full_curriculum), config.train_every)):
             curriculum_chunk = full_curriculum[i:i + config.train_every]
 
