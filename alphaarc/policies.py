@@ -44,7 +44,9 @@ class GumbelZeroPolicy(BasePolicy):
         super().__init__()
     
     def get_action(self, state): 
-        """
-        TODO: fill this in.
-        """ 
-        return None
+        raise NotImplementedError
+
+class MCTS(BasePolicy): 
+    def __init__(self):
+        super().__init__()
+
