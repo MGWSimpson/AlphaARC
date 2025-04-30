@@ -14,7 +14,7 @@ class Agent():
         train_examples = []
         self.policy.policy_init()
 
-        """ while not terminated:
+        while not terminated:
             action, actions, action_probs = self.policy.get_action(state)
             train_examples.append((state, actions, action_probs))
 
@@ -26,21 +26,20 @@ class Agent():
                 for hist_state, hist_actions,  hist_action_probs in train_examples:
                     ret.append(( env.tokenized_task, hist_state, hist_actions, hist_action_probs, reward))
 
-                return ret, solved, full_task_and_program"""
+                return ret, solved, full_task_and_program
 
 
     def learn(self, env: BaseEnv):
         episode_log = make_episode_log(env.task.task_key)
         
-        #episode_history, solved, full_task_and_program = 
-        self._execute_episode(env)
+        episode_history, solved, full_task_and_program =  self._execute_episode(env)
 
-        """if solved:
+        if solved:
             self.replay_q.put((full_task_and_program[0], full_task_and_program[1]))
             
         self.trajectory_q.put(episode_history)
 
-        episode_log['solved'] = float(solved)"""
+        episode_log['solved'] = float(solved)
         return episode_log
 
     def evaluate(self, env: BaseEnv): 

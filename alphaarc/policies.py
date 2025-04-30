@@ -16,7 +16,6 @@ class BasePolicy:
 class AlphaZeroPolicy(BasePolicy):
     def __init__(self, model, env, temperature, n_simulations):
         super().__init__()
-
         self.model = model
         self.env = env 
         self.temperature = temperature
@@ -37,3 +36,15 @@ class AlphaZeroPolicy(BasePolicy):
         action = root.select_action(temperature=self.temperature)
         
         return action, actions, action_probs
+
+
+
+class GumbelZeroPolicy(BasePolicy): 
+    def __init__(self):
+        super().__init__()
+    
+    def get_action(self, state): 
+        """
+        TODO: fill this in.
+        """ 
+        return None

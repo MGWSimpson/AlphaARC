@@ -16,11 +16,16 @@ from alphaarc.agent import Agent
 from alphaarc.env import BaseEnv
 from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
 
-def tree_worker_fn( 
+def tree_worker_fn(config, 
                    mp_context: MultiProcessingContext,
-                   agent: Agent,
-                   env: BaseEnv,
                    ): 
+    
+
+    model_requester = ModelRequester(gpu_request_q=mp_context.gpu_request_q,
+                                     encode_request_q=mp_context.encode_request_q)
+    env = build_env(config['env_config'])
+    policy = build_policy(model_requester, env, config['policy_config'])
+    agent = Agent(policy=policy, replay_q=mp_context.replay_buffer_q, trajectory_q=mp_context.trajectory_buffer_q)
     
     try:
         while True:
@@ -93,9 +98,6 @@ def run_experiment( config: AlphaARCConfig,
             episode_logs = drain_q(mp_context. episode_results_q)
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
             mp_context.load_model_event.set()
-            
-            
-            print("starting evaluation.")
             eval_log, eval_episode_logs = evaluate(evaluation_set, mp_context.task_q, mp_context.episode_results_q)
 
             run_log = make_run_log(train_log, episode_logs, eval_log, eval_episode_logs)
@@ -123,18 +125,13 @@ def main():
                                      load_model_event=mp_context.load_model_event,
                                      model=model)
     
-    model_requester = ModelRequester(gpu_request_q=mp_context.gpu_request_q,
-                                     encode_request_q=mp_context.encode_request_q)
-    env = build_env(config['env_config'])
-    policy = build_policy(model_requester, env, config['policy_config'])
-    agent = Agent(policy=policy, replay_q=mp_context.replay_buffer_q, trajectory_q=mp_context.trajectory_buffer_q)
 
     run = None #wandb.init(
     #project="alphaarc",
     #config=config)
 
     gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
-    tree_workers = [Process(target=tree_worker_fn, args=(mp_context,agent, env), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
+    tree_workers = [Process(target=tree_worker_fn, args=(config, mp_context,), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
 
     gpu_worker.start()
 
