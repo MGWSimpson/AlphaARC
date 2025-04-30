@@ -22,10 +22,8 @@ trainer_config:
 policy_config:
   type: AlphaZero
   params:
-    n_simulations:  10
-    action_temperature:  1
-    max_action_len:  20
-    evaluation_action_temperature:  0.0
+    temperature: 1 
+    n_simulations: 10
 
 
 alpha_arc_config:
@@ -51,13 +49,15 @@ env_config:
 
 
 training_curriculum_config:
-  type:
+  type: BaselineCurriculum
   params:
+    dir_paths: [ data/training]
     
 
 evaluation_curriculum_config:
-  type:
+  type: BaselineCurriculum
   params:
-
+    dir_paths: [ data/evaluation]
+    is_eval: True
 
 

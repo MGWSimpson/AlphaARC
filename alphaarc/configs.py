@@ -6,6 +6,7 @@ from alphaarc.train import BaseTrainer, JointTrainer
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.env import BaseEnv, LineLevelArcEnv
 from alphaarc.policies import BasePolicy, AlphaZero
+from alphaarc.curriculum import BaseCurriculum, BaselineCurriculum
 
 @dataclass
 class AlphaARCConfig:
@@ -47,7 +48,7 @@ def build_network(model_config: dict) -> BaseNetwork:
 
 
 
-def build_policy(policy_config: dict) -> BasePolicy:
+def build_policy(model, env,policy_config: dict) -> BasePolicy:
     POLICY_REGISTRY = {"AlphaZero": AlphaZero }
 
     env_type = policy_config['type']
@@ -56,14 +57,31 @@ def build_policy(policy_config: dict) -> BasePolicy:
     if env_cls is None:
         raise ValueError(f"Unknown policy type '{env_type}'")
 
-    return env_cls(**params)
+    return env_cls(model, env, **params)
 
 def build_trainer(trainer_config: dict) -> BaseTrainer: 
-    TRAINER_REGISTRY = {""}
+    TRAINER_REGISTRY = {"JointTrainer": JointTrainer}
 
+    trainer_type = trainer_config['type']
+    params = trainer_config.get('params', {})
+    env_cls = TRAINER_REGISTRY.get(trainer_type)
+    if env_cls is None:
+        raise ValueError(f"Unknown curriculum type '{trainer_type}'")
+
+    return env_cls(**params)
 
 def build_curriculum(curriculum_config: dict)-> BaseCurriculum: 
-    CURRICULUM_REGISTRY = {""}
+    CURRICULUM_REGISTRY = {"BaselineCurriculum": BaselineCurriculum}
+
+    curriculum_type = curriculum_config['type']
+    params = curriculum_config.get('params', {})
+    env_cls = CURRICULUM_REGISTRY.get(curriculum_type)
+    if env_cls is None:
+        raise ValueError(f"Unknown curriculum type '{curriculum_type}'")
+
+    return env_cls(**params)
+
+
 
 def build_env(env_config: dict) -> BaseEnv: 
     ENV_REGISTRY = {"LineLevelArcEnv": LineLevelArcEnv}

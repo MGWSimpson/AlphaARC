@@ -14,7 +14,7 @@ import traceback
 from alphaarc.mp import ModelRequester, ModelResponder
 from alphaarc.agent import Agent
 from alphaarc.env import BaseEnv
-from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy
+from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
 
 def tree_worker_fn( 
                    mp_context: MultiProcessingContext,
@@ -76,7 +76,7 @@ def run_experiment( config: AlphaARCConfig,
                     run): 
     
 
-    for meta_epoch in config.n_epochs:
+    for meta_epoch in range(config.n_epochs):
         full_curriculum = curriculum.generate_curriculum()
         
         for i in tqdm(range(0, len(full_curriculum), config.train_every)):
@@ -124,33 +124,51 @@ def main():
                                      load_model_event=mp_context.load_model_event,
                                      model=model)
     
+    model_requester = ModelRequester(gpu_request_q=mp_context.gpu_request_q,
+                                     encode_request_q=mp_context.encode_request_q)
     env = build_env(config['env_config'])
+    policy = build_policy(model_requester, env, config['policy_config'])
+    agent = Agent(policy=policy)
 
-    policy = build_policy(config['policy_config'])
-    # agent = Agent()
-
-    """run = wandb.init(
+    run = wandb.init(
     project="alphaarc",
-    config=config)"""
-    gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
-    tree_workers = [Process(target=tree_worker_fn, args=(mp_context,), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
+    config=config)
 
-    """
+    gpu_worker = Process(target=gpu_worker_fn, args=(model_responder, ))
+    tree_workers = [Process(target=tree_worker_fn, args=(mp_context,agent, env), daemon=True) for _ in range(alpha_arc_config.n_tree_workers)]
+
+    
     # spin up workers
     for worker in tree_workers:
         worker.start()
 
     gpu_worker.start()
 
+    
+    trainer = build_trainer(config['trainer_config'])
 
+    curriculum = build_curriculum(config['training_curriculum_config'])
+    eval_set = build_curriculum(config['evaluation_curriculum_config'] )
+
+    trajectory_buffer = TrajectoryBuffer()
+    replay_buffer = ReplayBuffer()
     # run experiment
-    run_experiment()
+    run_experiment(alpha_arc_config,
+                   curriculum, 
+                   eval_set, 
+                   trainer,
+                   trajectory_buffer,
+                   replay_buffer,
+                   mp_context,
+                   model,
+                   run
+                   )
 
     [worker.kill() for worker in tree_workers]
     gpu_worker.kill()
-    run.finish()
+    # run.finish()
     print("workers done")
-    print("all done!")"""
+    print("all done!")
 
     
     

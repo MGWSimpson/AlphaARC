@@ -23,7 +23,7 @@ class BaseTrainer:
 
 
 class JointTrainer(BaseTrainer): 
-    def __init__(self):
+    def __init__(self,   rl_batch_size, rl_lr, supervised_batch_size, supervised_lr,):
         super().__init__()
 
     

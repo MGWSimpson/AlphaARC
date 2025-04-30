@@ -61,7 +61,7 @@ class ModelResponder():
         while True: 
             batch = []
             start_time = None
-            while len(batch) < self.batch_size.value:
+            while len(batch) < self.batch_size:
                 
                 if self.load_model_event.is_set():
                     self._handle_load_model()
@@ -83,7 +83,7 @@ class ModelResponder():
                         # If timeout has started and expired, break
                 
                 if start_time is not None and (time.time() - start_time > self.time_out_time):
-                    self.batch_size.value = len(batch)
+                    self.batch_size = len(batch)
                     break
                     
             data, connections = zip(*batch)
@@ -118,6 +118,7 @@ class MultiProcessingContext:
     trajectory_buffer_q = mp.Queue()
     replay_buffer_q = mp.Queue()
     episode_results_q = mp.Queue()
+    task_q = mp.Queue()
     load_model_event = mp.Event()
 
 
