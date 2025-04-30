@@ -23,10 +23,9 @@ def tree_worker_fn(
                    ): 
     
     try:
-        
         while True:
             task = mp_context.task_q.get()
-            env.load_task(task)
+            env.set_task(task)
             
             if task.is_eval:
                 result = agent.evaluate(env)
@@ -52,13 +51,13 @@ def gpu_worker_fn(model_responder: ModelResponder):
 
 
 
-def evaluate(eval_set, curriculum_q, episode_results_q): 
+def evaluate(eval_set, task_q, episode_results_q): 
     eval_log = make_eval_log()
     
     # enqueue the curriculum.
     for task in eval_set.generate_curriculum():
-        curriculum_q.put(task, block=True)
-    curriculum_q.join()
+        task_q.put(task, block=True)
+    task_q.join()
     episode_logs = drain_q(episode_results_q)
     
     eval_log['solve_rate'] = summarize_episodes(episode_logs)
@@ -80,12 +79,12 @@ def run_experiment( config: AlphaARCConfig,
         full_curriculum = curriculum.generate_curriculum()
         
         for i in tqdm(range(0, len(full_curriculum), config.train_every)):
-
             curriculum_chunk = full_curriculum[i:i + config.train_every]
+
             for task in curriculum_chunk:
-                mp_context.curriculum_q.put(task, block=True)
+                mp_context.task_q .put(task, block=True)
             
-            mp_context.curriculum_q.join()
+            mp_context.task_q.join()
             transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
                                        trajectory_q=mp_context.trajectory_buffer_q,
                                        replay_buffer=replay_buffer,
@@ -97,10 +96,9 @@ def run_experiment( config: AlphaARCConfig,
             train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
             mp_context.load_model_event.set()
             
-
             
             print("starting evaluation.")
-            eval_log, eval_episode_logs = evaluate(evaluation_set, mp_context.curriculum_q, mp_context.episode_results_q)
+            eval_log, eval_episode_logs = evaluate(evaluation_set, mp_context.task_q, mp_context.episode_results_q)
 
             run_log = make_run_log(train_log, episode_logs, eval_log, eval_episode_logs)
             run.log(run_log)

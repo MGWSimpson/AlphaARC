@@ -14,9 +14,9 @@ trainer_config:
   type: JointTrainer
   params:
     rl_batch_size: 1
-    rl_lr:  5e-5
+    rl_lr:  0.00005
     supervised_batch_size: 1
-    supervised_lr:   5e-5
+    supervised_lr:   0.00005
 
 
 policy_config:

@@ -40,11 +40,12 @@ class ModelResponder():
         self.gpu_request_q = gpu_request_q
         self.encode_request_q = encode_request_q
         self.batch_size = batch_size
+        self.original_batch_size = batch_size
         self.model = model
 
         self.load_model_event = load_model_event
 
-        self.time_out_time = 1
+        self.time_out_time = 5
 
     def _handle_encode_request(self, request): 
         task, connection = request
@@ -56,6 +57,7 @@ class ModelResponder():
 
     def _handle_load_model(self): 
         self.model = torch.load('model.pth', weights_only=False)
+        self.batch_size = self.original_batch_size
 
     def serve(self): 
         while True: 
@@ -112,20 +114,38 @@ class ModelResponder():
 
 @dataclass
 class MultiProcessingContext:
-    curriculum_q = mp.JoinableQueue()
-    gpu_request_q = mp.Queue()
-    encode_request_q = mp.Queue()
-    trajectory_buffer_q = mp.Queue()
-    replay_buffer_q = mp.Queue()
-    episode_results_q = mp.Queue()
-    task_q = mp.Queue()
-    load_model_event = mp.Event()
+    gpu_request_q:  mp.Queue
+    encode_request_q:  mp.Queue
+    trajectory_buffer_q:  mp.Queue
+    replay_buffer_q:  mp.Queue
+    episode_results_q:  mp.Queue
+    task_q:  mp.Queue
+    load_model_event: None
+
+
+
+
+    
 
 
 
 
 def build_mp_context(): 
-    context = MultiProcessingContext()
+    gpu_request_q = mp.Queue ( )
+    encode_request_q =  mp.Queue ( )
+    trajectory_buffer_q =  mp.Queue ( )
+    replay_buffer_q =  mp.Queue ( )
+    episode_results_q =   mp.Queue ()
+    task_q = mp.JoinableQueue()
+    load_model_event = mp.Event()
+    context = MultiProcessingContext(
+                                     gpu_request_q=gpu_request_q,
+                                     encode_request_q=encode_request_q, 
+                                     trajectory_buffer_q=trajectory_buffer_q,
+                                     replay_buffer_q=replay_buffer_q,
+                                     episode_results_q=episode_results_q,
+                                     task_q=task_q, 
+                                     load_model_event=load_model_event)
     return context
 
 

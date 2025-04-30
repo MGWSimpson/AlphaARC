@@ -26,6 +26,12 @@ class JointTrainer(BaseTrainer):
     def __init__(self,   rl_batch_size, rl_lr, supervised_batch_size, supervised_lr,):
         super().__init__()
 
+        self.learning_count = 0 
+
+        self.rl_batch_size = rl_batch_size
+        self.rl_lr = rl_lr
+        self.supervised_batch_size = supervised_batch_size
+        self.supervised_lr = supervised_lr
     
     def _train_rl(self, model, trajectory_buffer,batch_logs): 
         trajectory_dataloader = DataLoader(trajectory_buffer, 

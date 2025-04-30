@@ -17,7 +17,7 @@ class Agent():
             action, actions, action_probs = self.policy.get_action(state)
             state, reward, terminated = env.step(action=action, state=state)
             train_examples.append((state, actions, action_probs))
-
+            
             if terminated:
                 ret = []
                 solved = (reward == 1.0)

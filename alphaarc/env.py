@@ -35,7 +35,7 @@ class BaseEnv:
         pass
     
 
-    def load_task(self, task): 
+    def set_task(self, task): 
         raise NotImplementedError
 
 class LineLevelArcEnv (BaseEnv):
