@@ -68,8 +68,8 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(observation)
         
-        print(self.task.task_key)
-        print(append_return(program))
+        #print(self.task.task_key)
+        # print(append_return(program))
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program

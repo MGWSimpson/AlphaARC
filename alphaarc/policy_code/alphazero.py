@@ -96,9 +96,11 @@ class AlphaZero:
     def __init__(self, env: LineLevelArcEnv, encoder_output, n_simulations, is_debugging=True):
         self.env = env
         self.n_simulations = n_simulations
-        self.encoder_output = encoder_output
+        import torch
+        self.encoder_output = torch.tensor(self.env.tokenized_task).unsqueeze(0)
 
     def run(self, model, state):
+        
 
         root = Node(0)
         actions, action_probs, value, child_key_values =  model.predict(self.encoder_output, state, past_key_values=None)
@@ -124,7 +126,7 @@ class AlphaZero:
                 # EXPAND
 
                 # start_time = time.time()
-                actions, action_probs, value, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=child_key_value)
+                actions, action_probs, value, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
                 #print(f"forward pass time: {time.time() - start_time}")
                 # normalize_actions()
                 node.expand(next_state, actions, action_probs, child_key_values)

@@ -1,5 +1,4 @@
 from policy_code.alphazero import AlphaZero
-
 import numpy as np
 
 class BasePolicy:

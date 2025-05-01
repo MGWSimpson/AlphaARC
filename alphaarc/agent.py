@@ -12,6 +12,7 @@ class Agent():
         self.replay_q = replay_q 
         self.trajectory_q = trajectory_q
 
+        self.tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     
     def _execute_episode(self, env: BaseEnv ):
         terminated = False

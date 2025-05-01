@@ -11,7 +11,7 @@ class BaseNetwork(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     
-    def predict(self, task, state, past_key_values):
+    def predict(self, task, state, state_attention_masks,  past_key_values):
         raise NotImplementedError
 
 
@@ -31,12 +31,13 @@ class PolicyValueNetwork(BaseNetwork):
         self.stop_strings =['\n']
         self.n_calls = 0
 
-    def _compute_actions(self, task, state, past_key_values):
+    def _compute_actions(self, task, state, state_attention_masks,  past_key_values):
         
         batch_size = task.shape[0] 
 
-        outputs = self.model.generate(      encoder_outputs=BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=task), # TODO: this may introduce a bug!
+        outputs = self.model.generate(      input_ids=task.clone(),
                                             decoder_input_ids   = state,
+                                            decoder_attention_mask = state_attention_masks, 
                                             temperature=self.temperature,
                                             do_sample=True,
                                             max_new_tokens=20,
@@ -74,9 +75,9 @@ class PolicyValueNetwork(BaseNetwork):
         return F.softmax(self.policy(last_hidden_state).squeeze(), dim=-1)
 
 
-    def predict(self, task, state, past_key_values):
+    def predict(self, task, state, state_attention_masks, past_key_values):
         with torch.no_grad(): 
-            actions, action_probs, values, past_key_values =  self._compute_actions(task, state, past_key_values)
+            actions, action_probs, values, past_key_values =  self._compute_actions(task, state, state_attention_masks,  past_key_values)
         
         return actions, action_probs ,values, None
 
