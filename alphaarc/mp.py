@@ -89,12 +89,13 @@ class ModelResponder():
             # packet everything up. and then pass it to the network class
             
             task, state, past_key_values = zip(*data)
-        
+
             task = torch.stack(task).squeeze()
             
+
             state_attention_masks = [torch.ones(x.shape) for x in state]
 
-            state_attention_masks = pad_sequence(state, batch_first=True).to(self.model.device)
+            state_attention_masks = pad_sequence(state_attention_masks, batch_first=True ).to(self.model.device)
             state = pad_sequence(state, batch_first=True)
             
             task, state = task.to(self.model.device), state.to(self.model.device)
