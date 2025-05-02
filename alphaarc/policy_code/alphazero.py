@@ -22,7 +22,6 @@ def normalize_actions():
     pass
 
 
-
 class Node:
     def __init__(self, prior):
         self.visit_count = 0
