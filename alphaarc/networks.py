@@ -35,9 +35,12 @@ class PolicyValueNetwork(BaseNetwork):
 
     def _compute_actions(self, task, state, state_attention_masks,  past_key_values):
         batch_size = task.shape[0] 
+        attention_mask = (task != self.tokenizer.pad_token_type_id).bool()
+
         outputs = self.model.generate(      input_ids=task,
+                                            attention_mask=attention_mask,
                                             decoder_input_ids   = state,
-                                            decoder_attention_mask = state_attention_masks, 
+                                            decoder_attention_mask = state_attention_masks.bool(), 
                                             temperature=self.temperature,
                                             do_sample=True,
                                             max_new_tokens=20,
@@ -47,7 +50,7 @@ class PolicyValueNetwork(BaseNetwork):
                                             stop_strings=self.stop_strings,
                                             tokenizer= self.tokenizer,
                                             use_cache=True,
-                                            output_hidden_states= True
+                                            output_hidden_states= True,
                                             )         
         
         actions = outputs.sequences.view(batch_size, self.num_samples, -1)
@@ -62,7 +65,7 @@ class PolicyValueNetwork(BaseNetwork):
         final_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1]
         final_hidden_states = final_hidden_states.view(batch_size, self.num_samples, -1)
 
-
+ 
         
 
         return actions, self._compute_policy(final_hidden_states),self._compute_values(first_hidden_states), past_key_values

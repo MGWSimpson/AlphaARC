@@ -68,8 +68,6 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(observation)
         
-        #print(self.task.task_key)
-        # print(append_return(program))
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -90,8 +88,8 @@ class LineLevelArcEnv (BaseEnv):
             reward = -1.0
         
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
-        print(program)
         observation = self._encode(program)
+        observation = np.concatenate(([0], observation))
         return observation, reward, terminated
 
 
