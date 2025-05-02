@@ -14,8 +14,6 @@ class BaseNetwork(nn.Module):
     def predict(self, task, state, state_attention_masks,  past_key_values):
         raise NotImplementedError
 
-
-
     def encode(self, task, task_attention_mask): 
         raise NotImplementedError
 
@@ -25,7 +23,7 @@ class PolicyValueNetwork(BaseNetwork):
         super().__init__()
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-        self.value = nn.Linear(768, 1) 
+        self.value = nn.Linear(768, 1) # TODO please fix this.
         self.policy = nn.Linear(768, 1)
         self.device = device
 
@@ -39,7 +37,7 @@ class PolicyValueNetwork(BaseNetwork):
         
         batch_size = task.shape[0] 
 
-        outputs = self.model.generate(      input_ids=task.clone(),
+        outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids   = state,
                                             decoder_attention_mask = state_attention_masks, 
                                             temperature=self.temperature,

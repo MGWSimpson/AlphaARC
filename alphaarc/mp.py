@@ -97,11 +97,10 @@ class ModelResponder():
             
             task, state, past_key_values = zip(*data)
 
-            task = torch.stack(task).squeeze()
+            task = torch.stack(task).squeeze().unsqueeze(0)
             
 
             state_attention_masks = [torch.ones(x.shape) for x in state]
-
             state_attention_masks = pad_sequence(state_attention_masks, batch_first=True ).to(self.model.device)
             state = pad_sequence(state, batch_first=True)
             
@@ -113,7 +112,7 @@ class ModelResponder():
                 action_probs = action_probs.unsqueeze(0)
 
             for i, connections in enumerate(connections):
-                # print(self.model.tokenizer.batch_decode(actions[i]))
+                print(self.model.tokenizer.batch_decode(actions[i]))
                 connections.send(  ( actions[i], 
                                     action_probs[i], 
                                     values[i],

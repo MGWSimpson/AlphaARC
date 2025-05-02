@@ -33,7 +33,6 @@ class AlphaZeroPolicy(BasePolicy):
         action_probs = [v.visit_count for v in root.children]
         action_probs = action_probs / np.sum(action_probs)
         action = root.select_action(temperature=self.temperature)
-        
         return action, actions, action_probs
 
 
