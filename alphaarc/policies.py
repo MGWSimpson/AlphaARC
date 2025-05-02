@@ -26,7 +26,6 @@ class AlphaZeroPolicy(BasePolicy):
 
         
     def get_action(self, state): 
-        
         self.mcts = AlphaZero(self.env , encoder_output=self.encoder_output,  n_simulations=self.n_simulations)
         root = self.mcts.run(self.model, state)
         actions = root.child_actions

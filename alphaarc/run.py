@@ -29,7 +29,9 @@ def tree_worker_fn(config,
                                      encode_request_q=mp_context.encode_request_q)
     env = build_env(config['env_config'])
     policy = build_policy(model_requester, env, config['policy_config'])
-    agent = Agent(policy=policy, replay_q=mp_context.replay_buffer_q, trajectory_q=mp_context.trajectory_buffer_q)
+    agent = Agent(policy=policy, 
+                  replay_q=mp_context.replay_buffer_q, 
+                  trajectory_q=mp_context.trajectory_buffer_q)
     
     try:
         while True:
@@ -41,7 +43,7 @@ def tree_worker_fn(config,
             else:
                 result = agent.learn(env) 
             
-            mp_context.episode_results_q.put_nowait(result)
+            mp_context.episode_results_q.put(result)
             mp_context.task_q.task_done()
     
     except Exception as e:
@@ -85,12 +87,13 @@ def run_experiment( config: AlphaARCConfig,
 
     for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
-
+        full_curriculum = full_curriculum[:10]
         for task in full_curriculum:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
-            
-        transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
+        mp_context.load_model_event.set()
+
+        """transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
                                        trajectory_q=mp_context.trajectory_buffer_q,
                                        replay_buffer=replay_buffer,
                                        replay_q=mp_context.replay_buffer_q
@@ -101,7 +104,7 @@ def run_experiment( config: AlphaARCConfig,
         mp_context.load_model_event.set()
         run_log = make_train_only_run_log(train_log, episode_logs)
         print(f"On meta epoch: {meta_epoch}. Solved: {run_log['train_solve_rate']}")
-        run.log(run_log)
+        run.log(run_log)"""
 
 
 def main(): 

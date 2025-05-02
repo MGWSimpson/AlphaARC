@@ -15,7 +15,7 @@ class ModelRequester():
         self.read_conn , self.send_conn = mp.Pipe(duplex=False)
 
     def _make_gpu_request(self, task_data): 
-        self.gpu_request_q.put_nowait((task_data, self.send_conn))
+        self.gpu_request_q.put((task_data, self.send_conn))
         result = self.read_conn.recv()
         actions, action_probs, value, child_key_values = result
         actions, action_probs, value, child_key_values = actions.cpu(), action_probs.cpu(), value.cpu(), child_key_values
@@ -27,7 +27,7 @@ class ModelRequester():
     
     def _make_encode_request(self, task, task_length): 
         task = torch.tensor(task).unsqueeze(0)
-        self.encode_request_q.put_nowait((task, task_length, self.send_conn))
+        self.encode_request_q.put((task, task_length, self.send_conn))
         result = self.read_conn.recv()
 
         return result.cpu()
@@ -97,10 +97,12 @@ class ModelResponder():
             
             task, state, past_key_values = zip(*data)
 
-            task = torch.stack(task).squeeze().unsqueeze(0)
-            
+            task = torch.stack(task).squeeze()
+            if len(task.shape) == 1: 
+                task = task.unsqueeze(0)
 
             state_attention_masks = [torch.ones(x.shape) for x in state]
+            
             state_attention_masks = pad_sequence(state_attention_masks, batch_first=True ).to(self.model.device)
             state = pad_sequence(state, batch_first=True)
             
@@ -117,7 +119,6 @@ class ModelResponder():
                                     action_probs[i], 
                                     values[i],
                                     past_key_values))
-
 
 
 @dataclass
