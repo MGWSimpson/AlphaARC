@@ -127,6 +127,7 @@ class LineLevelArcEnv (BaseEnv):
         ]
         tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max-1, self.max_length)['input_ids'])
         self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
+        self.task_length = len(tokenized_task)
         pad_length = (self.input_state_max *2 ) - len(tokenized_task)
         self.tokenized_task = np.pad(tokenized_task, (0, pad_length), constant_values=self.tokenizer.pad_token_id)
 

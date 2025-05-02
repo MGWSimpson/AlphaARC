@@ -6,8 +6,9 @@ from queue import Empty
 from dataclasses import dataclass
 from multiprocessing.synchronize import Event as EventType  # for type hints
 
-class ModelRequester():
+import torch.nn.functional as F
 
+class ModelRequester():
     def __init__(self, gpu_request_q, encode_request_q):
         self.gpu_request_q = gpu_request_q
         self.encode_request_q = encode_request_q
@@ -24,15 +25,15 @@ class ModelRequester():
         return self._make_gpu_request((task.clone(), torch.tensor(state), past_key_values))
 
     
-    def _make_encode_request(self, task): 
+    def _make_encode_request(self, task, task_length): 
         task = torch.tensor(task).unsqueeze(0)
-        self.encode_request_q.put_nowait((task, self.send_conn))
+        self.encode_request_q.put_nowait((task, task_length, self.send_conn))
         result = self.read_conn.recv()
 
         return result.cpu()
 
-    def encode(self, task): 
-        return self._make_encode_request(task)
+    def encode(self, task, task_length): 
+        return self._make_encode_request(task, task_length)
 
 class ModelResponder(): 
     def __init__(self, gpu_request_q, encode_request_q, batch_size, model, load_model_event):
@@ -46,10 +47,16 @@ class ModelResponder():
         self.time_out_time = 5
 
     def _handle_encode_request(self, request): 
-        task, connection = request
+        task, task_length, connection = request
+
+        task_attention_mask = torch.ones((task.shape[0], task_length))
+        task_attention_mask = F.pad(task_attention_mask, (0, task.shape[-1] - task_length), value=0)
+
         task = task.to(self.model.device)
+        task_attention_mask = task_attention_mask.to(self.model.device)        
+
         with torch.no_grad(): 
-            result = self.model.model.encoder(task)
+            result = self.model.encode(task, task_attention_mask)
         result = result.last_hidden_state
         connection.send(result)
 
@@ -106,7 +113,7 @@ class ModelResponder():
                 action_probs = action_probs.unsqueeze(0)
 
             for i, connections in enumerate(connections):
-                print(self.model.tokenizer.batch_decode(actions[i]))
+                # print(self.model.tokenizer.batch_decode(actions[i]))
                 connections.send(  ( actions[i], 
                                     action_probs[i], 
                                     values[i],

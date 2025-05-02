@@ -22,7 +22,7 @@ class AlphaZeroPolicy(BasePolicy):
 
 
     def policy_init(self):
-        self.encoder_output = self.model.encode(self.env.tokenized_task).squeeze()
+        self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
 
         
     def get_action(self, state): 

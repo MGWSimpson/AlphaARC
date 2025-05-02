@@ -16,6 +16,10 @@ class BaseNetwork(nn.Module):
 
 
 
+    def encode(self, task, task_attention_mask): 
+        raise NotImplementedError
+
+
 class PolicyValueNetwork(BaseNetwork): 
     def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
@@ -108,4 +112,6 @@ class PolicyValueNetwork(BaseNetwork):
             policies.append(p)
 
         return torch.stack(policies),  torch.stack( values)
-    
+
+    def encode(self, task, task_attention_mask):
+        return self.model.encoder(input_ids=task, attention_mask=task_attention_mask)
