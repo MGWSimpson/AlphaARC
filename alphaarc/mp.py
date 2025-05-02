@@ -18,7 +18,7 @@ class ModelRequester():
         self.gpu_request_q.put((task_data, self.send_conn))
         result = self.read_conn.recv()
         actions, action_probs, value, child_key_values = result
-        actions, action_probs, value, child_key_values = actions.cpu(), action_probs.cpu(), value.cpu(), child_key_values
+        actions, action_probs, value, child_key_values = actions.cpu().clone(), action_probs.cpu().clone(), value.cpu().clone(), child_key_values
         return actions.numpy(), action_probs.numpy(), value.numpy(), child_key_values
 
     def predict(self, task, state, past_key_values):
@@ -48,7 +48,6 @@ class ModelResponder():
 
     def _handle_encode_request(self, request): 
         task, task_length, connection = request
-
         task_attention_mask = torch.ones((task.shape[0], task_length))
         task_attention_mask = F.pad(task_attention_mask, (0, task.shape[-1] - task_length), value=0)
 
@@ -114,7 +113,7 @@ class ModelResponder():
                 action_probs = action_probs.unsqueeze(0)
 
             for i, connections in enumerate(connections):
-                print(self.model.tokenizer.batch_decode(actions[i]))
+                print(self.model.tokenizer.batch_decode(actions[i], skip_special_tokens=False))
                 connections.send(  ( actions[i], 
                                     action_probs[i], 
                                     values[i],

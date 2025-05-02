@@ -104,9 +104,8 @@ class AlphaZero:
 
         root = Node(0)
         actions, action_probs, value, child_key_values =  model.predict(self.encoder_output, state, past_key_values=None)
-        
         root.expand(state, actions, action_probs, child_key_values)
-        
+
         for _ in range(self.n_simulations):
 
             node = root

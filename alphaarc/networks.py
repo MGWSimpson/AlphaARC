@@ -34,9 +34,7 @@ class PolicyValueNetwork(BaseNetwork):
         self.n_calls = 0
 
     def _compute_actions(self, task, state, state_attention_masks,  past_key_values):
-        
         batch_size = task.shape[0] 
-
         outputs = self.model.generate(      input_ids=task,
                                             decoder_input_ids   = state,
                                             decoder_attention_mask = state_attention_masks, 

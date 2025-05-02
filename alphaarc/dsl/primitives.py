@@ -83,5 +83,5 @@ PRIMITIVE_CONSTANTS = {
     ],
 }
 PRIMITIVE_FUNCTIONS = find_function_names(
-    filename=os.path.join(PROJECT_FOLDER_PATH, "codeit/dsl/dsl.py")
+    filename=os.path.join(PROJECT_FOLDER_PATH, "alphaarc/dsl/dsl.py")
 )
