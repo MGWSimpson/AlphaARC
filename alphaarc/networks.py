@@ -33,9 +33,8 @@ class PolicyValueNetwork(BaseNetwork):
         self.stop_strings =['\n']
         self.n_calls = 0
 
-    def _compute_actions(self, task, state, state_attention_masks,  past_key_values):
+    def _compute_actions(self, task, state, state_attention_masks, attention_mask,  past_key_values):
         batch_size = task.shape[0] 
-        attention_mask = (task != self.tokenizer.pad_token_type_id).bool()
 
         outputs = self.model.generate(      input_ids=task,
                                             attention_mask=attention_mask,
@@ -78,9 +77,9 @@ class PolicyValueNetwork(BaseNetwork):
         return F.softmax(self.policy(last_hidden_state).squeeze(), dim=-1)
 
 
-    def predict(self, task, state, state_attention_masks, past_key_values):
+    def predict(self, task, state, state_attention_masks, attention_mask, past_key_values):
         with torch.no_grad(): 
-            actions, action_probs, values, past_key_values =  self._compute_actions(task, state, state_attention_masks,  past_key_values)
+            actions, action_probs, values, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
         
         return actions, action_probs ,values, None
 

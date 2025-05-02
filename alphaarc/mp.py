@@ -107,11 +107,14 @@ class ModelResponder():
             state_attention_masks = [torch.ones(x.shape) for x in state]
             state_attention_masks = pad_sequence(state_attention_masks, batch_first=True)
             state = pad_sequence(state, batch_first=True)
+            task_attention_masks =  (task != 0).bool()
 
 
+            state_attention_masks = state_attention_masks.to(self.model.device)
+            task_attention_masks = task_attention_masks.to(self.model.device) 
             task, state = task.to(self.model.device), state.to(self.model.device)
 
-            actions, action_probs ,values, past_key_values = self.model.predict(task, state, state_attention_masks, past_key_values)
+            actions, action_probs ,values, past_key_values = self.model.predict(task, state, state_attention_masks, task_attention_masks,  past_key_values)
 
 
             if len(batch) == 1:

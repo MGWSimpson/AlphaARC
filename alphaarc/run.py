@@ -91,7 +91,6 @@ def run_experiment( config: AlphaARCConfig,
         for task in full_curriculum:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
-        mp_context.load_model_event.set()
 
         """transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
                                        trajectory_q=mp_context.trajectory_buffer_q,
