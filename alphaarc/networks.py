@@ -19,7 +19,7 @@ class BaseNetwork(nn.Module):
     def encode(self, task, task_attention_mask): 
         raise NotImplementedError
 
-
+# TODO: change this to PolicyHeadValueNetwork
 class PolicyValueNetwork(BaseNetwork): 
     def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
@@ -169,4 +169,83 @@ class ActionNetwork(BaseNetwork):
     def encode(self, task, task_attention_mask):
         return self.model.encoder(input_ids=task, attention_mask=task_attention_mask) 
         
+
+class PolicyNetwork(BaseNetwork):
+    def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
+        super().__init__()
+        self.model= T5ForConditionalGeneration.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        self.value = nn.Linear(768, 1) # TODO please fix this.
+        self.policy = nn.Linear(768, 1)
+        self.device = device
+
+        # model parameters
+        self.temperature = temperature
+        self.num_samples = num_samples
+        self.stop_strings =['\n']
+        self.n_calls = 0
+
+    def _compute_actions(self, task, state, state_attention_masks, attention_mask,  past_key_values):
+        batch_size = task.shape[0] 
+
+        outputs = self.model.generate(      input_ids=task,
+                                            attention_mask=attention_mask,
+                                            decoder_input_ids   = state,
+                                            decoder_attention_mask = state_attention_masks.bool(), 
+                                            temperature=self.temperature,
+                                            do_sample=True,
+                                            max_new_tokens=20,
+                                            num_return_sequences=self.num_samples,
+                                            return_dict_in_generate=True,
+                                            output_logits=True,
+                                            stop_strings=self.stop_strings,
+                                            tokenizer= self.tokenizer,
+                                            use_cache=True,
+                                            output_hidden_states= True,
+                                            )         
+        
+        actions = outputs.sequences.view(batch_size, self.num_samples, -1)
+        logits = outputs.logits
+        new_actions_shape = len(logits)
+        actions = actions[:, : , -new_actions_shape:]
+
+        # TODO: will need to reshape the logitNetwork
+        return actions, self._compute_score_from_logits(actions, logits), past_key_values
+
+    def _compute_score_from_logits(self, actions, logits): 
+        probabilities = F.softmax(logits, dim=-1) 
+        chosen_token_probs = probabilities.gather(dim=-1, index=actions.unsqueeze(-1)).squeeze(-1)
+        chosen_token_probs = torch.clamp(chosen_token_probs, min=1e-12)
+        log_seq_scores = torch.log(chosen_token_probs).sum(dim=-1)
+        normalized_scores = F.softmax(log_seq_scores, dim=0)
+        return normalized_scores
+    
+    
+
+
+    def predict(self, task, state, state_attention_masks, attention_mask, past_key_values):
+        with torch.no_grad(): 
+            actions, action_probs, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
+
+        if len(action_probs.shape) == 1:
+                action_probs = action_probs.unsqueeze(0)
+
+        return actions, action_probs , past_key_values
+
+
+    def encode(self, task, task_attention_mask):
+        return super().encode(task, task_attention_mask)
+
+
+class PolicyValueNetwork(BaseNetwork):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    
+    def encode(self, task, task_attention_mask):
+        return super().encode(task, task_attention_mask)
+    
+    def predict(self, task, state, state_attention_masks, past_key_values):
+        return super().predict(task, state, state_attention_masks, past_key_values)
+    
 
