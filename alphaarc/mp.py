@@ -113,19 +113,13 @@ class ModelResponder():
             state_attention_masks = state_attention_masks.to(self.model.device)
             task_attention_masks = task_attention_masks.to(self.model.device) 
             task, state = task.to(self.model.device), state.to(self.model.device)
-
-            actions, action_probs ,values, past_key_values = self.model.predict(task, state, state_attention_masks, task_attention_masks,  past_key_values)
-
-
-            if len(batch) == 1:
-                action_probs = action_probs.unsqueeze(0)
-
+            results = self.model.predict(task,state, state_attention_masks, task_attention_masks, past_key_values)
             for i, connections in enumerate(connections):
-                print(self.model.tokenizer.batch_decode(actions[i], skip_special_tokens=False))
-                connections.send(  ( actions[i], 
-                                    action_probs[i], 
-                                    values[i],
-                                    past_key_values))
+                tuple_to_return = ()
+                for j in range(len(results)):
+                    tuple_to_return = tuple_to_return + (results[j][i], )
+
+                connections.send(tuple_to_return)
 
 
 @dataclass

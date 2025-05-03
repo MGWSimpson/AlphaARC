@@ -7,6 +7,8 @@ from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttenti
 import torch.nn.functional as F
 
 
+
+
 class BaseNetwork(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,9 +82,11 @@ class PolicyValueNetwork(BaseNetwork):
     def predict(self, task, state, state_attention_masks, attention_mask, past_key_values):
         with torch.no_grad(): 
             actions, action_probs, values, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
-        
-        return actions, action_probs ,values, None
 
+        if len(action_probs.shape) == 1:
+                action_probs = action_probs.unsqueeze(0)
+
+        return actions, action_probs, values, past_key_values
 
     def forward(self, task, state, actions):
         B, A, AL = actions.shape
@@ -130,5 +134,6 @@ class ActionNetwork(BaseNetwork):
         self.num_samples = num_samples
         self.stop_strings =['\n']
         self.n_calls = 0
-    
+
+        
 
