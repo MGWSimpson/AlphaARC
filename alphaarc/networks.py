@@ -116,7 +116,6 @@ class PolicyValueNetwork(BaseNetwork):
     def encode(self, task, task_attention_mask):
         return self.model.encoder(input_ids=task, attention_mask=task_attention_mask)
     
-# come back to this.
 class ActionNetwork(BaseNetwork):
     def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
         super().__init__()
@@ -132,6 +131,43 @@ class ActionNetwork(BaseNetwork):
         self.num_samples = num_samples
         self.stop_strings =['\n']
         self.n_calls = 0
+
+    def _compute_actions(self, task, state, state_attention_masks, attention_mask,  past_key_values):
+        batch_size = task.shape[0] 
+
+        outputs = self.model.generate(      input_ids=task,
+                                            attention_mask=attention_mask,
+                                            decoder_input_ids   = state,
+                                            decoder_attention_mask = state_attention_masks.bool(), 
+                                            temperature=self.temperature,
+                                            do_sample=True,
+                                            max_new_tokens=20,
+                                            num_return_sequences=self.num_samples,
+                                            return_dict_in_generate=True,
+                                            output_logits=True,
+                                            stop_strings=self.stop_strings,
+                                            tokenizer= self.tokenizer,
+                                            use_cache=True,
+                                            output_hidden_states= True,
+                                            )         
+        
+        actions = outputs.sequences.view(batch_size, self.num_samples, -1)
+        logits = outputs.logits
+        new_actions_shape = len(logits)
+        actions = actions[:, : , -new_actions_shape:]
+
+        return actions, past_key_values
+
+  
+
+    def predict(self, task, state, state_attention_masks, attention_mask, past_key_values):
+        with torch.no_grad(): 
+            actions, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
+
+        if len(action_probs.shape) == 1:
+                action_probs = action_probs.unsqueeze(0)
+
+        return actions, past_key_values
 
         
 
