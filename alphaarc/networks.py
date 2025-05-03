@@ -232,7 +232,6 @@ class PolicyNetwork(BaseNetwork):
             actions, action_probs, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
 
 
-        print(action_probs.shape)
         if len(action_probs.shape) == 1:
                 action_probs = action_probs.unsqueeze(0)
 

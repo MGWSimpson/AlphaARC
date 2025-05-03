@@ -4,17 +4,24 @@ import copy
 import random
 import numpy as np
 
-def uct_score(parent, child, EXPLORATION_C=1):
 
-    if child.visit_count == 0:
-        return math.inf
 
-    visit_score = EXPLORATION_C * math.sqrt(math.log(parent.visit_count) / child.visit_count)
-    value_score = child.value()
-    return value_score + visit_score
+def puct_score(parent, child):
+    """
+    The score for an action that would transition between the parent and child.
+    """
+    prior_score = child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
+    if child.visit_count > 0:
+        value_score = child.value()
+    else:
+        value_score = 0
+
+    return value_score + prior_score
+
 
 class Node: 
-    def __init__(self):
+    def __init__(self, prior= 0):
+        self.prior = prior
         self.visit_count = 0
         self.value_sum = 0
         self.child_actions = None
@@ -29,10 +36,10 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
 
-    def expand(self, state, actions, child_key_values): 
+    def expand(self, state, actions, action_probs, child_key_values): 
         self.state = state.copy()
         self.child_actions = copy.deepcopy(actions)
-        self.children = [Node() for _ in actions]
+        self.children = [Node(prior=prob) for prob in action_probs]
         self.child_key_values =  None #copy.deepcopy(child_key_values)
 
     def select_action(self, temperature):
@@ -59,7 +66,7 @@ class Node:
         best_child = None
 
         for i in range(len(self.children)):
-            score = uct_score(self, self.children[i])
+            score = puct_score(self, self.children[i])
             if score > best_score:
                 best_score = score
                 best_action = self.child_actions[i]
@@ -87,7 +94,7 @@ class PolicyGuidedMCTS:
             if terminated:
                 return value
             else: 
-                actions, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
+                actions, _,  child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None) # TODO: may wish to factor in the action probs
                 action = random.choice(actions)
 
     
@@ -99,10 +106,10 @@ class PolicyGuidedMCTS:
     def run(self, model, state): 
         
         # initialize the tree.
-        root = Node()
+        root = Node(0)
         actions, action_probs, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
         
-        root.expand(state, actions, child_key_values)
+        root.expand(state, actions, action_probs, child_key_values)
 
         for _ in range(self.n_simulations): 
             node = root
@@ -121,7 +128,7 @@ class PolicyGuidedMCTS:
             if not terminated: 
                 actions,action_probs, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
                 value = self._rollout(model, next_state, actions) # rollout
-                node.expand(next_state, actions,child_key_values)
+                node.expand(next_state, actions, action_probs,child_key_values)
 
             # backprop
             self._backpropagate(search_path, value)
