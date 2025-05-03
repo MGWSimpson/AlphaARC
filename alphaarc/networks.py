@@ -114,13 +114,21 @@ class PolicyValueNetwork(BaseNetwork):
     def encode(self, task, task_attention_mask):
         return self.model.encoder(input_ids=task, attention_mask=task_attention_mask)
     
+# come back to this.
+class ActionNetwork(BaseNetwork):
+    def __init__(self, model_path, tokenizer_path, temperature=0.95,num_samples=5, device='cuda'):
+        super().__init__()
 
+        self.model= T5ForConditionalGeneration.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        self.value = nn.Linear(768, 1) # TODO please fix this.
+        self.policy = nn.Linear(768, 1)
+        self.device = device
 
-# model which only returns the actions (used in non-neural guided baselines)
-class ActionNetwork(BaseNetwork): 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        # model parameters
+        self.temperature = temperature
+        self.num_samples = num_samples
+        self.stop_strings =['\n']
+        self.n_calls = 0
     
 
-    def predict(self, task, state, state_attention_masks, past_key_values):
-        pass

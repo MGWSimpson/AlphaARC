@@ -5,8 +5,8 @@ from torch.nn.utils.rnn import pad_sequence
 from queue import Empty
 from dataclasses import dataclass
 from multiprocessing.synchronize import Event as EventType  # for type hints
-
 import torch.nn.functional as F
+
 
 class ModelRequester():
     def __init__(self, gpu_request_q, encode_request_q):

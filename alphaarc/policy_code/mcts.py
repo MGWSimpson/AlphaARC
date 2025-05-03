@@ -1,66 +1,108 @@
 
 import math
+import copy
+import random
+import numpy as np
 
+def uct_score(parent, child, EXPLORATION_C=1):
+    visit_score = EXPLORATION_C * math.sqrt(math.log(parent.visit_count) / child.visit_count)
+    if child.visit_count > 0:
+        value_score = child.value()
+    else:
+        value_score = 0
+    return value_score + visit_score
 
 class Node: 
-    def __init__(self, parent, action, state):
-        pass
+    def __init__(self):
+        self.visit_count = 0
+        self.value_sum = 0
+        self.child_actions = None
+        self.children = []
+        self.state = None
 
-"""
-Algorithm goes like:
-    - is it a leaf node?
-        - if no -> choose its child according to UCB formula
-    - if this is a leaf node.
-    ....
+    def expanded(self):
+        return len(self.children) > 0
 
-    - rollout is:
-        -> loop forever:
-            - if S_i is a terminal state
-                return S_i
-            - Else sample a random action. 
-            - S_i = simulate(A_i, S_i)
+    def value(self):
+        if self.visit_count == 0:
+            return 0
+        return self.value_sum / self.visit_count
 
-"""
+    def expand(self, state, actions): 
+        self.state = state.copy()
+        self.child_actions = copy.deepcopy(actions)
+        self.child_key_values =  None #copy.deepcopy(child_key_values)
+
+
+    def select_child(self): 
+        best_score = -np.inf
+        best_action = -1
+        best_child = None
+
+        for i in range(len(self.children)):
+            score = uct_score(self, self.children[i])
+            if score > best_score:
+                best_score = score
+                best_action = self.child_actions[i]
+                best_child = self.children[i]
+                best_child_key_value = None # copy.deepcopy(self.child_key_values).batch_select_indices(i)
+
+
+        return best_action, best_child, best_child_key_value
+    
+
 class MCTS:
-    def __init__(self, n_simulations):
-
+    def __init__(self, n_simulations: int, env, encoder_output):
         self.n_simulations = n_simulations
+        self.env = env
+        import torch
+        self.encoder_output = torch.tensor(self.env.tokenized_task).unsqueeze(0)
     
-    
-    def _selection(self): 
-        pass
 
-    def _expansion(self): 
-        pass
+    def _rollout(self, model, next_state, actions): 
+        action = random.choice(actions)
 
-    def _simulation(self): 
-        pass
-
-    def _backpropagation(self): 
-        pass
-
-    def run(self): 
-        
-        # init the tree.
-        root = Node(0)
-        actions = self.model.predict() # as our model informs our action space.
-        root.expand()
-        
-        for _ in range(self.n_simulations): 
+        while True:
+            next_state, value, terminated = self.env.step(action=action, state=next_state)
             
+            if terminated:
+                return value
+            else: 
+                actions, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
+                action = random.choice(actions)
+
+    
+    def _backpropagate(self, path, value):
+            for node in reversed(path):
+                node.visit_count += 1
+                node.value_sum  += value
+
+    def run(self, model, state): 
+        
+        # initialize the tree.
+        root = Node()
+        actions, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
+        root.expand(state, actions, child_key_values)
+
+        for _ in range(self.n_simulations): 
             node = root
             search_path = [node]
-
+            
             # SELECT
             while node.expanded():
-                action, node = node.selection_child()
+                action, node, child_key_value = node.select_child()
                 search_path.append(node)
-            
+
             parent = search_path[-2]
             state = parent.state
 
-            
+            # expansion 
+            next_state, value, terminated = self.env.step(action=action, state=state)
+            if not terminated: 
+                actions, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
+                value = self._rollout(next_state, actions) # rollout
+                node.expand(next_state, actions,child_key_values)
 
-
-        
+            # backprop
+            self.backpropagate(search_path, value)
 

@@ -5,7 +5,7 @@ from alphaarc.policies import BasePolicy
 from alphaarc.train import BaseTrainer, JointTrainer
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.env import BaseEnv, LineLevelArcEnv
-from alphaarc.policies import BasePolicy, AlphaZeroPolicy
+from alphaarc.policies import BasePolicy, AlphaZeroPolicy, MCTSPolicy
 from alphaarc.curriculum import BaseCurriculum, BaselineCurriculum
 
 @dataclass
@@ -49,7 +49,7 @@ def build_network(model_config: dict) -> BaseNetwork:
 
 
 def build_policy(model, env,policy_config: dict) -> BasePolicy:
-    POLICY_REGISTRY = {"AlphaZeroPolicy": AlphaZeroPolicy }
+    POLICY_REGISTRY = {"AlphaZeroPolicy": AlphaZeroPolicy, "MCTSPolicy": MCTSPolicy}
 
     env_type = policy_config['type']
     params = policy_config.get('params', {})
