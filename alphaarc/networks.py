@@ -66,8 +66,6 @@ class PolicyValueNetwork(BaseNetwork):
         final_hidden_states = torch.stack(outputs.decoder_hidden_states[-1])[-1]
         final_hidden_states = final_hidden_states.view(batch_size, self.num_samples, -1)
 
- 
-        
 
         return actions, self._compute_policy(final_hidden_states),self._compute_values(first_hidden_states), past_key_values
 

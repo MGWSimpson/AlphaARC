@@ -17,9 +17,14 @@ class ModelRequester():
     def _make_gpu_request(self, task_data): 
         self.gpu_request_q.put((task_data, self.send_conn))
         result = self.read_conn.recv()
-        actions, action_probs, value, child_key_values = result
-        actions, action_probs, value, child_key_values = actions.cpu().clone(), action_probs.cpu().clone(), value.cpu().clone(), child_key_values
-        return actions.numpy(), action_probs.numpy(), value.numpy(), child_key_values
+
+        tuple_to_return = ()
+        for item in result:
+            if type(item) is torch.Tensor:
+                item = item.cpu().clone().numpy()
+            tuple_to_return = tuple_to_return + (item, )
+        
+        return tuple_to_return
 
     def predict(self, task, state, past_key_values):
         return self._make_gpu_request((task.clone(), torch.tensor(state), past_key_values))
