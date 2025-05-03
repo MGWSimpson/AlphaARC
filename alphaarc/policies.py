@@ -1,5 +1,6 @@
 from policy_code.alphazero import AlphaZero
 from policy_code.mcts import MCTS
+from policy_code.policy_guided_mcts import PolicyGuidedMCTS
 
 import numpy as np
 
@@ -52,6 +53,30 @@ class MCTSPolicy(BasePolicy):
 
     def get_action(self, state): 
         self.mcts = MCTS(encoder_output=self.encoder_output, env=self.env, n_simulations=self.n_simulations)
+        root = self.mcts.run(self.model, state)
+        actions = root.child_actions
+        action_probs = [v.visit_count for v in root.children]
+        action_probs = action_probs / np.sum(action_probs)
+        action = root.select_action(temperature=self.temperature)
+        return action, actions, action_probs
+
+
+class PolicyGuidedMCTSPolicy(BasePolicy):
+    def __init__(self, model, env, temperature, n_simulations):
+        super().__init__()
+        
+        self.model= model
+        self.env = env
+        self.temperature = temperature
+        self.n_simulations = n_simulations
+    
+
+    def policy_init(self):
+        self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
+    
+
+    def get_action(self, state): 
+        self.mcts = PolicyGuidedMCTS(encoder_output=self.encoder_output, env=self.env, n_simulations=self.n_simulations)
         root = self.mcts.run(self.model, state)
         actions = root.child_actions
         action_probs = [v.visit_count for v in root.children]

@@ -1,0 +1,62 @@
+model_config:
+  type: PolicyNetwork
+  params:
+    model_path: 'finetune/2025-04-18_12-38-42/model'
+    tokenizer_path:  'Salesforce/codet5p-220m'
+    temperature: 0.95
+    device: 'cuda'
+    num_samples: 5
+
+
+
+
+trainer_config:
+  type: JointTrainer
+  params:
+    rl_batch_size: 1
+    rl_lr:  0.00005
+    supervised_batch_size: 1
+    supervised_lr:   0.00005
+
+
+policy_config:
+  type: PolicyGuidedMCTSPolicy
+  params:
+    temperature: 1 
+    n_simulations: 10
+
+
+alpha_arc_config:
+  seed: 0
+  n_tree_workers: 2
+  train_every: 10
+  n_episodes_per_task:  1
+  trajectory_buffer_capacity: 100_000
+  replay_buffer_capacity: 100_000
+  n_epochs: 100
+  n_actions:  5
+
+
+env_config:
+  type: LineLevelArcEnv
+  params:
+    tokenizer_path: 'Salesforce/codet5p-220m'
+    n_examples:  10
+    max_task_len: 512
+    max_state_len: 512
+    n_actions:  5
+
+
+
+training_curriculum_config:
+  type: BaselineCurriculum
+  params:
+    dir_paths: [ data/evaluation]
+    
+
+evaluation_curriculum_config:
+  type: BaselineCurriculum
+  params:
+    is_eval: True
+
+

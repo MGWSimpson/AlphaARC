@@ -71,7 +71,7 @@ class Node:
     
 
 class PolicyGuidedMCTS:
-    def __init__(self, n_simulations: int, env, encoder_output):
+    def __init__(self, env, encoder_output, n_simulations):
         self.n_simulations = n_simulations
         self.env = env
         import torch
@@ -100,7 +100,7 @@ class PolicyGuidedMCTS:
         
         # initialize the tree.
         root = Node()
-        actions, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
+        actions, action_probs, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
         
         root.expand(state, actions, child_key_values)
 
@@ -119,7 +119,7 @@ class PolicyGuidedMCTS:
             # expansion 
             next_state, value, terminated = self.env.step(action=action, state=state)
             if not terminated: 
-                actions, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
+                actions,action_probs, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
                 value = self._rollout(model, next_state, actions) # rollout
                 node.expand(next_state, actions,child_key_values)
 

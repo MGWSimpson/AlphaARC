@@ -209,7 +209,11 @@ class PolicyNetwork(BaseNetwork):
         new_actions_shape = len(logits)
         actions = actions[:, : , -new_actions_shape:]
 
-        # TODO: will need to reshape the logitNetwork
+        
+        logits = torch.stack(logits)
+        logits = logits.permute(1, 0,2)
+        logits = logits.reshape(batch_size, self.num_samples, new_actions_shape, -1)
+
         return actions, self._compute_score_from_logits(actions, logits), past_key_values
 
     def _compute_score_from_logits(self, actions, logits): 
@@ -227,6 +231,8 @@ class PolicyNetwork(BaseNetwork):
         with torch.no_grad(): 
             actions, action_probs, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
 
+
+        print(action_probs.shape)
         if len(action_probs.shape) == 1:
                 action_probs = action_probs.unsqueeze(0)
 
@@ -234,18 +240,5 @@ class PolicyNetwork(BaseNetwork):
 
 
     def encode(self, task, task_attention_mask):
-        return super().encode(task, task_attention_mask)
-
-
-class PolicyValueNetwork(BaseNetwork):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    
-    def encode(self, task, task_attention_mask):
-        return super().encode(task, task_attention_mask)
-    
-    def predict(self, task, state, state_attention_masks, past_key_values):
-        return super().predict(task, state, state_attention_masks, past_key_values)
-    
-
+        return self.model.encoder(input_ids=task, attention_mask=task_attention_mask) 
+        
