@@ -5,11 +5,12 @@ import random
 import numpy as np
 
 def uct_score(parent, child, EXPLORATION_C=1):
+
+    if child.visit_count == 0:
+        return math.inf
+
     visit_score = EXPLORATION_C * math.sqrt(math.log(parent.visit_count) / child.visit_count)
-    if child.visit_count > 0:
-        value_score = child.value()
-    else:
-        value_score = 0
+    value_score = child.value()
     return value_score + visit_score
 
 class Node: 
@@ -28,11 +29,29 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
 
-    def expand(self, state, actions): 
+    def expand(self, state, actions, child_key_values): 
         self.state = state.copy()
         self.child_actions = copy.deepcopy(actions)
+        self.children = [Node() for _ in actions]
         self.child_key_values =  None #copy.deepcopy(child_key_values)
 
+    def select_action(self, temperature):
+        """
+        Select action according to the visit count distribution and the temperature.
+        """
+        visit_counts = np.array([child.visit_count for child in self.children])
+        actions = self.child_actions
+        if temperature == 0:
+            action = actions[np.argmax(visit_counts)]
+        elif temperature == float("inf"):
+            action = np.random.choice(actions)
+        else:
+            # See paper appendix Data Generation
+            visit_count_distribution = visit_counts ** (1 / temperature)
+            visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
+            action_index = np.random.choice(len(actions), p=visit_count_distribution)
+            action = actions[action_index]
+        return action
 
     def select_child(self): 
         best_score = -np.inf
@@ -73,15 +92,16 @@ class MCTS:
 
     
     def _backpropagate(self, path, value):
-            for node in reversed(path):
-                node.visit_count += 1
-                node.value_sum  += value
+        for node in reversed(path):
+            node.visit_count += 1
+            node.value_sum  += value
 
     def run(self, model, state): 
         
         # initialize the tree.
         root = Node()
         actions, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
+        
         root.expand(state, actions, child_key_values)
 
         for _ in range(self.n_simulations): 
@@ -100,9 +120,10 @@ class MCTS:
             next_state, value, terminated = self.env.step(action=action, state=state)
             if not terminated: 
                 actions, child_key_values = model.predict(self.encoder_output, next_state, past_key_values=None)
-                value = self._rollout(next_state, actions) # rollout
+                value = self._rollout(model, next_state, actions) # rollout
                 node.expand(next_state, actions,child_key_values)
 
             # backprop
-            self.backpropagate(search_path, value)
+            self._backpropagate(search_path, value)
+        return root
 

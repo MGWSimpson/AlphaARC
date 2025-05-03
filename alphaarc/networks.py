@@ -164,10 +164,9 @@ class ActionNetwork(BaseNetwork):
         with torch.no_grad(): 
             actions, past_key_values =  self._compute_actions(task, state, state_attention_masks, attention_mask, past_key_values)
 
-        if len(action_probs.shape) == 1:
-                action_probs = action_probs.unsqueeze(0)
-
         return actions, past_key_values
-
+    
+    def encode(self, task, task_attention_mask):
+        return self.model.encoder(input_ids=task, attention_mask=task_attention_mask) 
         
 

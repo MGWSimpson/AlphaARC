@@ -1,5 +1,5 @@
 model_config:
-  type: PolicyValueNetwork
+  type: ActionNetwork
   params:
     model_path: 'finetune/2025-04-18_12-38-42/model'
     tokenizer_path:  'Salesforce/codet5p-220m'

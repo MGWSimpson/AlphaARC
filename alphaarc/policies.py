@@ -51,7 +51,7 @@ class MCTSPolicy(BasePolicy):
     
 
     def get_action(self, state): 
-        self.mcts = MCTS(encoder_output=self.encoder_outputm, env=self.env, n_simulations=self.n_simulations)
+        self.mcts = MCTS(encoder_output=self.encoder_output, env=self.env, n_simulations=self.n_simulations)
         root = self.mcts.run(self.model, state)
         actions = root.child_actions
         action_probs = [v.visit_count for v in root.children]

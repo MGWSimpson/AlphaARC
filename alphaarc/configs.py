@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 import yaml
-from alphaarc.networks import BaseNetwork, PolicyValueNetwork
+from alphaarc.networks import BaseNetwork, PolicyValueNetwork, ActionNetwork
 from alphaarc.policies import BasePolicy
 from alphaarc.train import BaseTrainer, JointTrainer
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.env import BaseEnv, LineLevelArcEnv
 from alphaarc.policies import BasePolicy, AlphaZeroPolicy, MCTSPolicy
 from alphaarc.curriculum import BaseCurriculum, BaselineCurriculum
+
 
 @dataclass
 class AlphaARCConfig:
@@ -36,7 +37,7 @@ def load_config(path: str) -> dict:
 
 # would take in some network or something then
 def build_network(model_config: dict) -> BaseNetwork:
-    NETWORK_REGISTRY = {"PolicyValueNetwork": PolicyValueNetwork }
+    NETWORK_REGISTRY = {"PolicyValueNetwork": PolicyValueNetwork, "ActionNetwork": ActionNetwork}
     network_type = model_config['type']
     params = model_config.get('params', {})
 
