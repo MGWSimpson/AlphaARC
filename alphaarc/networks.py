@@ -113,3 +113,14 @@ class PolicyValueNetwork(BaseNetwork):
 
     def encode(self, task, task_attention_mask):
         return self.model.encoder(input_ids=task, attention_mask=task_attention_mask)
+    
+
+
+# model which only returns the actions (used in non-neural guided baselines)
+class ActionNetwork(BaseNetwork): 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+
+    def predict(self, task, state, state_attention_masks, past_key_values):
+        pass
