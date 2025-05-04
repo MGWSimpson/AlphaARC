@@ -29,7 +29,7 @@ class AlphaProofPolicy(BasePolicy):
 
         
     def get_action(self, state): 
-        self.mcts = AlphaZero(self.env , encoder_output=self.encoder_output,  n_simulations=self.n_simulations)
+        self.mcts = AlphaProof(self.env , encoder_output=self.encoder_output,  n_simulations=self.n_simulations)
         root = self.mcts.run(self.model, state)
         actions = root.child_actions
         action_probs = [v.visit_count for v in root.children]
@@ -83,3 +83,4 @@ class PolicyGuidedMCTSPolicy(BasePolicy):
         action_probs = action_probs / np.sum(action_probs)
         action = root.select_action(temperature=self.temperature)
         return action, actions, action_probs
+
