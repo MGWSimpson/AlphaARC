@@ -5,6 +5,7 @@ from typing import Dict
 from alphaarc.task import Task
 from alphaarc import PROJECT_FOLDER_PATH
 from alphaarc.policy.environment import execute_candidate_program
+from pathlib import Path
 
 def find_grid_functions(filename):
     with open(filename, "r") as file:
@@ -203,10 +204,19 @@ def collate_task_inputs(task: Task):
     return program_inputs
 
 def main():
-    task = Task.from_json('data/training/54d9e175.json')
+    
+    data_dir = Path("data/training")    # directory with your JSON files
+    tasks = []                          # collect Task objects here
 
-    program_lines = task.program_lines.split("\n")    
-    compress(program_lines, task)    
+    for json_file in data_dir.glob("*.json"):     # iterate over every .json in the folder
+        task = Task.from_json(json_file)          # load each file
+        tasks.append(task)
+
+
+    for task in tasks:
+        program_lines = task.program_lines.split("\n")    
+        compress(program_lines, task)    
+
     
 
     
