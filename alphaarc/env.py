@@ -105,6 +105,33 @@ class LineLevelArcEnv (BaseEnv):
                 return False   
 
         return True
+    
+    def evaluate_program(self, program): 
+        terminated = False
+        reward = 0
+        program = self._decode(program)
+        
+        for i, st in enumerate(self.initial_states):
+            candidate_program = append_return(program)
+            # candidate_program = program
+            output = execute_candidate_program(program_string=candidate_program, program_input=st)
+            if output == "Invalid Input": 
+                terminated = True # TODO: change this back to false
+
+            if "O" in program:
+               terminated = True
+
+            if output == self.goal_states[i]:
+                reward +=1
+
+
+        if reward == len(self.initial_states):
+            reward = 1.0 
+        else:
+            reward = -1.0
+        
+        terminated = terminated or reward == 1.0
+        return reward, terminated
 
     def get_action_space(self):
         return self.n_actions
