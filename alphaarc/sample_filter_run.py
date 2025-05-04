@@ -10,7 +10,7 @@ from alphaarc.env import BaseEnv
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 NEW_LINE_TOKEN_ID = 203
 
 
@@ -84,24 +84,26 @@ class SampleAndFilterSolver:
 
 
     def solve_tasks(self, tasks: list, env):
-        
+        n_solved = 0
         tokenized_tasks, attention_masks = tokenize_task_arr(tasks, self.tokenizer)
         tokenized_tasks, attention_masks = torch.stack(tokenized_tasks) , torch.stack(attention_masks)
         tokenized_tasks, attention_masks = tokenized_tasks.to(self.device), attention_masks.to(self.device)
         answers = self._generate_answers(tokenized_tasks, attention_masks)
 
         for i in range(len(tasks)):
-            pass
+            solved = evaluate_solutions(answers[i], tasks[i], env)
+            n_solved += int(solved)
 
+        return n_solved
             
 def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env): 
-    
+    n_solved = 0     
     for meta_epoch in tqdm(range(n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
 
         for i in tqdm(range(0, len (full_curriculum), batch_size)):
             batch = full_curriculum[i:i+batch_size]
-            results = solver.solve_tasks(batch, env)
+            n_solved +=  solver.solve_tasks(batch, env)
 
 
 
@@ -119,7 +121,7 @@ def main():
 
     env = build_env(config['env_config'])
 
-    run_experiment(config['n_epochs'], config['batch_size'], solver, curriculum, env)
+    print(run_experiment(config['n_epochs'], config['batch_size'], solver, curriculum, env))
 
 if __name__ == "__main__":
     main()
