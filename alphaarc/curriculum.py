@@ -33,7 +33,6 @@ class BaseCurriculum:
             self._load_tasks_from_files(file_path)
 
 
-
     def __len__(self): 
         return len(self.tasks)
     
