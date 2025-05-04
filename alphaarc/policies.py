@@ -8,7 +8,6 @@ import numpy as np
 class BasePolicy:
     def __init__(self):
         pass
-
     
     def policy_init(self):
         raise NotImplementedError

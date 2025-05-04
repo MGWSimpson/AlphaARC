@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 import yaml
-from alphaarc.networks import BaseNetwork, PolicyValueNetwork, ActionNetwork, PolicyNetwork
-from alphaarc.policies import BasePolicy
+from alphaarc.networks import BaseNetwork, PolicyValueNetwork, ActionNetwork, PolicyNetwork, AlphaZeroNetwork
 from alphaarc.train import BaseTrainer, JointTrainer
 from alphaarc.curriculum import BaseCurriculum
 from alphaarc.env import BaseEnv, LineLevelArcEnv
-from alphaarc.policies import BasePolicy, AlphaProofPolicy, MCTSPolicy, PolicyGuidedMCTSPolicy
+from alphaarc.policies import BasePolicy, AlphaProofPolicy, MCTSPolicy, PolicyGuidedMCTSPolicy, AlphaZeroPolicy
 from alphaarc.curriculum import BaseCurriculum, BaselineCurriculum
 
 
@@ -39,7 +38,8 @@ def load_config(path: str) -> dict:
 def build_network(model_config: dict) -> BaseNetwork:
     NETWORK_REGISTRY = {"PolicyValueNetwork": PolicyValueNetwork, 
                         "ActionNetwork": ActionNetwork, 
-                        "PolicyNetwork": PolicyNetwork}
+                        "PolicyNetwork": PolicyNetwork,
+                        "AlphaZeroNetwork": AlphaZeroNetwork}
     
     network_type = model_config['type']
     params = model_config.get('params', {})
@@ -55,7 +55,8 @@ def build_network(model_config: dict) -> BaseNetwork:
 def build_policy(model, env,policy_config: dict) -> BasePolicy:
     POLICY_REGISTRY = {"AlphaProofPolicy": AlphaProofPolicy, 
                        "MCTSPolicy": MCTSPolicy,
-                       "PolicyGuidedMCTSPolicy": PolicyGuidedMCTSPolicy}
+                       "PolicyGuidedMCTSPolicy": PolicyGuidedMCTSPolicy, 
+                       "AlphaZeroPolicy": AlphaZeroPolicy}
 
     env_type = policy_config['type']
     params = policy_config.get('params', {})
