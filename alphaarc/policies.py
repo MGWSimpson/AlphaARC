@@ -1,4 +1,4 @@
-from policy_code.alphazero import AlphaZero
+from alphaarc.policy_code.alphaproof import AlphaProof
 from policy_code.mcts import MCTS
 from policy_code.policy_guided_mcts import PolicyGuidedMCTS
 
@@ -15,7 +15,7 @@ class BasePolicy:
     def get_action(self, state):
         raise NotImplementedError
     
-class AlphaZeroPolicy(BasePolicy):
+class AlphaProofPolicy(BasePolicy):
     def __init__(self, model, env, temperature, n_simulations):
         super().__init__()
         self.model = model

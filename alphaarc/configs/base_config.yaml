@@ -20,7 +20,7 @@ trainer_config:
 
 
 policy_config:
-  type: AlphaZeroPolicy
+  type: AlphaProofPolicy
   params:
     temperature: 1 
     n_simulations: 10
