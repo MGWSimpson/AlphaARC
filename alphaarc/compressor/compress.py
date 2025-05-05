@@ -203,6 +203,9 @@ def collate_task_inputs(task: Task):
 
     return program_inputs
 
+
+
+
 def main():
     
     data_dir = Path("data/training")    # directory with your JSON files
