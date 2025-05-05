@@ -62,9 +62,10 @@ class LineLevelArcEnv (BaseEnv):
         self.tokens_used= 0
 
     def _add_and_check_token_budget(self, action):
-        self.tokens_used += len(action)
         if self.tokens_used > self.token_budget:
             raise ExceededTokenBudget("Exceeded token budget!")
+        
+        self.tokens_used += len(action)
 
 
     def _add_new_line_if_absent(self, action): 
@@ -82,9 +83,7 @@ class LineLevelArcEnv (BaseEnv):
     # state =  previous program tokens 
     def step(self, action, state): 
         action = self._add_new_line_if_absent(action)
-
-        self._add_and_check_token_budget(self, action)
-
+        self._add_and_check_token_budget(action)
         observation = np.concatenate((state, action))
         terminated = False
         reward = 0

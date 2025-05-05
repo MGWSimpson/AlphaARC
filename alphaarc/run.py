@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 import traceback
 from alphaarc.mp import ModelRequester, ModelResponder
 from alphaarc.agent import Agent
-from alphaarc.env import BaseEnv
+from alphaarc.env import BaseEnv, ExceededTokenBudget
 from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
 import os
 
@@ -33,18 +33,25 @@ def tree_worker_fn(config,
                   replay_q=mp_context.replay_buffer_q, 
                   trajectory_q=mp_context.trajectory_buffer_q)
     
+
+
     try:
-        while True:
+        while True: # general loop that just keeps us going
             task = mp_context.task_q.get()
-            env.set_task(task)
-            
-            if task.is_eval:
-                result = agent.evaluate(env)
-            else:
-                result = agent.learn(env) 
-            
-            mp_context.episode_results_q.put(result)
+            try:
+                    while True:             
+                        env.set_task(task)
+                        if task.is_eval:
+                            result = agent.evaluate(env)
+                        else:
+                            result = agent.learn(env) 
+                        mp_context.episode_results_q.put(result)
+
+            except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
+                print("Exceeded token budget")
+
             mp_context.task_q.task_done()
+    
     
     except Exception as e:
         print(f"[CPU THREAD ERROR] {e}")
