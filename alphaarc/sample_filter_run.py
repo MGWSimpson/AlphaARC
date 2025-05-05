@@ -48,12 +48,17 @@ def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, m
 
 
 
-def evaluate_solutions(answers, task, env: BaseEnv):
+def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
+    tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max-1, max_length)['input_ids'])
+    tokenized_task = np.concatenate((tokenized_task,  np.array([NEW_LINE_TOKEN_ID])))
     
+    tokenized_task = torch.tensor(tokenized_task).to('cuda')
+    # return model.encoder(tokenized_task.unsqueeze(0))
+    return tokenized_task
+
+def evaluate_solutions(answers, task, env: BaseEnv):
     env.set_task(task)
-
     solved = False
-
     for i in range(answers.shape[0]):
         program = answers[i]
         reward, terminated = env.evaluate_program(program)
@@ -80,34 +85,30 @@ class SampleAndFilterSolver:
         self.batch_size = batch_size
         self.num_return_sequences = num_return_sequences
 
-    def _generate_answers(self, tokenized_tasks, attention_masks): 
-        answers = self.model.generate(  input_ids=tokenized_tasks,
-                                        attention_mask=attention_masks,
+    def _generate_answers(self, encoder_outputs): 
+        answers = self.model.generate(  encoder_outputs.unsqueeze(0),
                                         max_new_tokens= self.max_new_length,
                                         num_return_sequences=self.num_return_sequences,
                                         do_sample=True)
 
         answers = answers.view(self.batch_size, self.num_return_sequences, -1)
+        answers = answers.squeeze(0)
         return answers 
 
 
-    def solve_tasks(self, tasks: list, env):
+    def solve_task(self, task, env): 
         try:
+            encoder_outputs = encode_task(task, self.tokenizer, self.model)
             while True:
-                tokenized_tasks, attention_masks = tokenize_task_arr(tasks, self.tokenizer)
-                tokenized_tasks, attention_masks = torch.stack(tokenized_tasks) , torch.stack(attention_masks)
-                tokenized_tasks, attention_masks = tokenized_tasks.to(self.device), attention_masks.to(self.device)
-                answers = self._generate_answers(tokenized_tasks, attention_masks)
-
-                for i in range(len(tasks)):
-                    solved = evaluate_solutions(answers[i], tasks[i], env)
-                    if solved:
-                        return [tasks[i].task_key] 
+                answers = self._generate_answers(encoder_outputs)
+                solved = evaluate_solutions(answers, task, env)
+                if solved:
+                    return [task. task_key] 
                     
         except ExceededTokenBudget:
             print("exceeded token budget!")
-            return []
-            
+            return [] 
+
 def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env): 
     solved_task_ids = []
 
@@ -116,7 +117,7 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
 
         for i in tqdm(range(0, len (full_curriculum), batch_size)):
             batch = full_curriculum[i:i+batch_size]
-            solved_task_ids.extend( solver.solve_tasks(batch, env))
+            solved_task_ids.extend( solver.solve_task(batch[0], env))
             print(len(solved_task_ids))
             print(solved_task_ids)
 

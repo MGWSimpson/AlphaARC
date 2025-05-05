@@ -9,7 +9,7 @@ num_return_sequences: 8
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/training, data/evaluation]
+    dir_paths: [ data/training]
     
 
 evaluation_curriculum_config:
@@ -26,4 +26,4 @@ env_config:
     max_task_len: 512
     max_state_len: 512
     n_actions:  5
-    token_budget: 1000
+    token_budget: 3000
