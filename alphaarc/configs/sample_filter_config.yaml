@@ -1,10 +1,10 @@
 model_path: 'finetune/2025-04-18_12-38-42/model'
 tokenizer_path:  'Salesforce/codet5p-220m'
-max_new_length: 1000
+max_new_length: 512
 batch_size: 1
 n_epochs: 1 
 
-num_return_sequences: 8
+num_return_sequences: 256
 
 training_curriculum_config:
   type: BaselineCurriculum
