@@ -6,13 +6,17 @@ from tqdm import tqdm
 import numpy as np 
 from alphaarc.policy.tokenize import tokenize_task
 import torch 
-from alphaarc.env import BaseEnv
-
+from alphaarc.env import BaseEnv, ExceededTokenBudget
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 NEW_LINE_TOKEN_ID = 203
 
+
+"""
+NOTE:
+-> Imposing an assumption that only one task is being solved at a time. This makes tracking the tasks much easier
+"""
 
 
 def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, max_length=512): 
@@ -84,17 +88,21 @@ class SampleAndFilterSolver:
 
 
     def solve_tasks(self, tasks: list, env):
-        n_solved = 0
-        tokenized_tasks, attention_masks = tokenize_task_arr(tasks, self.tokenizer)
-        tokenized_tasks, attention_masks = torch.stack(tokenized_tasks) , torch.stack(attention_masks)
-        tokenized_tasks, attention_masks = tokenized_tasks.to(self.device), attention_masks.to(self.device)
-        answers = self._generate_answers(tokenized_tasks, attention_masks)
+        try:
+            while True:
+                tokenized_tasks, attention_masks = tokenize_task_arr(tasks, self.tokenizer)
+                tokenized_tasks, attention_masks = torch.stack(tokenized_tasks) , torch.stack(attention_masks)
+                tokenized_tasks, attention_masks = tokenized_tasks.to(self.device), attention_masks.to(self.device)
+                answers = self._generate_answers(tokenized_tasks, attention_masks)
 
-        for i in range(len(tasks)):
-            solved = evaluate_solutions(answers[i], tasks[i], env)
-            n_solved += int(solved)
-
-        return n_solved
+                for i in range(len(tasks)):
+                    solved = evaluate_solutions(answers[i], tasks[i], env)
+                    if solved:
+                        return 1 
+                    
+        except ExceededTokenBudget:
+            print("exceeded token budget!")
+            return 0
             
 def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env): 
     n_solved = 0     

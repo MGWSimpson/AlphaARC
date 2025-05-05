@@ -1,7 +1,7 @@
 model_path: 'finetune/2025-04-18_12-38-42/model'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 1000
-batch_size: 4 
+batch_size: 1
 n_epochs: 1 
 
 num_return_sequences: 8
@@ -26,3 +26,4 @@ env_config:
     max_task_len: 512
     max_state_len: 512
     n_actions:  5
+    token_budget: 1000

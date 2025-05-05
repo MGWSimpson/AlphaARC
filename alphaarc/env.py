@@ -30,6 +30,12 @@ def append_return(program):
 NEW_LINE_TOKEN_ID = 203
 
 
+class ExceededTokenBudget(Exception): 
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
 class BaseEnv:
     def __init__(self):
         pass
@@ -38,7 +44,7 @@ class BaseEnv:
         raise NotImplementedError
 
 class LineLevelArcEnv (BaseEnv):
-    def __init__(self, tokenizer_path, n_examples, max_task_len, max_state_len, n_actions):
+    def __init__(self, tokenizer_path, n_examples, max_task_len, max_state_len, n_actions,  token_budget):
         self.n_examples = n_examples
         self.input_state_max = max_task_len
         self.max_length = max_state_len
@@ -47,7 +53,20 @@ class LineLevelArcEnv (BaseEnv):
         self.new_line_arr = np.array([NEW_LINE_TOKEN_ID])
         
         
+        self._reset_token_budget()
+
+        self.token_budget = token_budget
+        
     
+    def _reset_token_budget(self):
+        self.tokens_used= 0
+
+    def _add_and_check_token_budget(self, action):
+        self.tokens_used += len(action)
+        if self.tokens_used > self.token_budget:
+            raise ExceededTokenBudget("Exceeded token budget!")
+
+
     def _add_new_line_if_absent(self, action): 
         if NEW_LINE_TOKEN_ID not in action:
             action = np.concatenate((action, self.new_line_arr))
@@ -63,6 +82,9 @@ class LineLevelArcEnv (BaseEnv):
     # state =  previous program tokens 
     def step(self, action, state): 
         action = self._add_new_line_if_absent(action)
+
+        self._add_and_check_token_budget(self, action)
+
         observation = np.concatenate((state, action))
         terminated = False
         reward = 0
@@ -111,6 +133,9 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(program)
         
+
+        self._add_and_check_token_budget(program)
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -156,6 +181,9 @@ class LineLevelArcEnv (BaseEnv):
         self.task_length = len(tokenized_task)
         pad_length = (self.input_state_max *2 ) - len(tokenized_task)
         self.tokenized_task = np.pad(tokenized_task, (0, pad_length), constant_values=self.tokenizer.pad_token_id)
+
+        self._reset_token_budget()
+
 
 if __name__ == "__main__": 
     task = Task.from_json('data/training/67385a82.json')
