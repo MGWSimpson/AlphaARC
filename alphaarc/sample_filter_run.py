@@ -18,7 +18,11 @@ NOTE:
 -> Imposing an assumption that only one task is being solved at a time. This makes tracking the tasks much easier
 """
 
-
+"""
+TODO: 
+-> Will need to remove it from curriculum if it solves. Will do this later. 
+-> saving which tasks it solves
+"""
 def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, max_length=512): 
     tokenized_tasks = []
     attention_masks = []
@@ -98,22 +102,25 @@ class SampleAndFilterSolver:
                 for i in range(len(tasks)):
                     solved = evaluate_solutions(answers[i], tasks[i], env)
                     if solved:
-                        return 1 
+                        return [tasks[i].task_key] 
                     
         except ExceededTokenBudget:
             print("exceeded token budget!")
-            return 0
+            return []
             
 def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env): 
-    n_solved = 0     
+    solved_task_ids = []
+
     for meta_epoch in tqdm(range(n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
 
         for i in tqdm(range(0, len (full_curriculum), batch_size)):
             batch = full_curriculum[i:i+batch_size]
-            n_solved +=  solver.solve_tasks(batch, env)
+            solved_task_ids.extend( solver.solve_tasks(batch, env))
+            print(len(solved_task_ids))
+            print(solved_task_ids)
 
-
+       
 
 # collect arguments and run experiment
 def main(): 
