@@ -96,6 +96,8 @@ class MCTS:
             node.visit_count += 1
             node.value_sum  += value
 
+
+    # TODO: whilst I still have 
     def run(self, model, state): 
         
         # initialize the tree.
@@ -104,7 +106,7 @@ class MCTS:
         
         root.expand(state, actions, child_key_values)
 
-        for _ in range(self.n_simulations): 
+        while self.env.is_below_token_budget():  
             node = root
             search_path = [node]
             

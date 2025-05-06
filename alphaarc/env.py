@@ -68,6 +68,9 @@ class LineLevelArcEnv (BaseEnv):
         self.tokens_used += len(action)
 
 
+    def is_below_token_budget(self):
+        return self.tokens_used < self.token_budget
+
     def _add_new_line_if_absent(self, action): 
         if NEW_LINE_TOKEN_ID not in action:
             action = np.concatenate((action, self.new_line_arr))
@@ -78,6 +81,7 @@ class LineLevelArcEnv (BaseEnv):
 
     def _encode(self, program): 
         return self.tokenizer( program, add_special_tokens=False, return_tensors='np')['input_ids'].squeeze()
+
 
     # action = new program tokens
     # state =  previous program tokens 
