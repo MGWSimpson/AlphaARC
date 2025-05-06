@@ -22,6 +22,7 @@ NOTE:
 
 """
 At a budget of 50k tokens, it scored 5/89
+['ac0a08a4', 'd9fac9be', '4258a5f9', '6fa7a44f', '6150a2bd']
 """
 def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, max_length=512): 
     tokenized_tasks = []
