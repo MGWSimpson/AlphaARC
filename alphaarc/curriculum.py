@@ -4,13 +4,16 @@ import json
 
 
 class BaseCurriculum:
+    
+    # filter_tasks_key is a list of task ID's which should be kept.
+    # need to use external code to load that 
     def __init__(self, dir_paths=[], file_paths=[], is_eval=False):
         self.tasks = []
         self.solved_tasks = []
         self.is_eval = is_eval
-
         self._add_data_sources(dirs=dir_paths, files=file_paths)
         print(f"loaded {len(self.tasks)} tasks, is eval: {self.is_eval}")
+
 
     def _load_tasks_from_folders(self, dir_path):
         file_paths = [os.path.join(dir_path, f) for f in os.listdir(dir_path)]
@@ -46,6 +49,24 @@ class BaseCurriculum:
     def handle_solved_tasks(self, task):
         self.solved_tasks.append(task)
         self.tasks.remove(task)
+
+
+    def prune_tasks_not_in_list(self, tasks_to_keep):
+        prune_list = []
+        for task in self.tasks:
+            if task.parent_key is None: # check the main key
+                if task.task_key not in tasks_to_keep:
+                    prune_list.append(task)
+            else:
+                if task.parent_key not in tasks_to_keep:
+                    prune_list.append(task)
+        
+
+
+        for task in prune_list:
+            self.tasks.remove(task)
+
+        print(f"removed {len(prune_list)} tasks")
 
 
     def generate_curriculum(self) -> list[Task]: 

@@ -4,8 +4,14 @@ from typing import Any, Dict, Iterable, List, Union
 from matplotlib import pyplot as plt
 
 import numpy as np
+import json
 
 
+
+def load_key_split(split_keys_path): 
+    with open(split_keys_path) as fp:
+        json_object = json.load(fp)
+    return json_object
 
 
 def transform_to_function(input_str: str, function_name: str) -> str:

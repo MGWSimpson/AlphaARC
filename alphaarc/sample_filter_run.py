@@ -8,6 +8,8 @@ from alphaarc.policy.tokenize import tokenize_task
 import torch 
 from alphaarc.env import BaseEnv, ExceededTokenBudget
 
+from alphaarc.utils import load_key_split
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 NEW_LINE_TOKEN_ID = 203
@@ -19,9 +21,7 @@ NOTE:
 """
 
 """
-TODO: 
--> Will need to remove it from curriculum if it solves. Will do this later. 
--> saving which tasks it solves
+At a budget of 50k tokens, it scored 5/89
 """
 def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, max_length=512): 
     tokenized_tasks = []
@@ -57,16 +57,13 @@ def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_
     return tokenized_task
 
 def evaluate_solutions(answers, task, env: BaseEnv):
-    env.set_task(task)
-    solved = False
     for i in range(answers.shape[0]):
         program = answers[i]
         reward, terminated = env.evaluate_program(program)
         if reward == 1:
-            solved = True
-        
+            return True
 
-    return solved
+    return False
 
 
 class SampleAndFilterSolver:
@@ -87,7 +84,8 @@ class SampleAndFilterSolver:
 
     def _generate_answers(self, encoder_outputs): 
         answers = self.model.generate(  encoder_outputs.unsqueeze(0),
-                                        max_new_tokens= self.max_new_length,
+                                        max_new_tokens= self.max_new_length, 
+                                        early_stopping=True,
                                         num_return_sequences=self.num_return_sequences,
                                         do_sample=True)
 
@@ -99,27 +97,28 @@ class SampleAndFilterSolver:
     def solve_task(self, task, env): 
         try:
             encoder_outputs = encode_task(task, self.tokenizer, self.model)
+            env.set_task(task)
+
             while True:
                 answers = self._generate_answers(encoder_outputs)
                 solved = evaluate_solutions(answers, task, env)
+                
                 if solved:
                     return [task. task_key] 
-                    
+                
+                print(f"budget left: {env.token_budget - env.tokens_used}")
         except ExceededTokenBudget:
             print("exceeded token budget!")
             return [] 
 
 def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env): 
     solved_task_ids = []
-
-    for meta_epoch in tqdm(range(n_epochs)):
-        full_curriculum = curriculum.generate_curriculum()
-
-        for i in tqdm(range(0, len (full_curriculum), batch_size)):
-            batch = full_curriculum[i:i+batch_size]
-            solved_task_ids.extend( solver.solve_task(batch[0], env))
-            print(len(solved_task_ids))
-            print(solved_task_ids)
+    full_curriculum = curriculum.generate_curriculum()
+    for i in tqdm(range(0, len (full_curriculum), batch_size)):
+        batch = full_curriculum[i:i+batch_size]
+        solved_task_ids.extend( solver.solve_task(batch[0], env))
+        print(len(solved_task_ids))
+        print(solved_task_ids)
 
        
 
@@ -129,14 +128,16 @@ def main():
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/sample_filter_config.yaml')
     args = parser.parse_args()
 
+    
+
+    
+
     config = load_config(args.config_path)
-
     solver = SampleAndFilterSolver(config['model_path'], config['tokenizer_path'], config['max_new_length'], config['batch_size'], num_return_sequences=config['num_return_sequences'])
-
     curriculum = build_curriculum(config['training_curriculum_config'])
-
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
-
     print(run_experiment(config['n_epochs'], config['batch_size'], solver, curriculum, env))
 
 if __name__ == "__main__":
