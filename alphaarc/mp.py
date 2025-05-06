@@ -119,6 +119,10 @@ class ModelResponder():
             task_attention_masks = task_attention_masks.to(self.model.device) 
             task, state = task.to(self.model.device), state.to(self.model.device)
             results = self.model.predict(task,state, state_attention_masks, task_attention_masks, past_key_values)
+            
+
+            
+
             for i, connections in enumerate(connections):
                 tuple_to_return = ()
                 for j in range(len(results)):

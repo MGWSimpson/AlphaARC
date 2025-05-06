@@ -50,9 +50,9 @@ def tree_worker_fn(config,
 
                         if result['solved'] == 1.0:
                             print("ASKLIASDC")
-                            
-                        mp_context.episode_results_q.put(result)
 
+                        mp_context.episode_results_q.put(result)
+                        print(env.tokens_used)
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
                 print("Exceeded token budget")
 

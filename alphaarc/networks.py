@@ -130,8 +130,6 @@ class ActionNetwork(BaseNetwork):
 
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-        self.value = nn.Linear(768, 1) # TODO please fix this.
-        self.policy = nn.Linear(768, 1)
         self.device = device
 
         # model parameters

@@ -4,6 +4,7 @@ from policy_code.policy_guided_mcts import PolicyGuidedMCTS
 from policy_code.alphazero import AlphaZero
 from alphaarc.env import ExceededTokenBudget
 import numpy as np
+import copy
 
 class BasePolicy:
     def __init__(self):
@@ -51,29 +52,28 @@ class MCTSPolicy(BasePolicy):
 
     def policy_init(self):
         self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
-    
+        self.root = None
 
     def get_action(self, state): 
         
-
         if self.root is None: # generate the tree, save the root
             self.mcts = MCTS(encoder_output=self.encoder_output, env=self.env, n_simulations=self.n_simulations)
             root = self.mcts.run(self.model, state)
-            self.root = root
+            self.root = copy.deepcopy(root)
 
 
         # basically generate this on the first try. Once you have generated it then just step through it. 
 
         actions = self.root.child_actions
+        
+        if actions is None:
+            raise ExceededTokenBudget("Exceeded token budget, task unsolved!")
+        
         action_probs = [v.visit_count for v in self.root.children]
         action_probs = action_probs / np.sum(action_probs)
 
-        if actions is None:
-            print(self.env.tokens_used)
-            raise ExceededTokenBudget("Exceeded token budget!")
         action, action_node = self.root.select_action(temperature=self.temperature)
-        # step down the tree
-        self.root = action_node
+        self.root = copy.deepcopy(action_node)
         return action, actions, action_probs
 
 
