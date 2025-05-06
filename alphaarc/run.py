@@ -17,6 +17,8 @@ from alphaarc.env import BaseEnv, ExceededTokenBudget
 from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
 import os
 
+from alphaarc.utils import load_key_split
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
@@ -45,6 +47,10 @@ def tree_worker_fn(config,
                             result = agent.evaluate(env)
                         else:
                             result = agent.learn(env) 
+
+                        if result['solved'] == 1.0:
+                            print("ASKLIASDC")
+                            
                         mp_context.episode_results_q.put(result)
 
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
@@ -83,7 +89,7 @@ def evaluate(eval_set, task_q, episode_results_q):
 
 def run_experiment( config: AlphaARCConfig, 
                     curriculum: BaseCurriculum, 
-                    evaluation_set: BaseCurriculum,
+                   #  evaluation_set: BaseCurriculum,
                     trainer: BaseTrainer,
                     trajectory_buffer: TrajectoryBuffer, 
                     replay_buffer: ReplayBuffer,
@@ -94,23 +100,24 @@ def run_experiment( config: AlphaARCConfig,
 
     for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
-        full_curriculum = full_curriculum[:10]
         for task in full_curriculum:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
 
-        """transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
-                                       trajectory_q=mp_context.trajectory_buffer_q,
-                                       replay_buffer=replay_buffer,
-                                       replay_q=mp_context.replay_buffer_q
-                                       )
+        #transfer_queues_to_buffers(trajectory_buffer=trajectory_buffer,
+        #                               trajectory_q=mp_context.trajectory_buffer_q,
+        #                               replay_buffer=replay_buffer,
+        #                               replay_q=mp_context.replay_buffer_q
+        #                               )
 
-        episode_logs = drain_q(mp_context. episode_results_q)
-        train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
-        mp_context.load_model_event.set()
-        run_log = make_train_only_run_log(train_log, episode_logs)
-        print(f"On meta epoch: {meta_epoch}. Solved: {run_log['train_solve_rate']}")
-        run.log(run_log)"""
+        #episode_logs = drain_q(mp_context. episode_results_q)
+        
+        #train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
+        #mp_context.load_model_event.set()
+        #run_log = make_train_only_run_log(train_log, episode_logs)
+        #print(f"On meta epoch: {meta_epoch}. Solved: {run_log['train_solve_rate']}")
+        #
+        # run.log(run_log)
 
 
 def main(): 
@@ -153,14 +160,19 @@ def main():
     trainer = build_trainer(config['trainer_config'])
 
     curriculum = build_curriculum(config['training_curriculum_config'])
-    eval_set = build_curriculum(config['evaluation_curriculum_config'] )
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+
+    # eval_set = build_curriculum(config['evaluation_curriculum_config'] )
+
+    
 
     trajectory_buffer = TrajectoryBuffer()
     replay_buffer = ReplayBuffer()
     # run experiment
     run_experiment(alpha_arc_config,
                    curriculum, 
-                   eval_set, 
+      #              eval_set, 
                    trainer,
                    trajectory_buffer,
                    replay_buffer,

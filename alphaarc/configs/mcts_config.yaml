@@ -1,7 +1,7 @@
 model_config:
   type: ActionNetwork
   params:
-    model_path: 'finetune/2025-04-18_12-38-42/model'
+    model_path: 'finetune/2025-05-05_23-47-18/model'
     tokenizer_path:  'Salesforce/codet5p-220m'
     temperature: 0.95
     device: 'cuda'
@@ -22,18 +22,18 @@ trainer_config:
 policy_config:
   type: MCTSPolicy
   params:
-    temperature: 1 
+    temperature: 0
     n_simulations: 10
 
 
 alpha_arc_config:
   seed: 0
-  n_tree_workers: 2
+  n_tree_workers: 8
   train_every: 10
   n_episodes_per_task:  1
   trajectory_buffer_capacity: 100_000
   replay_buffer_capacity: 100_000
-  n_epochs: 100
+  n_epochs: 1
   n_actions:  5
 
 
@@ -45,6 +45,7 @@ env_config:
     max_task_len: 512
     max_state_len: 512
     n_actions:  5
+    token_budget: 50000
 
 
 

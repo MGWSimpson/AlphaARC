@@ -23,7 +23,7 @@ class Agent():
         while not terminated:
             action, actions, action_probs = self.policy.get_action(state)
             train_examples.append((state, actions, action_probs))
-            state, reward, terminated = env.step(action=action, state=state)
+            state, reward, terminated = env.step(action=action, state=state, should_do_token_accounting=False)
             
             if terminated:
                 ret = []

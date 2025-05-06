@@ -42,7 +42,9 @@ class Node:
         visit_counts = np.array([child.visit_count for child in self.children])
         actions = self.child_actions
         if temperature == 0:
-            action = actions[np.argmax(visit_counts)]
+            index = np.argmax(visit_counts)
+            action = actions[index]
+            action_node = self.children[index]
         elif temperature == float("inf"):
             action = np.random.choice(actions)
         else:
@@ -51,7 +53,9 @@ class Node:
             visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
             action_index = np.random.choice(len(actions), p=visit_count_distribution)
             action = actions[action_index]
-        return action
+            action_node = self.children[action_index]
+        return action, action_node
+
 
     def select_child(self): 
         best_score = -np.inf
