@@ -23,6 +23,11 @@ import logging
 logger = logging.getLogger(__name__)
 timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+
+
 @dataclass
 class FineTuneConfig: 
     model_path: str = 'Salesforce/codet5p-220m'
