@@ -6,6 +6,12 @@ from alphaarc.env import ExceededTokenBudget
 import numpy as np
 import copy
 
+
+"""
+There is a decision here on whether or not I should store the best program.
+Going to ere on the side of not, otherwise I lose the best stuff.
+"""
+
 class BasePolicy:
     def __init__(self):
         pass
@@ -63,7 +69,7 @@ class MCTSPolicy(BasePolicy):
 
 
         # basically generate this on the first try. Once you have generated it then just step through it. 
-
+        
         actions = self.root.child_actions
         
         if actions is None:

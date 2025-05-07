@@ -139,6 +139,7 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         # print(program)
         program = self._decode(program)
+
         
 
         self._add_and_check_token_budget(program)
@@ -159,10 +160,16 @@ class LineLevelArcEnv (BaseEnv):
 
         if reward == len(self.initial_states):
             reward = 1.0 
+            print("SOLVING A TASK :D")
         else:
             reward = -1.0
+
         
+        if len(program) > self.max_length:
+            terminated = True
+
         terminated = terminated or reward == 1.0
+
         return reward, terminated
 
     def get_action_space(self):

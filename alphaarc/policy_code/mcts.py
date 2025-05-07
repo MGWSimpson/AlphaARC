@@ -4,6 +4,10 @@ import copy
 import random
 import numpy as np
 
+"""
+Think there is likely a bug which is not resetting the stuff.
+"""
+
 def uct_score(parent, child, EXPLORATION_C=1):
 
     if child.visit_count == 0:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from multiprocessing.synchronize import Event as EventType  # for type hints
 import torch.nn.functional as F
 
+from transformers import AutoTokenizer
 
 class ModelRequester():
     def __init__(self, gpu_request_q, encode_request_q):
@@ -50,6 +51,7 @@ class ModelResponder():
         self.model = model
         self.load_model_event = load_model_event
         self.time_out_time = 5
+        self.tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
 
     def _handle_encode_request(self, request): 
         task, task_length, connection = request
@@ -121,13 +123,16 @@ class ModelResponder():
             results = self.model.predict(task,state, state_attention_masks, task_attention_masks, past_key_values)
             
 
+
             
 
             for i, connections in enumerate(connections):
                 tuple_to_return = ()
                 for j in range(len(results)):
                     tuple_to_return = tuple_to_return + (results[j][i], )
-
+                actions, _ = tuple_to_return
+                print(actions.shape)
+                print(self.tokenizer.batch_decode(actions))
                 connections.send(tuple_to_return)
 
 

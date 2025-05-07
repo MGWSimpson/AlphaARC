@@ -16,7 +16,7 @@ from alphaarc.agent import Agent
 from alphaarc.env import BaseEnv, ExceededTokenBudget
 from alphaarc.configs import build_alpha_arc_config, build_network, build_env, build_policy, build_curriculum, build_trainer
 import os
-
+import pytorch_lightning as pl 
 from alphaarc.utils import load_key_split
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -40,7 +40,8 @@ def tree_worker_fn(config,
     try:
         while True: # general loop that just keeps us going
             task = mp_context.task_q.get()
-            try:
+            try:    
+
                     while True:             
                         env.set_task(task)
                         if task.is_eval:
@@ -48,9 +49,7 @@ def tree_worker_fn(config,
                         else:
                             result = agent.learn(env) 
 
-                        if result['solved'] == 1.0:
-                            print("ASKLIASDC")
-
+                        
                         mp_context.episode_results_q.put(result)
                         print(env.tokens_used)
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
@@ -122,6 +121,7 @@ def run_experiment( config: AlphaARCConfig,
 
 def main(): 
 
+    pl.seed_everything(0)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/base_config.yaml')
     args = parser.parse_args()
