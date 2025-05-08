@@ -118,7 +118,6 @@ class ModelResponder():
             state = pad_sequence(state, batch_first=True, padding_side='left')
             
             state_attention_masks = (state !=0).bool()
-
             task_attention_masks =  (task != 0).float()
 
             state_attention_masks = state_attention_masks.to(self.model.device)
@@ -135,14 +134,11 @@ class ModelResponder():
                 for j in range(len(results)):
                     tuple_to_return = tuple_to_return + (results[j][i], )
                 actions, _ = tuple_to_return
-                print(actions.shape)
-                print(self.tokenizer.batch_decode(actions))
+                # print(actions.shape)
+                # print(self.tokenizer.batch_decode(actions))
                 connections.send(tuple_to_return)
 
-            self.n_calls +=1
-
-            if self.n_calls == 6 :
-                exit( )
+           
 
 @dataclass
 class MultiProcessingContext:

@@ -69,9 +69,7 @@ class MCTSPolicy(BasePolicy):
 
 
         # basically generate this on the first try. Once you have generated it then just step through it. 
-        
         actions = self.root.child_actions
-        
         if actions is None:
             raise ExceededTokenBudget("Exceeded token budget, task unsolved!")
         

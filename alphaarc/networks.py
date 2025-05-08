@@ -143,14 +143,13 @@ class ActionNetwork(BaseNetwork):
         batch_size = task.shape[0] 
         
         
-        print("-----------")
-        print(self.tokenizer.batch_decode(state))
-        print("-----------")
+       
         outputs = self.model.generate(      input_ids=task,
                                             attention_mask=attention_mask,
                                             decoder_input_ids   = state,
                                             # decoder_attention_mask = state_attention_masks.bool(), 
-                                            temperature=self.temperature,
+                                            # temperature=self.temperature,
+                                            #num_beams=self.num_samples,
                                             do_sample=True,
                                             max_new_tokens=20,
                                             num_return_sequences=self.num_samples,

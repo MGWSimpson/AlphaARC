@@ -105,7 +105,6 @@ class MCTS:
             node.value_sum  += value
 
 
-    # TODO: whilst I still have 
     def run(self, model, state): 
         
         # initialize the tree.
