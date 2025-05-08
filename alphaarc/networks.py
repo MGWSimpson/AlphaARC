@@ -129,6 +129,7 @@ class ActionNetwork(BaseNetwork):
         super().__init__()
 
         self.model= T5ForConditionalGeneration.from_pretrained(model_path)
+        self.model.eval()
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.device = device
 
@@ -140,11 +141,15 @@ class ActionNetwork(BaseNetwork):
 
     def _compute_actions(self, task, state, state_attention_masks, attention_mask,  past_key_values):
         batch_size = task.shape[0] 
-
+        
+        
+        print("-----------")
+        print(self.tokenizer.batch_decode(state))
+        print("-----------")
         outputs = self.model.generate(      input_ids=task,
                                             attention_mask=attention_mask,
                                             decoder_input_ids   = state,
-                                            decoder_attention_mask = state_attention_masks.bool(), 
+                                            # decoder_attention_mask = state_attention_masks.bool(), 
                                             temperature=self.temperature,
                                             do_sample=True,
                                             max_new_tokens=20,
@@ -154,10 +159,11 @@ class ActionNetwork(BaseNetwork):
                                             stop_strings=self.stop_strings,
                                             tokenizer= self.tokenizer,
                                             use_cache=True,
-                                            output_hidden_states= True,
                                             )         
         
         actions = outputs.sequences.view(batch_size, self.num_samples, -1)
+        
+        
         logits = outputs.logits
         new_actions_shape = len(logits)
         actions = actions[:, : , -new_actions_shape:]

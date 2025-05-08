@@ -1,5 +1,5 @@
 import torch
-import torch.multiprocessing as mp
+import multiprocessing as mp
 import time
 from torch.nn.utils.rnn import pad_sequence
 from queue import Empty
@@ -52,6 +52,8 @@ class ModelResponder():
         self.load_model_event = load_model_event
         self.time_out_time = 5
         self.tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+
+        self.n_calls= 0
 
     def _handle_encode_request(self, request): 
         task, task_length, connection = request
@@ -111,11 +113,13 @@ class ModelResponder():
 
 
 
-            state_attention_masks = [torch.ones(x.shape) for x in state]
-            state_attention_masks = pad_sequence(state_attention_masks, batch_first=True)
-            state = pad_sequence(state, batch_first=True)
-            task_attention_masks =  (task != 0).bool()
+            
 
+            state = pad_sequence(state, batch_first=True, padding_side='left')
+            
+            state_attention_masks = (state !=0).bool()
+
+            task_attention_masks =  (task != 0).float()
 
             state_attention_masks = state_attention_masks.to(self.model.device)
             task_attention_masks = task_attention_masks.to(self.model.device) 
@@ -135,6 +139,10 @@ class ModelResponder():
                 print(self.tokenizer.batch_decode(actions))
                 connections.send(tuple_to_return)
 
+            self.n_calls +=1
+
+            if self.n_calls == 6 :
+                exit( )
 
 @dataclass
 class MultiProcessingContext:
