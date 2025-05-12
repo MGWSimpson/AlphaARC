@@ -113,7 +113,7 @@ class MCTS:
         
         root.expand(state, actions, child_key_values)
 
-        while self.env.is_below_token_budget():  
+        while self.env.is_below_token_budget(): 
             node = root
             search_path = [node]
             
@@ -134,5 +134,7 @@ class MCTS:
 
             # backprop
             self._backpropagate(search_path, value)
+        
+        print(self.env.tokens_used )
         return root
 

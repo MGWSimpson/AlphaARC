@@ -37,20 +37,18 @@ def tree_worker_fn(config,
     
 
 
+    
     try:
         while True: # general loop that just keeps us going
             task = mp_context.task_q.get()
             try:    
-
+                    env.set_task(task)
                     while True:             
-                        env.set_task(task)
                         if task.is_eval:
                             result = agent.evaluate(env)
                         else:
                             result = agent.learn(env) 
 
-
-                        print(result)            
                         mp_context.episode_results_q.put(result)
             
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
@@ -184,7 +182,7 @@ def main():
 
     [worker.kill() for worker in tree_workers]
     gpu_worker.kill()
-    # run.finish()
+    run.finish()
     print("workers done")
     print("all done!")
 
