@@ -43,12 +43,13 @@ def tree_worker_fn(config,
             task = mp_context.task_q.get()
             try:    
                     env.set_task(task)
-                    while True:             
+                    while env.is_below_token_budget():             
                         if task.is_eval:
                             result = agent.evaluate(env)
                         else:
                             result = agent.learn(env) 
 
+                        print(result)
                         mp_context.episode_results_q.put(result)
             
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.

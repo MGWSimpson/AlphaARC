@@ -60,6 +60,8 @@ class MCTSPolicy(BasePolicy):
         self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
         self.root = None
 
+    # what I could do is basically say, like rather than throwing the exception you just check if that is the last
+    # action which the program can construct and return if its terminated.
     def get_action(self, state): 
         
         if self.root is None: # generate the tree, save the root
@@ -70,15 +72,16 @@ class MCTSPolicy(BasePolicy):
 
         # basically generate this on the first try. Once you have generated it then just step through it. 
         actions = self.root.child_actions
-        if actions is None:
-            raise ExceededTokenBudget("Exceeded token budget, task unsolved!")
         
         action_probs = [v.visit_count for v in self.root.children]
         action_probs = action_probs / np.sum(action_probs)
-
         action, action_node = self.root.select_action(temperature=self.temperature)
         self.root = copy.deepcopy(action_node)
-        return action, actions, action_probs
+
+        
+        terminated = np.sum([v.visit_count for v in self.root.children]) == 0
+
+        return action, actions, action_probs, terminated
 
 
 class PolicyGuidedMCTSPolicy(BasePolicy):

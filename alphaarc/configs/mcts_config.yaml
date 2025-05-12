@@ -28,7 +28,7 @@ policy_config:
 
 alpha_arc_config:
   seed: 0
-  n_tree_workers: 6
+  n_tree_workers: 1
   train_every: 10
   n_episodes_per_task:  1
   trajectory_buffer_capacity: 100_000
@@ -45,7 +45,7 @@ env_config:
     max_task_len: 512
     max_state_len: 512
     n_actions:  5
-    token_budget: 50000
+    token_budget: 3000
 
 
 

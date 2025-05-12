@@ -132,9 +132,8 @@ class MCTS:
                 value = self._rollout(model, next_state, actions) # rollout
                 node.expand(next_state, actions,child_key_values)
 
-            # backprop
+            
             self._backpropagate(search_path, value)
         
-        print(self.env.tokens_used )
         return root
 

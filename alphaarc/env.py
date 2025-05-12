@@ -91,6 +91,7 @@ class LineLevelArcEnv (BaseEnv):
 
         if should_do_token_accounting: 
             self._add_and_check_token_budget(action)
+
         observation = np.concatenate((state, action))
         terminated = False
         reward = 0
@@ -149,7 +150,7 @@ class LineLevelArcEnv (BaseEnv):
             # candidate_program = program
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
             if output == "Invalid Input": 
-                terminated = True # TODO: change this back to false
+                terminated = True 
 
             if "O" in program:
                terminated = True
@@ -160,7 +161,6 @@ class LineLevelArcEnv (BaseEnv):
 
         if reward == len(self.initial_states):
             reward = 1.0 
-            print("SOLVING A TASK :D")
         else:
             reward = -1.0
 
