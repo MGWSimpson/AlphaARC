@@ -6,6 +6,7 @@ import numpy as np
 
 """
 Think there is likely a bug which is not resetting the stuff.
+Default MCTS got 1 task compared to 5 or 6 of sample + filter
 """
 
 def uct_score(parent, child, EXPLORATION_C=1):

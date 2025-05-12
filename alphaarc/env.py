@@ -116,6 +116,10 @@ class LineLevelArcEnv (BaseEnv):
         else:
             reward = -1.0
         
+        
+        if reward == 1.0:
+            print("VALID PROGRAM FOUND :D")
+
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
         observation = self._encode(program)
         observation = np.concatenate(([0], observation))
@@ -134,6 +138,29 @@ class LineLevelArcEnv (BaseEnv):
                 return False   
 
         return True
+    
+
+    def is_valid_syntax(self, program): 
+        program = self._decode(program)
+        for i, st in enumerate(self.initial_states):
+            candidate_program = append_return(program)
+            output = execute_candidate_program(program_string=candidate_program, program_input=st)
+            if output == "Invalid Input": 
+                return False   
+
+        return True
+    
+    def get_outputs(self, program): 
+        outputs = []
+        program = self._decode(program)
+        for i, st in enumerate(self.initial_states):
+            candidate_program = append_return(program)
+            output = execute_candidate_program(program_string=candidate_program, program_input=st)
+
+            outputs.append(output)
+
+        return outputs
+        
     
     def evaluate_program(self, program): 
         terminated = False
@@ -190,8 +217,7 @@ class LineLevelArcEnv (BaseEnv):
                 training_example["output"]
                 for training_example in task.training_examples[: self.n_examples]
         ]
-        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max-1, self.max_length)['input_ids'])
-        self.tokenized_task = np.concatenate((tokenized_task, self.new_line_arr))
+        tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
         self.task_length = len(tokenized_task)
         pad_length = (self.input_state_max *2 ) - len(tokenized_task)
         self.tokenized_task = np.pad(tokenized_task, (0, pad_length), constant_values=self.tokenizer.pad_token_id)

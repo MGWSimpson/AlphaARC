@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import json
 
-
+import copy
 
 def load_key_split(split_keys_path): 
     with open(split_keys_path) as fp:
@@ -75,3 +75,19 @@ def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, ma
     
     padded_actions = np.stack(padded_actions, axis=0)
     return padded_task, padded_state, padded_actions
+
+
+
+# TODO: function which relabels a task.
+def relabel_task(task, env,program): 
+    outputs = env.get_outputs(program)
+    new_task = copy.deepcopy(task)
+    
+    new_training_examples = []
+
+    for i, data in enumerate(new_task.training_examples):
+        data["output"] = outputs[i]
+        new_training_examples.append(data)
+
+    new_task.training_examples = new_training_examples
+    return new_task

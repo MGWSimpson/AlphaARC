@@ -21,7 +21,7 @@ from alphaarc.utils import load_key_split
 from alphaarc.logger import summarize_episode_list
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def tree_worker_fn(config, 
                    mp_context: MultiProcessingContext,
@@ -51,6 +51,7 @@ def tree_worker_fn(config,
                             result = agent.learn(env) 
 
                         
+                        print(result)
                         mp_context.episode_results_q.put(result)
             
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
@@ -100,7 +101,7 @@ def run_experiment( config: AlphaARCConfig,
 
     for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
-        for task in full_curriculum[:3]:
+        for task in full_curriculum:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
 
@@ -124,7 +125,7 @@ def run_experiment( config: AlphaARCConfig,
 
 def main(): 
 
-    pl.seed_everything(0)
+    pl.seed_everything(1)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/base_config.yaml')
     args = parser.parse_args()
