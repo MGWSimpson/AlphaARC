@@ -18,6 +18,7 @@ from alphaarc.configs import build_alpha_arc_config, build_network, build_env, b
 import os
 import pytorch_lightning as pl 
 from alphaarc.utils import load_key_split
+from alphaarc.logger import summarize_episode_list
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -49,7 +50,7 @@ def tree_worker_fn(config,
                         else:
                             result = agent.learn(env) 
 
-                        print(result)
+                        
                         mp_context.episode_results_q.put(result)
             
             except ExceededTokenBudget: # stops learning / evaluating if we exceeded the token budget.
@@ -99,7 +100,7 @@ def run_experiment( config: AlphaARCConfig,
 
     for meta_epoch in tqdm(range(config.n_epochs)):
         full_curriculum = curriculum.generate_curriculum()
-        for task in full_curriculum:
+        for task in full_curriculum[:3]:
             mp_context.task_q .put(task, block=True)
         mp_context.task_q.join()
 
@@ -109,8 +110,10 @@ def run_experiment( config: AlphaARCConfig,
         #                               replay_q=mp_context.replay_buffer_q
         #                               )
 
-        #episode_logs = drain_q(mp_context. episode_results_q)
-        
+        episode_logs = drain_q(mp_context. episode_results_q)
+        summarized_log = summarize_episode_list(episode_logs)
+        print(episode_logs)
+        print(summarized_log)
         #train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)
         #mp_context.load_model_event.set()
         #run_log = make_train_only_run_log(train_log, episode_logs)

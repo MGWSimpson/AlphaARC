@@ -69,6 +69,15 @@ def make_episode_log(task_id):
 
 
 
+def summarize_episode_list(episode_list): 
+    solved_tasks = []
+
+    for episode in episode_list:
+        if episode['solved'] != 0.0:
+            solved_tasks.append(episode['task_id'])
+            
+
+    return list(set(solved_tasks))
 def summarize_episodes(episode_logs):
     solve_rate = sum([x['solved'] for x in episode_logs]) / len(episode_logs)
     return solve_rate
