@@ -19,6 +19,36 @@ class BaseTrainer:
     def train(self, model, trajectory_buffer, supervised_buffer):
         raise NotImplementedError
 
+    def train(self, model, replay_buffer): 
+        raise NotImplementedError
+
+class SampleFilterTrainer(BaseTrainer): 
+    
+    def __init__(self, lr, model, n_epochs=1, batch_size=8):
+        super().__init__()
+
+
+        self.scaler = GradScaler()
+        self.optimizer = optim.AdamW(model.parameters(), lr=lr)
+        self.n_epochs = n_epochs
+        self.batch_size = 4
+
+    def train(self, model, replay_buffer): 
+        dataloader = DataLoader(replay_buffer, batch_size=self.batch_size, collate_fn=ReplayBuffer.collate_fn)
+
+        for epoch in tqdm(range(self.n_epochs)):
+            losses = []
+            for input, target in tqdm( dataloader):
+                self.optimizer.zero_grad()
+
+                with autocast(device_type='cuda', dtype=torch.float16):
+                    loss = model(input_ids=input.to(model.device),labels=target.to(model.device)).loss
+
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                losses.append(loss.detach().item())
+            
 
 
 

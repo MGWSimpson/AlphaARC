@@ -10,6 +10,8 @@ from alphaarc.env import BaseEnv, ExceededTokenBudget
 from alphaarc.buffers import ReplayBuffer
 from alphaarc.utils import relabel_task
 from alphaarc.utils import load_key_split
+from alphaarc.train import BaseTrainer, SampleFilterTrainer
+
 import time
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -131,13 +133,12 @@ class SampleAndFilterSolver:
 
 
 
-def train(solver, replay_buffer): 
-    pass
 
-
-def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env, replay_buffer): 
+def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curriculum, env, replay_buffer, trainer: BaseTrainer): 
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
+
+    
     for epoch in range(n_epochs):
         for i in tqdm(range(0, len (full_curriculum), batch_size)):
             batch = full_curriculum[i:i+batch_size]
@@ -147,8 +148,7 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
             print(len(solved_task_ids))
             print(solved_task_ids)
 
-        # perform the training here.
-        train(solver, replay_buffer)
+        trainer.train(solver.model, replay_buffer)
        
 
 # collect arguments and run experiment
@@ -165,7 +165,9 @@ def main():
     task_key_split = load_key_split('data/split_keys.json')
     curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
-    print(run_experiment(config['n_epochs'], config['batch_size'], solver, curriculum, env, replay_buffer ))
+    
+    trainer = SampleFilterTrainer( 0.00005, solver.model)
+    print(run_experiment(config['n_epochs'], config['batch_size'], solver, curriculum, env, replay_buffer, trainer ))
 
 if __name__ == "__main__":
     main()
