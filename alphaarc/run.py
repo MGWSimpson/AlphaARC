@@ -111,6 +111,7 @@ def run_experiment( config: AlphaARCConfig,
 
         episode_logs = drain_q(mp_context. episode_results_q)
         summarized_log = summarize_episode_list(episode_logs)
+        
         print(episode_logs)
         print(summarized_log)
         #train_log = trainer.train(model=model, trajectory_buffer=trajectory_buffer, supervised_buffer=replay_buffer)

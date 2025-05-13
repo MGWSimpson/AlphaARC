@@ -5,7 +5,7 @@ model_config:
     tokenizer_path:  'Salesforce/codet5p-220m'
     temperature: 1
     device: 'cuda'
-    num_samples: 12
+    num_samples: 96
 
 
 
@@ -34,7 +34,7 @@ alpha_arc_config:
   trajectory_buffer_capacity: 100_000
   replay_buffer_capacity: 100_000
   n_epochs: 1
-  n_actions:  12
+  n_actions:  96
 
 
 env_config:
@@ -44,7 +44,7 @@ env_config:
     n_examples:  10
     max_task_len: 512
     max_state_len: 512
-    n_actions:  12
+    n_actions:  96
     token_budget: 50000
 
 
