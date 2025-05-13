@@ -10,10 +10,14 @@ class Oracle:
 
 
     def run(self, model, state): 
-        actions, action_probs, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
-        action = np.random.choice(actions)
-
-        print(actions)
+        actions, child_key_values = model.predict(self.encoder_output, state, past_key_values=None)
+        actions_decoded = self.env.tokenizer.batch_decode(actions, skip_special_tokens=True)
+        action = np.array([0])
+        decoded_action = None
+        for i, act in enumerate(actions_decoded):
+            if act in self.env.task.program_lines:
+                action = actions[i]
+                decoded_action = act
 
         return action, actions
         

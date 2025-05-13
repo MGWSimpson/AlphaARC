@@ -83,6 +83,11 @@ class LineLevelArcEnv (BaseEnv):
         return self.tokenizer( program, add_special_tokens=False, return_tensors='np')['input_ids'].squeeze()
 
 
+    def _if_program_returns(self, string): 
+        str_arr = string.split("=")
+        lhs = str_arr[0]
+        return "O" in lhs
+
     # action = new program tokens
     # state =  previous program tokens 
     # note that we should only not do token accounting when you have already generated the actions (as in the case of search algs results)
@@ -96,7 +101,7 @@ class LineLevelArcEnv (BaseEnv):
         terminated = False
         reward = 0
         program = self._decode(observation)
-        
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -104,7 +109,7 @@ class LineLevelArcEnv (BaseEnv):
             if output == "Invalid Input": 
                 terminated = True # TODO: change this back to false
 
-            if "O" in program:
+            if self._if_program_returns(program): 
                terminated = True
 
             if output == self.goal_states[i]:
@@ -116,9 +121,6 @@ class LineLevelArcEnv (BaseEnv):
         else:
             reward = -1.0
         
-        
-        if reward == 1.0:
-            print("VALID PROGRAM FOUND :D")
 
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
         observation = self._encode(program)

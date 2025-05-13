@@ -152,5 +152,5 @@ class OraclePolicy(BasePolicy):
         self.oracle = Oracle(1000, self.env, self.encoder_output)
         action, actions = self.oracle.run( self.model, state)
         action_probs = np.zeros_like(actions)
-        terminated = action == [0]
+        terminated = np.array_equal(action, np.array([0]))
         return action, actions, action_probs, terminated
