@@ -6,6 +6,8 @@ from alphaarc.env import ExceededTokenBudget
 import numpy as np
 import copy
 
+from policy_code.oracle import Oracle
+
 
 """
 There is a decision here on whether or not I should store the best program.
@@ -130,3 +132,25 @@ class AlphaZeroPolicy(BasePolicy):
         action_probs = action_probs / np.sum(action_probs)
         action = root.select_action(temperature=self.temperature)
         return action, actions, action_probs
+
+
+
+class OraclePolicy(BasePolicy): 
+    def __init__(self, model, env, temperature, n_simulations):
+        super().__init__()
+        self.model = model
+        self.env = env 
+        self.temperature = temperature
+        self.n_simulations = n_simulations    
+    
+
+    def policy_init(self):
+        self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
+
+        
+    def get_action(self, state): 
+        self.oracle = Oracle(1000, self.env, self.encoder_output)
+        action, actions = self.oracle.run( self.model, state)
+        action_probs = np.zeros_like(actions)
+        terminated = action == [0]
+        return action, actions, action_probs, terminated

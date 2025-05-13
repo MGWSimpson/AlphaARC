@@ -21,7 +21,7 @@ from alphaarc.utils import load_key_split
 from alphaarc.logger import summarize_episode_list
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 def tree_worker_fn(config, 
                    mp_context: MultiProcessingContext,
