@@ -19,17 +19,15 @@ class Agent():
         state = env.reset()
         train_examples = []
         self.policy.policy_init()
-
+        depth = 0
         while not terminated:
             action, actions, action_probs, no_more_program = self.policy.get_action(state)
             train_examples.append((state, actions, action_probs))
-            
-
-            
 
             state, reward, terminated = env.step(action=action, state=state, should_do_token_accounting=False)
 
             terminated = terminated or no_more_program
+            depth +=1
 
             if terminated:
                 ret = []

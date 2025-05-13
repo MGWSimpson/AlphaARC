@@ -122,6 +122,10 @@ class LineLevelArcEnv (BaseEnv):
             reward = -1.0
         
 
+        if reward == 1.0:
+            print("task solved!")
+
+
         terminated = terminated or reward == 1.0 # or len(program.split("\n")) > 10
         observation = self._encode(program)
         observation = np.concatenate(([0], observation))

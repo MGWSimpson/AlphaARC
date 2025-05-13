@@ -142,15 +142,24 @@ class OraclePolicy(BasePolicy):
         self.env = env 
         self.temperature = temperature
         self.n_simulations = n_simulations    
-    
+
+        self.depth = 0
 
     def policy_init(self):
         self.encoder_output = self.model.encode(self.env.tokenized_task, self.env.task_length).squeeze()
+        self.depth = 0
 
         
     def get_action(self, state): 
         self.oracle = Oracle(1000, self.env, self.encoder_output)
         action, actions = self.oracle.run( self.model, state)
         action_probs = np.zeros_like(actions)
-        terminated = np.array_equal(action, np.array([0]))
+        terminated = action is None
+
+        self.depth +=1 
+        if terminated:
+            print(self.depth)
+            print(len(self.env.task.program_lines.split("\n")))
+            raise ExceededTokenBudget("Hello!")
+    
         return action, actions, action_probs, terminated
