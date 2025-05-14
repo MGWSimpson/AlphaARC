@@ -107,7 +107,7 @@ class ReplayBuffer(Dataset):
         self.task_lengths = np.empty((self.capacity), dtype=np.int16)
         self.program_lengths = np.empty((self.capacity), dtype=np.int16)
 
-        self.pad_token = 0
+        self.pad_token = -1
 
     def __len__(self):
         return self.idx 
@@ -119,13 +119,13 @@ class ReplayBuffer(Dataset):
     
 
     @staticmethod
-    def collate_fn(batch, pad_token=0):
+    def collate_fn(batch, pad_token=-1):
         tasks, states = zip(*batch)
-        longest_task = max([len(x) for x in tasks])
+        """longest_task = max([len(x) for x in tasks])
         longest_program = max([len(x) for x in states])
         padded_tasks = [np.pad(x, pad_width=(0, longest_task - x.shape[-1]), mode='constant', constant_values=pad_token) for x in tasks ]
-        padded_states = [np.pad(x, pad_width=(0, longest_program - x.shape[-1]), mode='constant', constant_values=pad_token) for x in states]
-        return torch.stack([torch.tensor(x) for x in padded_tasks]), torch.stack([torch.tensor(x) for x in padded_states])
+        padded_states = [np.pad(x, pad_width=(0, longest_program - x.shape[-1]), mode='constant', constant_values=pad_token) for x in states]"""
+        return torch.stack([torch.tensor(x) for x in tasks]), torch.stack([torch.tensor(x) for x in states])
 
     def _pad(self, task, program):
         padded_program = np.pad(program, pad_width=(0, self.max_state_len - program.shape[-1]), mode='constant', constant_values=self.pad_token)

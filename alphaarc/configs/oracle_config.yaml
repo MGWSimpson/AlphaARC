@@ -1,11 +1,11 @@
 model_config:
   type: ActionNetwork
   params:
-    model_path: 'finetune/2025-05-05_23-47-18/model'
+    model_path: 'epoch_4_save'
     tokenizer_path:  'Salesforce/codet5p-220m'
     temperature: 1
     device: 'cuda'
-    num_samples: 96
+    num_samples: 24
 
 
 
@@ -34,7 +34,7 @@ alpha_arc_config:
   trajectory_buffer_capacity: 100_000
   replay_buffer_capacity: 100_000
   n_epochs: 1
-  n_actions:  96
+  n_actions:  24
 
 
 env_config:
@@ -44,7 +44,7 @@ env_config:
     n_examples:  10
     max_task_len: 512
     max_state_len: 512
-    n_actions:  96
+    n_actions:  24
     token_budget: 50000
 
 

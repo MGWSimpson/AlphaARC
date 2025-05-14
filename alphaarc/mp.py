@@ -134,8 +134,8 @@ class ModelResponder():
                 for j in range(len(results)):
                     tuple_to_return = tuple_to_return + (results[j][i], )
                 actions, _ = tuple_to_return
-                # print(actions.shape)
-                # print(self.tokenizer.batch_decode(actions))
+                #print(actions.shape)
+                print(self.tokenizer.batch_decode(actions))
                 connections.send(tuple_to_return)
 
            

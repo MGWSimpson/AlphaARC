@@ -138,7 +138,6 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
 
-    
     for epoch in range(n_epochs):
         for i in tqdm(range(0, len (full_curriculum), batch_size)):
             batch = full_curriculum[i:i+batch_size]
@@ -149,7 +148,11 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
             print(solved_task_ids)
 
         trainer.train(solver.model, replay_buffer)
-       
+        solver.model.save_pretrained(f"epoch_{epoch}_save")
+        np.save('state_buffer', replay_buffer.states)
+        np.save('task_buffer', replay_buffer. tasks)
+        np.save('task_lengths', replay_buffer.task_lengths)
+        np.save('program_lengths', replay_buffer. program_lengths)
 
 # collect arguments and run experiment
 def main(): 

@@ -31,7 +31,7 @@ class SampleFilterTrainer(BaseTrainer):
         self.scaler = GradScaler()
         self.optimizer = optim.AdamW(model.parameters(), lr=lr)
         self.n_epochs = n_epochs
-        self.batch_size = 4
+        self.batch_size = 1
 
     def train(self, model, replay_buffer): 
         dataloader = DataLoader(replay_buffer, batch_size=self.batch_size, collate_fn=ReplayBuffer.collate_fn)
@@ -41,6 +41,10 @@ class SampleFilterTrainer(BaseTrainer):
             for input, target in tqdm( dataloader):
                 self.optimizer.zero_grad()
 
+                target[target == 0] = -1
+                target[:, 0] = 0
+
+                
                 with autocast(device_type='cuda', dtype=torch.float16):
                     loss = model(input_ids=input.to(model.device),labels=target.to(model.device)).loss
 

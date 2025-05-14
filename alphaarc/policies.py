@@ -158,8 +158,9 @@ class OraclePolicy(BasePolicy):
 
         self.depth +=1 
         if terminated:
-            print(self.depth)
-            print(len(self.env.task.program_lines.split("\n")))
             raise ExceededTokenBudget("Hello!")
-    
+
+
+        
+
         return action, actions, action_probs, terminated
