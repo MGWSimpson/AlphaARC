@@ -6,6 +6,7 @@ from alphaarc.env import BaseEnv
 from alphaarc.policy.tokenize import tokenize_task
 import numpy as np
 from tqdm import tqdm
+from grpo import GRPOTrainer
 import torch 
 
 from transformers import T5ForConditionalGeneration, AutoTokenizer
@@ -20,6 +21,8 @@ Algorithm outline:
 -> collect a handful of samples on a particular task
 -> anything which is a valid task, add it to the replay buffer 
 -> after i collected samples 
+
+-> likely something I can do where it retrains on successes too.
 """
 
 def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
@@ -28,15 +31,14 @@ def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_
 
 
 
-def evaluate_solutions(answers, task, env: BaseEnv, replay_buffer: ReplayBuffer, tokenizer, model):
+def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer, model):
         for i in range(answers.shape[0]):
             program = answers[i]
             reward, terminated = env.evaluate_program(program, should_token_account=False)
             if env.is_valid_syntax(program):
                 new_task = relabel_task(task, env,program)
-                new_task = encode_task(task, tokenizer, model)
-                program = program.detach().cpu().numpy()
-                replay_buffer.add_program_and_task(new_task, program)
+                relabelled_tasks.extend(new_task)
+
             if reward == 1:
                 return True
 
@@ -52,45 +54,40 @@ def generate_answers(model, tokenized_task, max_new_length=512, num_return_seque
     return answers
 
 
-def try_solve_task(task, env, replay_buffer,  tokenizer, model): 
+def try_solve_task(task, env, relabelled_tasks,  tokenizer, model): 
     env.set_task(task)
     tokenized_task = torch.tensor(encode_task(task, tokenizer, model)).to('cuda')
     answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
-    solved = evaluate_solutions(answers, task, env, replay_buffer, tokenizer, model)
+    solved = evaluate_solutions(answers, task, env, relabelled_tasks
+                                , tokenizer, model)
     return solved
 
 
+
+   
 """
-will perform grpo training! 
-    -> do the following: 
-    -> basically rather than storing the replay buffer, its more like storing a task buffer. So I change it to that. 
-    -> This is because I still need to generate new tasks basically.
-    -> 
-"""
-def grpo_train(model, task_buffer):
-    for task in task_buffer: 
-        pass
-
-        
-
-    
-
+So this is where im at. basically i need to get a list of the relabelled tasks rather than the buffer
+""" 
 def run_experiment(n_meta_epochs, 
                    curriculum,
                    env,
                    replay_buffer, 
                    tokenizer,
-                   model):
+                   model,
+                   grpo_trainer: GRPOTrainer):
      
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
+    relabelled_tasks = [] 
+
+
     for epoch in range(n_meta_epochs):
         for i in tqdm(range(len(full_curriculum))):
             task = full_curriculum[i]
-            if try_solve_task(task, env, replay_buffer, tokenizer, model):
+            if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
                 solved_task_ids.extend(task.task_key)
         
-        grpo_train()
+        grpo_trainer.train(relabelled_tasks)
             
         
 def main(): 
@@ -110,12 +107,19 @@ def main():
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
     tokenizer = AutoTokenizer.from_pretrained(config['tokenizer_path'])
 
+
+    grpo_trainer = GRPOTrainer(T5ForConditionalGeneration.from_pretrained(config['model_path']), 
+                               model,
+                               tokenizer,
+                               env)
+
     run_experiment(n_meta_epochs=1,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
                    tokenizer=tokenizer,
-                   model=model)
+                   model=model,
+                   grpo_trainer=grpo_trainer)
 
 
 
