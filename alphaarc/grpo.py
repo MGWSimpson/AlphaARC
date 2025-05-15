@@ -50,28 +50,44 @@ class GRPOTrainer:
         self.beta = beta
 
 
+    """
+    Need to change this over to be multiple decoder input ids
+    """
     def _compute_reward(self, task, decoder_input_ids): 
-        pass
-
-    def _compute_logits(self, model): 
-        pass
+        self.env.set_task(task)
+        rewards = [self.env.evaluate_program(x, should_token_account=False)[0] for x in decoder_input_ids]
+        return torch.tensor(rewards, dtype=torch.float, device='cuda')
+        
+    def _compute_logits(self, input_ids, decoder_input_ids, model): 
+        logits = model(input_ids=input_ids.repeat(self.num_gen_per_group, 1), decoder_input_ids=decoder_input_ids).logits
+        return logits
 
     
-    def _compute_per_token_log_probs(self,): 
-        pass
+    def _compute_per_token_log_probs(self,logits, decoder_input_ids): 
+        per_token_log_probs = []
+        for logits_row, input_ids_row in zip(logits, decoder_input_ids): 
+            log_probs = logits_row.log_softmax(dim=-1)
+            token_log_prob = torch.gather(log_probs, dim=1, index=input_ids_row.unsqueeze(1)).squeeze(1)
+            per_token_log_probs.append(token_log_prob)
+
+        return torch.stack(per_token_log_probs)
+
 
     # returns the loss
     def _grpo_step(self, input_ids, decoder_input_ids, rewards): 
         
 
+
         # get the logits :D 
-        policy_logits =  self._compute_logits(self.policy_model )
-        ref_logits = self._compute_logits(self.ref_model)
+        policy_logits =  self._compute_logits(input_ids, decoder_input_ids, self.policy_model )
+        ref_logits = self._compute_logits(input_ids, decoder_input_ids, self.ref_model)
+
 
 
         # compute the log probs
-        per_token_log_probs = self._compute_per_token_log_probs()
-        ref_per_token_log_probs = self._compute_per_token_log_probs()
+        per_token_log_probs = self._compute_per_token_log_probs(policy_logits, decoder_input_ids)
+        ref_per_token_log_probs = self._compute_per_token_log_probs(ref_logits, decoder_input_ids)
+
 
 
         # kl
@@ -95,13 +111,10 @@ class GRPOTrainer:
 
     # todo: given a task, slip in the hindsight relabelled one.
     def _generate_completions(self, batch): 
-
         task = encode_task(batch[0], self.tokenizer, self. policy_model)
         input_ids = torch.tensor(task, device='cuda').unsqueeze(0)
-        decoder_input_ids = self.policy_model.generate(input_ids) # do something here lets not worry for now
-        
-        print(decoder_input_ids)
-        rewards = None
+        decoder_input_ids = self.policy_model.generate(input_ids, do_sample=True, num_return_sequences=self.num_gen_per_group) # do something here lets not worry for now
+        rewards = self._compute_reward( batch[0], decoder_input_ids=decoder_input_ids) # will have to make this 
         return input_ids, decoder_input_ids, rewards 
     
         

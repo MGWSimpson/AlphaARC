@@ -195,15 +195,14 @@ class LineLevelArcEnv (BaseEnv):
         if reward == len(self.initial_states):
             reward = 1.0 
         else:
-            reward = -1.0
+            reward = 0
 
         
         if len(program) > self.max_length:
             terminated = True
 
-        if reward == 1.0:
-            print("SOLVED TASK!")
-            
+        
+        
         terminated = terminated or reward == 1.0
 
         return reward, terminated
