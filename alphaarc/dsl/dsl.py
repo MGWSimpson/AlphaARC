@@ -911,6 +911,8 @@ def palette(
     element: Element
 ) -> IntegerSet:
     """ colors occurring in object or grid """
+    
+    print(element)
     if isinstance(element, tuple):
         return frozenset({v for r in element for v in r})
     return frozenset({v for v, _ in element})

@@ -180,7 +180,7 @@ if __name__ == "__main__":
     ref_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
     policy_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
     
-    env = LineLevelArcEnv('Salesforce/codet5p-220m', 10, 1024, 1024, 5, 50000)
+    env = LineLevelArcEnv('Salesforce/codet5p-220m', 10, 512, 512, 5, 50000)
     ref_model.to('cuda')
     policy_model.to('cuda')
 

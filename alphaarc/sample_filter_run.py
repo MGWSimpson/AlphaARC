@@ -32,7 +32,6 @@ At a budget of 50k tokens, it scored 5/89
 ['ac0a08a4', 'd9fac9be', '4258a5f9', '6fa7a44f', '6150a2bd']
 """
 
-# TODO: add hindsight relabel.
 # 50k tokens per task, but rather than it working on the task thing, we do like 10k then move on etc
         # -> can just implement this with like the meta iterations and reducing the budgets. 
 # if its a syntactically correct program, then we relabel it to somethign else.
@@ -115,21 +114,19 @@ class SampleAndFilterSolver:
 
 
     def solve_task(self, task, env, replay_buffer): 
-        try:
+        #try:
             encoder_outputs =  torch.tensor(encode_task(task, self.tokenizer, self.model)).to('cuda')
             env.set_task(task)
 
-            while True:
-                answers = self._generate_answers(encoder_outputs)
-                solved = self.evaluate_solutions(answers, task, env, replay_buffer)
+            answers = self._generate_answers(encoder_outputs)
+            solved = self.evaluate_solutions(answers, task, env, replay_buffer)
                 
-                if solved:
-                    return [task. task_key] 
+            if solved:
+                return [task. task_key] 
                 
-                print(f"budget left: {env.token_budget - env.tokens_used}")
-        except ExceededTokenBudget:
-            print("exceeded token budget!")
-            return [] 
+        #except ExceededTokenBudget:
+        #    print("exceeded token budget!")
+        #    return [] 
 
 
 

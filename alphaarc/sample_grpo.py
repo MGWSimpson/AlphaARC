@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from grpo import GRPOTrainer
 import torch 
+import pytorch_lightning as pl
 
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
@@ -22,7 +23,7 @@ Algorithm outline:
 -> anything which is a valid task, add it to the replay buffer 
 -> after i collected samples 
 
--> likely something I can do where it retrains on successes too.
+-> likely something I can do where it retrains on successes too....
 """
 
 def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
@@ -37,14 +38,14 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
             reward, terminated = env.evaluate_program(program, should_token_account=False)
             if env.is_valid_syntax(program):
                 new_task = relabel_task(task, env,program)
-                relabelled_tasks.extend(new_task)
+                relabelled_tasks.append(new_task)
 
             if reward == 1:
                 return True
 
 
 
-def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=1 ):
+def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=12 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length, 
                                 num_return_sequences=num_return_sequences,
@@ -78,15 +79,17 @@ def run_experiment(n_meta_epochs,
      
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
+    full_curriculum = full_curriculum
     relabelled_tasks = [] 
 
 
-    for epoch in range(n_meta_epochs):
+    for epoch in tqdm(range(n_meta_epochs)):
         for i in tqdm(range(len(full_curriculum))):
             task = full_curriculum[i]
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
-                solved_task_ids.extend(task.task_key)
-        
+                solved_task_ids.append(task.task_key)
+                print(solved_task_ids)
+
         grpo_trainer.train(relabelled_tasks)
             
         
@@ -108,12 +111,13 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(config['tokenizer_path'])
 
 
-    grpo_trainer = GRPOTrainer(T5ForConditionalGeneration.from_pretrained(config['model_path']), 
+    grpo_trainer = GRPOTrainer(T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda'), 
                                model,
                                tokenizer,
                                env)
 
-    run_experiment(n_meta_epochs=1,
+    pl.seed_everything(0)
+    run_experiment(n_meta_epochs=100,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
