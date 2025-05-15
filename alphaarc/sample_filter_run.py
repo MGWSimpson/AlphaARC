@@ -148,11 +148,11 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
             print(solved_task_ids)
 
         trainer.train(solver.model, replay_buffer)
-        solver.model.save_pretrained(f"epoch_{epoch}_save")
+        """ solver.model.save_pretrained(f"epoch_{epoch}_save")
         np.save('state_buffer', replay_buffer.states)
         np.save('task_buffer', replay_buffer. tasks)
         np.save('task_lengths', replay_buffer.task_lengths)
-        np.save('program_lengths', replay_buffer. program_lengths)
+        np.save('program_lengths', replay_buffer. program_lengths)"""
 
 # collect arguments and run experiment
 def main(): 

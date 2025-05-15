@@ -168,15 +168,15 @@ class LineLevelArcEnv (BaseEnv):
         return outputs
         
     
-    def evaluate_program(self, program): 
+    def evaluate_program(self, program, should_token_account=True): 
         terminated = False
         reward = 0
         # print(program)
         program = self._decode(program)
 
         
-
-        self._add_and_check_token_budget(program)
+        if should_token_account:
+            self._add_and_check_token_budget(program)
 
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
