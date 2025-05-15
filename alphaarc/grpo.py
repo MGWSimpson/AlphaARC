@@ -1,5 +1,8 @@
 """
 minimal implementation of GRPO. Probably not super efficient but hacked together for my need.
+
+note: for now just doing one task at a time, will batchify later (removes the padding issue :D )
+
 reference implementation: https://github.com/lsdefine/simple_GRPO/
 """
 from transformers import AutoTokenizer, T5ForConditionalGeneration
@@ -7,13 +10,24 @@ from torch.optim import AdamW
 import random
 from tqdm import tqdm
 import torch
+from alphaarc.task import Task
+import numpy as np
+from alphaarc.policy.tokenize import tokenize_task
+from alphaarc.env import LineLevelArcEnv, BaseEnv
+
+
+def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
+    tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
+    return tokenized_task
+
 
 class GRPOTrainer:
 
     def __init__(self,
                  ref_model: T5ForConditionalGeneration,
                  policy_model: T5ForConditionalGeneration,
-                 tokenizer, 
+                 tokenizer: AutoTokenizer,
+                 env: BaseEnv,
                  num_gen_per_group=8,
                  batch_size=2, 
                  lr=1e-6,
@@ -25,10 +39,19 @@ class GRPOTrainer:
         self.ref_model = ref_model
         self.ref_model.requires_grad_(False)
         
+
         self.policy_model = policy_model
-        self.num_gen_per_group = num_gen_per_group # we will sneak in the correct answer !
+        self.env = env
+        
+
+        # grpo params
+        self.num_gen_per_group = num_gen_per_group # we will sneak in the correct answer ! -> hindsight stuff
+        self.batch_size = batch_size
+        self.beta = beta
 
 
+    def _compute_reward(self, task, decoder_input_ids): 
+        pass
 
     def _compute_logits(self, model): 
         pass
@@ -70,9 +93,14 @@ class GRPOTrainer:
         loss = per_token_loss.mean()
         return loss
 
-    def _generate_completions(self, batch):
-        input_ids = None # do something here to the batch, oh and slip in the right answers
+    # todo: given a task, slip in the hindsight relabelled one.
+    def _generate_completions(self, batch): 
+
+        task = encode_task(batch[0], self.tokenizer, self. policy_model)
+        input_ids = torch.tensor(task, device='cuda').unsqueeze(0)
         decoder_input_ids = self.policy_model.generate(input_ids) # do something here lets not worry for now
+        
+        print(decoder_input_ids)
         rewards = None
         return input_ids, decoder_input_ids, rewards 
     
@@ -80,7 +108,10 @@ class GRPOTrainer:
 
     # pass in a list of hindsight relabelled tasks
     def train(self, tasks):
-        tasks = random.shuffle(tasks)
+        
+        # shuffle the order of the tasks.
+        random.shuffle(tasks)
+        
         for i in tqdm(range(0, len (tasks), self.batch_size)):
             self.optimizer.zero_grad()
             batch = tasks[i:i+self.batch_size]
@@ -101,6 +132,25 @@ then i compute the log probs of the main model.
 then there is some 
 
 this is why they have the prompt length, because it is removing the prompt from the logit calcs.
-
-
 """
+
+
+
+if __name__ == "__main__":
+    task = Task.from_json("data/training/0a938d79.json")
+
+    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    ref_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
+    policy_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
+    
+    env = LineLevelArcEnv('Salesforce/codet5p-220m', 10, 1024, 1024, 5, 50000)
+    ref_model.to('cuda')
+    policy_model.to('cuda')
+
+    trainer = GRPOTrainer(ref_model, 
+                          policy_model, 
+                          tokenizer,
+                          env)
+    
+    task_array = [task]
+    trainer.train(task_array)
