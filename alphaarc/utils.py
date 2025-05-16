@@ -79,9 +79,7 @@ def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, ma
     return padded_task, padded_state, padded_actions
 
 
-"""
-clearly its something with how im getting the outputs
-"""
+# somehow need to get 
 def relabel_task(task, env,program, program_string): 
     outputs = env.get_outputs(program)
 
@@ -92,6 +90,6 @@ def relabel_task(task, env,program, program_string):
         data["output"] = outputs[i]
         new_training_examples.append(data)
     
-    ret_task = Task(program_string, new_training_examples, task.test_examples, task.task_key, task.task_key, extra_info=task.extra_info)
+    ret_task = Task(program_string, new_training_examples, [], task.task_key, task.task_key, extra_info=task.extra_info)
 
     return ret_task

@@ -207,6 +207,8 @@ class LineLevelArcEnv (BaseEnv):
         else:
             reward = 0
 
+
+
         
         if len(program) > self.max_length:
             terminated = True
@@ -235,6 +237,15 @@ class LineLevelArcEnv (BaseEnv):
                 training_example["output"]
                 for training_example in task.training_examples[: self.n_examples]
         ]
+
+        self.initial_states.extend([
+                training_example["input"]
+                for training_example in task.test_examples
+        ])
+        self.goal_states.extend([
+                training_example["output"]
+                for training_example in task.test_examples
+        ])
         tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
         self.task_length = len(tokenized_task)
         pad_length = (self.input_state_max *2 ) - len(tokenized_task)

@@ -9,7 +9,8 @@ from tqdm import tqdm
 from grpo import GRPOTrainer
 import torch 
 import pytorch_lightning as pl
-
+from collections import defaultdict
+import json
 from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 import os
@@ -32,7 +33,11 @@ def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_
 
 
 
-def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer, model):
+def save_answer(answer_dict):
+    with open("data.jsonl", "w") as f:
+        json.dump(answer_dict, f)
+
+def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer, model, answer_dict):
         for i in range(answers.shape[0]):
             program = answers[i]
             reward, terminated = env.evaluate_program(program, should_token_account=False)
@@ -41,7 +46,8 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
                 relabelled_tasks.append(new_task)
 
             if reward == 1:
-                print(program)
+                answer_dict[task.task_key].append(tokenizer.decode(program, skip_special_tokens=True, clean_up_tokenization_spaces=True))
+                save_answer(answer_dict)
                 return True
 
         return False
@@ -57,12 +63,12 @@ def generate_answers(model, tokenized_task, max_new_length=512, num_return_seque
     return answers
 
 
-def try_solve_task(task, env, relabelled_tasks,  tokenizer, model): 
+def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict): 
     env.set_task(task)
     tokenized_task = torch.tensor(encode_task(task, tokenizer, model)).to('cuda')
     answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     solved = evaluate_solutions(answers, task, env, relabelled_tasks
-                                , tokenizer, model)
+                                , tokenizer, model, answer_dict)
     return solved
 
 
@@ -84,11 +90,12 @@ def run_experiment(n_meta_epochs,
     full_curriculum = full_curriculum
     relabelled_tasks = [] 
 
+    answers_dict = defaultdict(list)
 
     for epoch in tqdm(range(n_meta_epochs)):
         for i in tqdm(range(len(full_curriculum))):
             task = full_curriculum[i]
-            if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
+            if try_solve_task(task, env, relabelled_tasks, tokenizer, model, answers_dict):
                 solved_task_ids.append(task.task_key)
                 print(f"solved: {len(set(solved_task_ids))}")
                 print(set(solved_task_ids))
@@ -106,8 +113,8 @@ def main():
     replay_buffer = ReplayBuffer()
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
-    # task_key_split = load_key_split('data/split_keys.json')
-    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    #task_key_split = load_key_split('data/split_keys.json')
+    #curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')

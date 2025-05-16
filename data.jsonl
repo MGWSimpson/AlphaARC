@@ -1,0 +1,1 @@
+{"070dd51e": ["x1 = partition(I)\nx2 = fork(recolor, color, backdrop)\nx3 = apply(x2, x1)\nx4 = mfilter(x3, hline)\nx5 = mfilter(x3, vline)\nx6 = underpaint(I, x4)\nO = paint(x6, x5)"]}
