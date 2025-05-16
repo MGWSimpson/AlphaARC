@@ -89,7 +89,7 @@ def run_experiment(n_meta_epochs,
             task = full_curriculum[i]
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
                 solved_task_ids.append(task.task_key)
-                print(solved_task_ids)
+                print(len(set(solved_task_ids)))
                 
 
         grpo_trainer.train(relabelled_tasks)
