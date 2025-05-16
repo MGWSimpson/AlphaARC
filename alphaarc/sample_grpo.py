@@ -37,15 +37,16 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
             program = answers[i]
             reward, terminated = env.evaluate_program(program, should_token_account=False)
             if env.is_valid_syntax(program):
-                new_task = relabel_task(task, env,program)
+                new_task = relabel_task(task, env, program, tokenizer.decode(program, skip_special_tokens=True, clean_up_tokenization_spaces=True))
                 relabelled_tasks.append(new_task)
 
             if reward == 1:
                 return True
 
+        return False
 
 
-def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=12 ):
+def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=24 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length, 
                                 num_return_sequences=num_return_sequences,
@@ -89,6 +90,7 @@ def run_experiment(n_meta_epochs,
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
                 solved_task_ids.append(task.task_key)
                 print(solved_task_ids)
+                
 
         grpo_trainer.train(relabelled_tasks)
             

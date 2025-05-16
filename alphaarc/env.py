@@ -1,4 +1,4 @@
-from alphaarc.policy.environment import execute_candidate_program
+from alphaarc.policy.environment import execute_candidate_program, check_syntax
 from alphaarc.task import Task
 from alphaarc.policy.tokenize import tokenize_task, TextEncoder
 from transformers import AutoTokenizer
@@ -148,13 +148,24 @@ class LineLevelArcEnv (BaseEnv):
 
     def is_valid_syntax(self, program): 
         program = self._decode(program)
+        candidate_program = append_return(program)
+        result = check_syntax(candidate_program)
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
-            if output == "Invalid Input": 
-                return False   
 
-        return True
+            if output == "Invalid Input": 
+                return False
+            
+            if type(output ) is not tuple: 
+                return False
+            
+            if type(output) is str and "Error" in output: 
+                return False
+            
+
+        return result == "Valid Syntax" 
     
     def get_outputs(self, program): 
         outputs = []
@@ -162,7 +173,6 @@ class LineLevelArcEnv (BaseEnv):
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
-
             outputs.append(output)
 
         return outputs

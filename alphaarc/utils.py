@@ -1,7 +1,9 @@
+from alphaarc.task import Task
 
 from importlib import import_module
 from typing import Any, Dict, Iterable, List, Union
 from matplotlib import pyplot as plt
+
 
 import numpy as np
 import json
@@ -77,17 +79,19 @@ def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, ma
     return padded_task, padded_state, padded_actions
 
 
-
-# TODO: function which relabels a task.
-def relabel_task(task, env,program): 
+"""
+clearly its something with how im getting the outputs
+"""
+def relabel_task(task, env,program, program_string): 
     outputs = env.get_outputs(program)
-    new_task = copy.deepcopy(task)
-    
+
+
     new_training_examples = []
 
-    for i, data in enumerate(new_task.training_examples):
+    for i, data in enumerate(task.training_examples):
         data["output"] = outputs[i]
         new_training_examples.append(data)
+    
+    ret_task = Task(program_string, new_training_examples, task.test_examples, task.task_key, task.task_key, extra_info=task.extra_info)
 
-    new_task.training_examples = new_training_examples
-    return new_task
+    return ret_task
