@@ -41,6 +41,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
                 relabelled_tasks.append(new_task)
 
             if reward == 1:
+                print(program)
                 return True
 
         return False
@@ -89,8 +90,8 @@ def run_experiment(n_meta_epochs,
             task = full_curriculum[i]
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model):
                 solved_task_ids.append(task.task_key)
-                print(len(set(solved_task_ids)))
-                
+                print(f"solved: {len(set(solved_task_ids))}")
+                print(set(solved_task_ids))
 
         grpo_trainer.train(relabelled_tasks)
             
@@ -105,8 +106,8 @@ def main():
     replay_buffer = ReplayBuffer()
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    # task_key_split = load_key_split('data/split_keys.json')
+    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
