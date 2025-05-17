@@ -1,3 +1,5 @@
+from datasets import Dataset
+
 import torch
 import torch.optim as optim
 import pytorch_lightning as pl
@@ -14,7 +16,7 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer, PretrainedCo
 from alphaarc.task import Task, from_dict
 import json
 import os
-
+import wandb
 import datetime as dt
 from pathlib import Path
 
@@ -28,78 +30,101 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
+from alphaarc.task import Task
+from alphaarc.policy.tokenize import tokenize_task
+
+from transformers import (
+    T5ForConditionalGeneration,
+    T5TokenizerFast as T5Tokenizer,
+    DataCollatorForSeq2Seq,
+    Trainer,
+    TrainingArguments,
+    AutoTokenizer
+)
+
+
+
 @dataclass
 class FineTuneConfig: 
     model_path: str = 'Salesforce/codet5p-220m'
-    batch_size: int = 8
     device: str = 'cuda'
-    lr: float = 5e-5
-    n_epochs: int = 10
-    fine_tune_dir: str = "./finetune/"
-    n_examples =   10
-    max_task_len= 512
-    max_state_len = 512
-
-"""
-This function is where I would make the change
-"""
-def load_tasks(file_path)->list[Task]: 
-    with open(file_path) as fp:
-        json_object = json.load(fp)
-        task_keys = json_object.keys()
-        new_tasks = [from_dict(json_object[key]) for key in task_keys]
-
-    return new_tasks
+    train_batch_size: int = 8
+    eval_batch_size: int = 2 
+    lr: float =5e-5
+    output_dir: str = './finetune/'
+    num_epochs: int = 10
 
 
-
-def setup_output_dir(config):
-    base = Path(config.fine_tune_dir)
-    log_dir = (
-            base / dt.datetime.now().strftime(timestamp_fmt)
-        )
-    log_dir.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename= log_dir / 'training.log', encoding='utf-8', level=logging.DEBUG)
-    return log_dir
-
-
-
-
-def run(config: FineTuneConfig):
-    dataset = ReplayBuffer()
-    tokenizer = AutoTokenizer.from_pretrained(config.model_path)
-    tasks =     load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
-    dataset.preload_tasks(tasks, tokenizer, n_examples=config.n_examples, max_state_len=config.max_state_len, max_task_len=config.max_task_len)
-    pl.seed_everything(0)
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=ReplayBuffer.collate_fn)
-    model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
-    model = model.to(config.device)    
-    model = torch.compile(model)
-
-    log_dir = setup_output_dir(config)
+def fine_tune(  model, 
+                tokenizer,
+                num_epochs,
+                train_batch_size,
+                eval_batch_size,
+                train_ds,
+                eval_ds,
+                lr,
+                output_dir,
+                ): 
     
+    wandb.init(
+    project="my-finetune-project",
+    config={
+        "epochs": num_epochs,
+        "train_batch_size": train_batch_size,
+        "eval_batch_size": eval_batch_size,
+        "learning_rate": lr,
+    })
 
-    # Creates a GradScaler once at the beginning of training.
-    scaler = GradScaler()
-    optimizer = optim.AdamW(model.parameters(), lr=config.lr)
+    data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
 
-    for epoch in tqdm(range(config.n_epochs)):
-        losses = []
-        for input, target in tqdm( dataloader):
-            optimizer.zero_grad()
+    args = TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=num_epochs,
+        per_device_train_batch_size=train_batch_size,
+        per_device_eval_batch_size=eval_batch_size,
+        learning_rate=lr,
+        logging_steps=100,
+        eval_strategy="steps",
+        eval_steps=500,
+        save_steps=500,
+        save_total_limit=5,
+        bf16=True, 
+        report_to=["wandb"],  
+    )
 
-            with autocast(device_type='cuda', dtype=torch.float16):
-                loss = model(input_ids=input.to(config.device),labels=target.to(config.device)).loss
-
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            losses.append(loss.detach().item())
-        
-        logger.info(f"epoch {epoch}: avg loss: {sum(losses) / len(losses)}")
-        model.save_pretrained(log_dir / "model", from_pt=True)
+    trainer = Trainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+    )
 
 
+    trainer.train()
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+
+
+
+def convert_task_to_jsonl(task, tokenizer , max_encoder_length = 512, max_decoder_length=512, n_examples= 10): 
+    json_object = {}
+    x = tokenize_task(task, tokenizer, n_examples, int(max_encoder_length/2),  int(max_encoder_length/2) ) # divide by 2 so that its between input and output, -1 as it adds a token
+    json_object['input_ids'] = x['input_ids']
+    json_object['attention_mask'] = x['attention_mask']
+    json_object['labels'] = tokenizer(task.program_lines)['input_ids'][:max_decoder_length]
+    return json_object
+
+
+
+
+def construct_ds(tasks, tokenizer):
+    json_objects = []
+    for task in tasks:
+        json_objects.append(convert_task_to_jsonl(task, tokenizer ))
+    return Dataset.from_list(json_objects)
 
 
 def load_tasks_from_folders(dir_path):
@@ -165,9 +190,69 @@ def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json'):
 
 
 
+def split_tasks(tasks): 
+    
+
+    eval_tasks = {}
+
+    l = []
+    for task in tasks:
+        # not core task and no eval task yet 
+        if task.parent_key is None and task.parent_key not in eval_tasks:
+            eval_tasks[task.parent_key] = task
+
+
+    eval_list = list(eval_tasks.values())
+    
+
+
+    for task in eval_list:
+        tasks.remove(task)
+
+    return tasks, eval_list
+
+
+
+
+
+def setup_output_dir(config): 
+    log_dir = Path(config.output_dir) / dt.datetime.now().strftime(timestamp_fmt)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    config.output_dir = str(log_dir)
+
+# handles all the orchestrating.
+def main(config): 
+
+    setup_output_dir(config)
+
+    tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
+    train_tasks, eval_tasks = split_tasks(tasks)
+
+
+    tokenizer = AutoTokenizer.from_pretrained(config.model_path)
+    model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
+    model.to(config.device)
+
+
+    train_ds, eval_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer)
+
+    fine_tune(  model, 
+                tokenizer, 
+                config.num_epochs,
+                config.train_batch_size,
+                config.eval_batch_size,
+                train_ds,
+                eval_ds, 
+                config.lr,
+                config.output_dir)
+
+
+              
+    
+
 
 
 
 if __name__ == "__main__":
     config = FineTuneConfig()
-    run(config)
+    main(config)

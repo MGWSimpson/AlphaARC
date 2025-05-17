@@ -16,16 +16,9 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import os
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-"""
-Algorithm outline: 
--> collect a handful of samples on a particular task
--> anything which is a valid task, add it to the replay buffer 
--> after i collected samples 
 
--> likely something I can do where it retrains on successes too....
-"""
 
 def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
@@ -88,7 +81,6 @@ def run_experiment(n_meta_epochs,
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
     full_curriculum = full_curriculum
-    relabelled_tasks = [] 
 
     answers_dict = defaultdict(list)
 
@@ -101,7 +93,7 @@ def run_experiment(n_meta_epochs,
                 print(f"solved: {len(set(solved_task_ids))}")
                 print(set(solved_task_ids))
 
-            grpo_trainer.train(relabelled_tasks)
+            # grpo_trainer.train(relabelled_tasks)
 
             
         

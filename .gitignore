@@ -34,6 +34,8 @@ data/*
 
 finetune/*
 
+finetune-checkpoint/*
+
 *.pth
 
 wandb/*

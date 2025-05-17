@@ -1,4 +1,4 @@
-model_path: 'finetune/2025-05-05_23-47-18/model'
+model_path: 'finetune-checkpoint/dev-checkpoint'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
