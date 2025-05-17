@@ -16,7 +16,7 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import os
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 """
 Algorithm outline: 
@@ -55,7 +55,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
 
 def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=24 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
-                                max_new_tokens= max_new_length, 
+                                max_new_tokens= max_new_length,
                                 num_return_sequences=num_return_sequences,
                                 do_sample=True)
 
@@ -113,8 +113,8 @@ def main():
     replay_buffer = ReplayBuffer()
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
-    #task_key_split = load_key_split('data/split_keys.json')
-    #curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')

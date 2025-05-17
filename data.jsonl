@@ -1,1 +1,1 @@
-{"070dd51e": ["x1 = partition(I)\nx2 = fork(recolor, color, backdrop)\nx3 = apply(x2, x1)\nx4 = mfilter(x3, hline)\nx5 = mfilter(x3, vline)\nx6 = underpaint(I, x4)\nO = paint(x6, x5)"]}
+{"ac0a08a4": ["x1 = compress(I)\nx2 = numcolors(x1)\nx3 = decrement(x2)\nO = upscale(I, x3)", "x1 = compress(I)\nx2 = numcolors(x1)\nx3 = decrement(x2)\nO = upscale(I, x3)"], "4258a5f9": ["x1 = objects(I, T, T, T)\nx2 = mapply(outbox, x1)\nO = fill(I, ONE, x2)"]}

@@ -202,8 +202,11 @@ class LineLevelArcEnv (BaseEnv):
                 reward +=1
 
 
+
         if reward == len(self.initial_states):
             reward = 1.0 
+
+        
         else:
             reward = 0
 
@@ -213,6 +216,7 @@ class LineLevelArcEnv (BaseEnv):
         if len(program) > self.max_length:
             terminated = True
 
+        
         
         
         terminated = terminated or reward == 1.0
@@ -228,7 +232,7 @@ class LineLevelArcEnv (BaseEnv):
 
 
     def set_task(self, task: Task): 
-        self.task = task
+        self.task = copy.deepcopy(task)
         self.initial_states = [
                 training_example["input"]
                 for training_example in task.training_examples[: self.n_examples]
@@ -246,6 +250,8 @@ class LineLevelArcEnv (BaseEnv):
                 training_example["output"]
                 for training_example in task.test_examples
         ])
+
+
         tokenized_task = np.array(tokenize_task(self.task, self.tokenizer, self.n_examples, self.input_state_max, self.max_length)['input_ids'])
         self.task_length = len(tokenized_task)
         pad_length = (self.input_state_max *2 ) - len(tokenized_task)

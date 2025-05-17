@@ -85,11 +85,23 @@ def relabel_task(task, env,program, program_string):
 
 
     new_training_examples = []
+    new_test_examples = []
 
+    output_counter = 0
     for i, data in enumerate(task.training_examples):
-        data["output"] = outputs[i]
-        new_training_examples.append(data)
-    
-    ret_task = Task(program_string, new_training_examples, [], task.task_key, task.task_key, extra_info=task.extra_info)
+        x = copy.deepcopy(data)
+        x["output"] = outputs[output_counter]
+        new_training_examples.append(x)
 
+        output_counter +=1
+    
+    for i, data in enumerate(task.test_examples):
+        x = copy.deepcopy(data)
+
+        x["output"] = outputs[output_counter]
+        new_test_examples.append(x)
+        output_counter +=1
+
+    ret_task = Task(program_string, new_training_examples, new_test_examples, task.task_key, task.task_key, extra_info=task.extra_info)
+    
     return ret_task

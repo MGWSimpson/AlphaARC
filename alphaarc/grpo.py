@@ -14,7 +14,9 @@ from alphaarc.env import LineLevelArcEnv, BaseEnv
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 
-def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
+import pytorch_lightning as pl
+
+def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
     return tokenized_task
 
@@ -22,7 +24,13 @@ def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_
 
 
 def compute_logits(input_ids, decoder_input_ids, model): 
-    logits = model(input_ids=input_ids.repeat(decoder_input_ids.shape[0], 1), decoder_input_ids=decoder_input_ids).logits
+    # use loop to reduce memory
+    logits = []
+    for b in range(decoder_input_ids.shape[0]):
+        logits.append(model(input_ids=input_ids, 
+                            decoder_input_ids=decoder_input_ids[b, :].unsqueeze(0)).logits)
+
+    logits =torch.stack(logits, dim=0).squeeze()
     return logits
 
 
@@ -48,8 +56,8 @@ def encode_program(program_lines, tokenizer):
 def combine_her(decoder_input_ids, her_tensor):
     max_len = max(decoder_input_ids.shape[-1], her_tensor.shape[-1])
 
-    decoder_input_ids = F.pad( decoder_input_ids, (max_len- decoder_input_ids.shape[-1], 0), 'constant', 0 )
-    her_tensor = F.pad(  her_tensor, (max_len- her_tensor.shape[-1], 0), 'constant', 0 )
+    decoder_input_ids = F.pad( decoder_input_ids, (0, max_len- decoder_input_ids.shape[-1]), 'constant', 0 )
+    her_tensor = F.pad(  her_tensor, (0, max_len- her_tensor.shape[-1]), 'constant', 0 )
 
     return torch.concat((decoder_input_ids, her_tensor.to('cuda')), dim=0)
 
@@ -106,9 +114,6 @@ class GRPOTrainer:
 
     # returns the loss
     def _grpo_step(self, input_ids, decoder_input_ids, rewards): 
-        
-
-
         # get the logits :D 
         policy_logits =  compute_logits(input_ids, decoder_input_ids, self.policy_model )
         ref_logits = compute_logits(input_ids, decoder_input_ids, self.ref_model)
@@ -136,12 +141,15 @@ class GRPOTrainer:
 
         completion_mask = (decoder_input_ids != 0).int()
 
+    
         ratio = torch.exp(per_token_log_probs - ref_per_token_log_probs.to('cuda'))
         clipped_ratio = torch.clamp(ratio, 1-self.clip_param, 1+self.clip_param)
 
-       
+
         per_token_loss = torch.min(ratio * advantages, clipped_ratio * advantages)
         
+
+
         
         per_token_loss = -(per_token_loss - self.beta * per_token_kl)
         loss = ((per_token_loss * completion_mask).sum(dim=1) / completion_mask.sum(dim=1)).mean()
@@ -151,7 +159,7 @@ class GRPOTrainer:
     def _generate_completions(self, batch): 
         task = encode_task(batch[0], self.tokenizer, self. policy_model)
         input_ids = torch.tensor(task, device='cuda').unsqueeze(0)
-        decoder_input_ids = self.policy_model.generate(input_ids, do_sample=True, num_return_sequences=self.num_gen_per_group -1) # generate it with -1 to account for the HER example
+        decoder_input_ids = self.policy_model.generate(input_ids, max_new_tokens=512, do_sample=True,  num_return_sequences=self.num_gen_per_group -1) # generate it with -1 to account for the HER example
         decoder_input_ids = append_her_answer(decoder_input_ids, batch[0], self. tokenizer)
         rewards = self._compute_reward( batch[0], decoder_input_ids=decoder_input_ids) # will have to make this 
         return input_ids, decoder_input_ids, rewards 
@@ -160,6 +168,7 @@ class GRPOTrainer:
 
     # pass in a list of hindsight relabelled tasks
     def train(self, tasks):
+        self.policy_model.train()
         # shuffle the order of the tasks.
         random.shuffle(tasks)
         for i in tqdm(range(0, len (tasks), self.batch_size)):
@@ -174,13 +183,13 @@ class GRPOTrainer:
 
 
 if __name__ == "__main__":
-    task = Task.from_json("data/training/0a938d79.json")
-
+    task = Task.from_json("data/training/b527c5c6.json")
+    pl.seed_everything(0)
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     ref_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
     policy_model = T5ForConditionalGeneration.from_pretrained('finetune/2025-04-18_12-38-42/model')
     
-    env = LineLevelArcEnv('Salesforce/codet5p-220m', 10, 512, 512, 5, 50000)
+    env = LineLevelArcEnv('Salesforce/codet5p-220m', 10, 256, 256, 5, 50000)
     ref_model.to('cuda')
     policy_model.to('cuda')
 

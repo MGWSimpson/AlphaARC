@@ -9,7 +9,7 @@ num_return_sequences: 8
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/evaluation]
+    dir_paths: [ data/training]
     
 
 evaluation_curriculum_config:
@@ -23,7 +23,7 @@ env_config:
   params:
     tokenizer_path: 'Salesforce/codet5p-220m'
     n_examples:  10
-    max_task_len: 512
-    max_state_len: 512
+    max_task_len: 256
+    max_state_len: 256
     n_actions:  5
     token_budget:  500
