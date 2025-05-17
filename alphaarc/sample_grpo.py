@@ -95,12 +95,14 @@ def run_experiment(n_meta_epochs,
     for epoch in tqdm(range(n_meta_epochs)):
         for i in tqdm(range(len(full_curriculum))):
             task = full_curriculum[i]
+            relabelled_tasks = []
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model, answers_dict):
                 solved_task_ids.append(task.task_key)
                 print(f"solved: {len(set(solved_task_ids))}")
                 print(set(solved_task_ids))
 
-        grpo_trainer.train(relabelled_tasks)
+            grpo_trainer.train(relabelled_tasks)
+
             
         
 def main(): 
