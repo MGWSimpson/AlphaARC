@@ -30,12 +30,14 @@ pretrained
 *.csv
 
 
-data/*
-
 finetune/*
+
 
 finetune-checkpoint/*
 
 *.pth
 
 wandb/*
+
+
+secret.txt
