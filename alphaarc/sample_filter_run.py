@@ -37,31 +37,11 @@ At a budget of 50k tokens, it scored 5/89
 # if its a syntactically correct program, then we relabel it to somethign else.
 # need to check each time we are evaluating the programs. are they syntactically correct
 # if so then save it, for now however we will just flag it.
-def tokenize_task_arr(task_arr, tokenizer, input_state_max=512, n_examples=10, max_length=512): 
-    tokenized_tasks = []
-    attention_masks = []
-    for task in task_arr:
-        tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
-        
-        attention_mask = np.ones(tokenized_task.shape)
-        
-        pad_length = (input_state_max *2 ) - len(tokenized_task)
-        
-        tokenized_task = np.pad(tokenized_task, (0, pad_length), constant_values=tokenizer.pad_token_id)
-        attention_mask = np.pad(attention_mask, (0, pad_length), constant_values=0)
-
-
-        tokenized_task = torch.tensor(tokenized_task)
-        attention_mask = torch.tensor(attention_mask)
-
-        tokenized_tasks.append(tokenized_task)
-        attention_masks.append(attention_mask)
-
-    return tokenized_tasks, attention_masks
+ 
 
 
 
-def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
+def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
     return tokenized_task
 
@@ -93,10 +73,10 @@ class SampleAndFilterSolver:
             
             if env.is_valid_syntax(program):
                 
-                new_task = relabel_task(task, env,program)
+                """new_task = relabel_task(task, env,program)
                 new_task = encode_task(task, self.tokenizer, self.model)
                 program = program.detach().cpu().numpy()
-                replay_buffer.add_program_and_task(new_task, program)
+                replay_buffer.add_program_and_task(new_task, program)"""
             if reward == 1:
                 return True
                 
@@ -114,19 +94,21 @@ class SampleAndFilterSolver:
 
 
     def solve_task(self, task, env, replay_buffer): 
-        #try:
-            encoder_outputs =  torch.tensor(encode_task(task, self.tokenizer, self.model)).to('cuda')
+        try:
             env.set_task(task)
 
-            answers = self._generate_answers(encoder_outputs)
-            solved = self.evaluate_solutions(answers, task, env, replay_buffer)
-                
-            if solved:
-                return [task. task_key] 
-                
-        #except ExceededTokenBudget:
-        #    print("exceeded token budget!")
-        #    return [] 
+            while True:
+                encoder_outputs =  torch.tensor(encode_task(task, self.tokenizer, self.model)).to('cuda')
+
+                answers = self._generate_answers(encoder_outputs)
+                solved = self.evaluate_solutions(answers, task, env, replay_buffer)
+                    
+                if solved:
+                    return [task. task_key] 
+                    
+        except ExceededTokenBudget:
+            print("exceeded token budget!")
+            return [] 
 
 
 
@@ -144,7 +126,7 @@ def run_experiment(n_epochs, batch_size, solver: SampleAndFilterSolver, curricul
             print(len(solved_task_ids))
             print(solved_task_ids)
 
-        trainer.train(solver.model, replay_buffer)
+        # trainer.train(solver.model, replay_buffer)
         """ solver.model.save_pretrained(f"epoch_{epoch}_save")
         np.save('state_buffer', replay_buffer.states)
         np.save('task_buffer', replay_buffer. tasks)

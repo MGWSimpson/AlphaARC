@@ -17,6 +17,8 @@ from alphaarc.utils import relabel_task
 import wandb
 import pytorch_lightning as pl
 
+from pprint import pprint
+
 def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
     return tokenized_task
@@ -80,7 +82,7 @@ class GRPOTrainer:
                  env: BaseEnv,
                  num_gen_per_group=8,
                  batch_size=2, 
-                 lr=1e-6,
+                 lr=5e-6,
                  beta= 0.04,
                  clip_param = 0.2): 
         
@@ -150,6 +152,7 @@ class GRPOTrainer:
 
 
 
+
         # compute the log probs
         per_token_log_probs = compute_per_token_log_probs(policy_logits, decoder_input_ids)
         ref_per_token_log_probs = compute_per_token_log_probs(ref_logits, decoder_input_ids)
@@ -170,11 +173,11 @@ class GRPOTrainer:
         advantages = advantages.unsqueeze(1)
 
 
-        if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
+        """if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
             advantages[advantages == 1] = 1
 
         if advantages.all() == 0: # replace advantage with negative advantage -> should be changed to if enabled.
-            advantages[advantages == 0] = -1
+            advantages[advantages == 0] = -1"""
 
         completion_mask = (decoder_input_ids != 0).int()
         
@@ -211,8 +214,6 @@ class GRPOTrainer:
 
         with torch.inference_mode():
             decoder_input_ids = self.policy_model.generate(input_ids, max_new_tokens=512, do_sample=True, 
-                                                            #top_p=0.92,
-                                                            # top_k=0,
                                                             num_return_sequences=num_gen_per_group) # generate it with -1 to account for the HER example
         
         decoder_input_ids = decoder_input_ids.clone()
@@ -247,10 +248,12 @@ class GRPOTrainer:
     def generate_answers(self, task, n_generations):
         answers = []
         for i in range(0, n_generations, self.num_gen_per_group):
-            self.optimizer.zero_grad()
             batch = task
             input_ids, decoder_input_ids, rewards = self._generate_completions(batch, exploration_reward=False)
             loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
+
+
+          
 
             grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
                 # log metrics
@@ -262,7 +265,22 @@ class GRPOTrainer:
                                 "avg reward": rwrd.cpu().mean().item()})
             
             loss.backward()
-            self.optimizer.step()  
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+            """x = self.tokenizer( task[0].program_lines, add_special_tokens=False, return_tensors='pt')['input_ids']
+            x = x.to('cuda')
+            
+            with torch.inference_mode():
+                policy_logits =  compute_logits(input_ids, x, self.policy_model ).unsqueeze(0)
+                answer_log_probs = compute_per_token_log_probs(policy_logits, x)
+
+
+            print("-----")
+            # print(self.tokenizer.batch_decode(decoder_input_ids))
+            print(task[0].program_lines)
+            print(f"sum log prob of answer: {answer_log_probs.cpu().sum().item()}")
+            print("-----")"""
             answers.extend([x for x in decoder_input_ids])  
 
         answer_tensor = pad_sequence(answers, batch_first=True)
@@ -290,7 +308,7 @@ class GRPOTrainer:
                                 "avg reward": rwrd.cpu().mean().item()})
             
             loss.backward()
-            self.optimizer.step()  
+            
 
 
             # you would basically insert it here, for each of the decoder ids, you would relabel it
@@ -300,7 +318,7 @@ class GRPOTrainer:
                 if not env.is_valid_syntax(decoder_input_ids[i]): # if not valid program, skip relabel
                     continue 
                 
-                input_ids, rewards = self._relabel(input_ids, decoder_input_ids[i], decoder_input_ids, task, env)    
+                input_ids, rewards, new_task = self._relabel(input_ids, decoder_input_ids[i], decoder_input_ids, task, env)    
                 
                 loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
                 loss.backward()
@@ -319,9 +337,23 @@ class GRPOTrainer:
                                 "grad norm": grad_norm.item(),
                                 "avg reward": rwrd.cpu().mean().item()})
 
-                self.optimizer.step()  
-                self.optimizer.zero_grad()
-                    
+            self.optimizer.step()  
+            self.optimizer.zero_grad()
+
+            x = self.tokenizer( task[0].program_lines, add_special_tokens=False, return_tensors='pt')['input_ids']
+            x = x.to('cuda')
+            
+            with torch.inference_mode():
+                policy_logits =  compute_logits(input_ids, x, self.policy_model ).unsqueeze(0)
+                answer_log_probs = compute_per_token_log_probs(policy_logits, x)
+
+            print("-----")
+            # print(self.tokenizer.batch_decode(decoder_input_ids))
+            print(task[0].program_lines)
+            print(f"sum log prob of answer: {answer_log_probs.cpu().sum().item()}")
+            print("-----")
+
+
             answers.extend([x for x in decoder_input_ids])  
 
         answer_tensor = pad_sequence(answers, batch_first=True)

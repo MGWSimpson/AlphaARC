@@ -21,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 
-def encode_task(task, tokenizer, model, input_state_max=512, n_examples=10, max_length=512): 
+def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
     return tokenized_task
 
@@ -67,7 +67,7 @@ def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict, 
         answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     
     else:
-        answers = grpo_trainer.generate_answers([task], 8)
+        answers = grpo_trainer.generate_answers([task], 24)
 
     
     solved = evaluate_solutions(answers, task, env, relabelled_tasks
@@ -93,6 +93,7 @@ def run_experiment(n_meta_epochs,
 
     answers_dict = defaultdict(list)
 
+    # full_curriculum = full_curriculum[:1]
 
     for epoch in tqdm(range(n_meta_epochs)):
         random.shuffle(full_curriculum)
@@ -118,8 +119,9 @@ def main():
     replay_buffer = ReplayBuffer()
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    
+    #task_key_split = load_key_split('data/split_keys.json')
+    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
