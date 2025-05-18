@@ -17,7 +17,7 @@ import random
 import os
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 
@@ -67,7 +67,7 @@ def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict, 
         answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     
     else:
-        answers = grpo_trainer.generate_relabeled_answers_external([task], env, 24)
+        answers = grpo_trainer.generate_answers([task], 8)
 
     
     solved = evaluate_solutions(answers, task, env, relabelled_tasks

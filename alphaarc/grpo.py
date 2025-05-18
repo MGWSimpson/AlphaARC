@@ -170,11 +170,11 @@ class GRPOTrainer:
         advantages = advantages.unsqueeze(1)
 
 
-        """if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
+        if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
             advantages[advantages == 1] = 1
 
         if advantages.all() == 0: # replace advantage with negative advantage -> should be changed to if enabled.
-            advantages[advantages == 0] = -1"""
+            advantages[advantages == 0] = -1
 
         completion_mask = (decoder_input_ids != 0).int()
         
@@ -210,7 +210,10 @@ class GRPOTrainer:
 
 
         with torch.inference_mode():
-            decoder_input_ids = self.policy_model.generate(input_ids, max_new_tokens=512, do_sample=True,  num_return_sequences=num_gen_per_group) # generate it with -1 to account for the HER example
+            decoder_input_ids = self.policy_model.generate(input_ids, max_new_tokens=512, do_sample=True, 
+                                                            #top_p=0.92,
+                                                            # top_k=0,
+                                                            num_return_sequences=num_gen_per_group) # generate it with -1 to account for the HER example
         
         decoder_input_ids = decoder_input_ids.clone()
         if should_append_HER:
@@ -246,7 +249,7 @@ class GRPOTrainer:
         for i in range(0, n_generations, self.num_gen_per_group):
             self.optimizer.zero_grad()
             batch = task
-            input_ids, decoder_input_ids, rewards = self._generate_completions(batch, exploration_reward=True)
+            input_ids, decoder_input_ids, rewards = self._generate_completions(batch, exploration_reward=False)
             loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
 
             grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())

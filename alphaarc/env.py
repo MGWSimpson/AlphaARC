@@ -212,7 +212,7 @@ class LineLevelArcEnv (BaseEnv):
 
         
         else:
-            reward = -1.0
+            reward = 0
 
 
 
