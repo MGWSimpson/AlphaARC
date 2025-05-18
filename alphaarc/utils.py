@@ -80,7 +80,8 @@ def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, ma
 
 
 # somehow need to get 
-def relabel_task(task, env,program, program_string): 
+def relabel_task(task, env, program, program_string): 
+    env.set_task(task)
     outputs = env.get_outputs(program)
 
 

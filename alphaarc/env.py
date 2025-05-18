@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 import copy
 import numpy as np
 import torch
+from alphaarc.augment.mutate_grid import valid_grid
 
 def append_action_to_state(state, action): 
     return state + action
@@ -160,11 +161,14 @@ class LineLevelArcEnv (BaseEnv):
             
             if type(output ) is not tuple: 
                 return False
+
+
+            if not valid_grid(output):
+                return False
             
             if type(output) is str and "Error" in output: 
                 return False
             
-
         return result == "Valid Syntax" 
     
     def get_outputs(self, program): 
@@ -208,7 +212,7 @@ class LineLevelArcEnv (BaseEnv):
 
         
         else:
-            reward = 0
+            reward = -1.0
 
 
 
