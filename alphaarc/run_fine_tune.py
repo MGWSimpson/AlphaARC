@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 
 from torch.amp.grad_scaler import GradScaler
 from torch import autocast
-
+import random
 
 from tqdm import tqdm
 from dataclasses import dataclass
@@ -50,9 +50,9 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 2 
-    lr: float =5e-5
+    lr: float =5e-6
     output_dir: str = './finetune/'
-    num_epochs: int = 10
+    num_epochs: int = 1
 
 
 def fine_tune(  model, 
@@ -83,11 +83,11 @@ def fine_tune(  model,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
+        lr_scheduler_type='constant',
         logging_steps=100,
         eval_strategy="steps",
-        eval_steps=500,
-        save_steps=500,
-        save_total_limit=5,
+        eval_steps=100,
+        save_steps=100,
         bf16=True, 
         report_to=["wandb"],  
     )
@@ -173,7 +173,7 @@ def prune_tasks(tasks, train_set_list ):
     return tasks
     
 
-def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json'):
+def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json', dev_mode=True):
     
 
     
@@ -184,8 +184,12 @@ def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json'):
     for file_path in files:
         tasks.extend(load_tasks_from_files(file_path))
 
-    split_keys = load_key_split(split_keys_path)
-    tasks = prune_tasks(tasks, split_keys['train'])
+
+    if dev_mode:
+        split_keys = load_key_split(split_keys_path)
+        tasks = prune_tasks(tasks, split_keys['train'])
+
+    random.shuffle(tasks)
     return tasks
 
 

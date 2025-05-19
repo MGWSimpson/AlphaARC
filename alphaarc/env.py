@@ -80,7 +80,7 @@ class LineLevelArcEnv (BaseEnv):
     def _decode(self, tokens):
         return self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)
 
-    def _encode(self, program): 
+    def _encode(self, program): # TODO: technically incorrect to match.
         return self.tokenizer( program, add_special_tokens=False, return_tensors='np')['input_ids'].squeeze()
 
 
