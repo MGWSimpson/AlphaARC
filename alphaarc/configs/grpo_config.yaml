@@ -1,4 +1,4 @@
-model_path: 'finetune-checkpoint/dev-checkpoint'
+model_path: 'finetune/2025-05-19_20-26-16/checkpoint-1647'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
@@ -9,7 +9,7 @@ num_return_sequences: 8
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/evaluation]
+    dir_paths: [ data/training]
     
 
 evaluation_curriculum_config:

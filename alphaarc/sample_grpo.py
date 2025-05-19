@@ -120,8 +120,8 @@ def main():
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
     
-    #task_key_split = load_key_split('data/split_keys.json')
-    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
@@ -129,10 +129,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(config['tokenizer_path'])
 
 
-    grpo_trainer = GRPOTrainer(ref_model, 
-                               model,
-                               tokenizer,
-                               env)
+    grpo_trainer = None # GRPOTrainer(ref_model, 
+                   #             model,
+                    #           tokenizer,
+                    #           env)
     
     
     pl.seed_everything(0)
