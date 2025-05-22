@@ -9,40 +9,103 @@ from alphaarc.task import Task
 import numpy as np 
 from alphaarc.policy.tokenize import tokenize_task
 from torch.nn.utils.rnn import pad_sequence
-
+import os
 import torch.nn.functional as F
-
-
 from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
 
 
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 
 
-# return a list of starting id's
-def compute_starting_ids_of_functions(): 
+def compute_next_token_ids(prefix, completions): 
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
-    
-    starting_ids = []
-
-    for func in PRIMITIVE_FUNCTIONS:
-        x = tokenizer.encode(func, return_tensors='np', add_special_tokens=False)[0]
-        starting_ids.append( x[0])
-
+    prefix_ids = tokenizer.encode(prefix, return_tensors='np', add_special_tokens=False)[0]
+    next_token_ids = []
+    for comp in completions:
+        comp_ids = tokenizer.encode(comp, return_tensors='np', add_special_tokens=False)[0]
         
+        # Only proceed if comp_ids starts with prefix_ids
+        if len(comp_ids) > len(prefix_ids) and all(comp_ids[i] == prefix_ids[i] for i in range(len(prefix_ids))):
+            next_token_ids.append(comp_ids[len(prefix_ids)])
+    
+    return list(set(next_token_ids))
 
-    return list(set(starting_ids))
-
-
-STARTING_IDS_OF_FUNCTIONS = compute_starting_ids_of_functions()
 
 
 
+"""
+In the missing function code, its not considering partially written functions. like h concat
+there is also a problem with calling other variable names as functions, but one thing at a time.
+"""
 def missing_function(line): 
+    if len(line.split("=")) != 2:
+        return False
+    
     LHS = line.split("=")[0]
     RHS = line.split("=")[1]
-    return RHS.strip() == ""
+    return (RHS.strip() not in PRIMITIVE_FUNCTIONS) and ("(" not in RHS.strip())
+
+
+def get_rhs(line): 
+    return line.split("=")[1]
+
+def missing_variable(line): 
+    return not "=" in line 
+
+
+def missing_argument(line): 
+    return True
+
+
+def find_continuations(input_str, string_list):
+    return [s for s in string_list if s.startswith(input_str)]
+
+# get the starting IDS of all functions
+def handle_missing_function(node, frontier, line): 
+    
+    rhs = get_rhs(line)
+    continuations = find_continuations(rhs, PRIMITIVE_FUNCTIONS) 
+    STARTING_IDS_OF_FUNCTIONS = compute_next_token_ids(rhs, continuations)
+
+    # when computing this. it needs to be like the 
+
+    for next_tok in STARTING_IDS_OF_FUNCTIONS: 
+        new_node = Node(
+                log_p   = 0.0,
+                dec_ids = torch.cat([node.dec_ids,
+                                     torch.tensor([next_tok], device='cuda')]),
+                n_splits = node.n_splits + 1      # unchanged for greedy extension
+            )
+        
+        heapq.heappush(frontier, new_node)
+
+
+
+def handle_missing_variable(node, frontier, tok, program_lines): 
+    
+    if len(program_lines) >= 2:
+        last_line = program_lines[-2]
+        var_name = last_line.split('=')[0].strip()  # "x1"
+        number = int(var_name[1:])
+        last_var = number + 1
+    else:
+        last_var = 1
+
+    to_add = ["O =", f"x{last_var} ="]
+
+
+    for new_line in to_add:
+        new_node = Node(
+                log_p   = 0.0,
+                dec_ids = torch.cat([node.dec_ids,
+                                     torch.tensor(tok.encode(new_line, return_tensors='np', add_special_tokens=False).squeeze(), device='cuda')]),
+                n_splits = node.n_splits + 1      # unchanged for greedy extension
+            )
+        heapq.heappush(frontier, new_node)
+
 
 
 
@@ -103,21 +166,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
         heapq.heappush(frontier, new_node)
 
 
-# get the starting IDS of all functions
-def handle_missing_function(node, frontier): 
-    
 
-    for next_tok in STARTING_IDS_OF_FUNCTIONS: 
-        new_node = Node(
-                log_p   = 0.0,
-                dec_ids = torch.cat([node.dec_ids,
-                                     torch.tensor([next_tok], device='cuda')]),
-                n_splits = node.n_splits + 1      # unchanged for greedy extension
-            )
-        
-        heapq.heappush(frontier, new_node)
-
-    print(len(frontier))
 
 
 def handle_entropy_spike(mask, tok, nodes, log_probs, frontier): 
@@ -130,9 +179,11 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier):
         last_line = program.split("\n")[-1]
 
         if missing_function(last_line): 
-            handle_missing_function(nodes[idx], frontier)
-        else:
-            pass
+            handle_missing_function(nodes[idx], frontier, last_line)
+        elif missing_variable(last_line): 
+            handle_missing_variable(nodes[idx], frontier, tok, program.split("\n"))
+        elif missing_argument(last_line):
+            print(last_line)
 
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
@@ -171,11 +222,10 @@ def entropy_fanout_search_encdec(
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
         
-        print(entropies)
+        # print(entropies)
 
-        print(tok.decode(nodes[0].dec_ids))
+        # print(tok.decode(nodes[0].dec_ids))
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
-        
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier)
 
 

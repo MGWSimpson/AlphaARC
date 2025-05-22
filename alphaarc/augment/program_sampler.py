@@ -149,7 +149,7 @@ class ProgramSample:
         )
         self.program = ast.unparse(self.program_ast)
 
-    def sample_term_with_type(self, term_type, terms_to_exclude):
+    def sample_term_with_type(self, term_type, terms_to_exclude, return_all=False):
         filtered_type_dict = self.filter_type_dict_by_index()
         candidate_terms = []
         # add primitive functions
@@ -171,7 +171,11 @@ class ProgramSample:
         candidate_terms = [term for term in candidate_terms if term not in terms_to_exclude]
         if not candidate_terms:
             raise ValueError(f"No candidate terms of type {display_type(term_type)} found")
-        return random.choice(candidate_terms)
+        
+        if return_all: 
+            return candidate_terms
+        else:
+            return random.choice(candidate_terms)
 
     def sample_function_with_output_type(self, output_type):
         filtered_type_dict = self.filter_type_dict_by_index()
