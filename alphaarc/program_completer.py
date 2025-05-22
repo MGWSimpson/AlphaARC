@@ -6,8 +6,9 @@ from alphaarc.dsl.primitives import PRIMITIVE_CONSTANTS, PRIMITIVE_FUNCTIONS
 from alphaarc.augment.genetic import TaskEvolver
 import random
 from alphaarc.task import Task
-
+from alphaarc.augment.type_inference import get_primitive_function_type
 from alphaarc.dsl.arc_types import Arrow
+import traceback
 
 class ProgramCompleter:
     def __init__(self, sampler: ProgramSampler):
@@ -45,34 +46,32 @@ class ProgramCompleter:
         try:
             body_ast = ast.parse(finished_part)
             ps.type_inferer.infer_type_from_ast(body_ast)
+        
+            needs_comma = not partial_line.rstrip().endswith(",")
+            dummy_line  = partial_line + (" ___)" if needs_comma else " ___)")
+            call_node   = ast.parse(dummy_line.strip()).body[0].value
+
+            func_src = ast.unparse(call_node.func)
+            supplied = [ast.unparse(arg) for arg in call_node.args]
+
+            if supplied and supplied[-1] == "___":
+                supplied = supplied[:-1]
+
         except (SyntaxError, TypeError) as e:
-            raise ValueError("Everything except the last line must be valid Python") from e
-
-        needs_comma = not partial_line.rstrip().endswith(",")
-        dummy_line  = partial_line + (" ___)" if needs_comma else " ___)")
-        call_node   = ast.parse(dummy_line.strip()).body[0].value
-
-        func_src = ast.unparse(call_node.func)
-        supplied = [ast.unparse(arg) for arg in call_node.args]
-
-        if supplied and supplied[-1] == "___":
-            supplied = supplied[:-1]
-
-        if func_src in ps.primitive_function_to_general_type_mapping:
-            func_types = ps.primitive_function_to_general_type_mapping[func_src]
-        else:
-            print("- - - ")
-            print(ps.type_inferer.type_dict)
-            print(ps. primitive_function_to_general_type_mapping)
-            print("- - - ")
-            func_types = ps.type_inferer.type_dict[func_src]
+            raise ValueError("HERE!")
+        
+        
+        func_types = get_primitive_function_type(func_src)
         
 
 
         final_candidates = []
         next_arg_pos   = len(supplied)
-        required_type  = func_types['inputs'][next_arg_pos]
 
+        try:
+            required_type  = func_types.inputs[next_arg_pos]
+        except IndexError as e : # case where all args provided
+            return []
          
         candidates = ps.sample_term_with_type(
                     term_type=required_type,

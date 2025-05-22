@@ -13,12 +13,17 @@ import os
 import torch.nn.functional as F
 from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
 from alphaarc.program_completer import ProgramCompleter, ProgramSampler
+import re
+import traceback
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 
+def extract_function_name(expression):
+    match = re.search(r'=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', expression)
+    return match.group(1) if match else None
 
 def compute_next_token_ids(prefix, completions): 
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
@@ -57,7 +62,12 @@ def missing_variable(line):
 
 
 def missing_argument(line): 
-    return True
+    rhs = get_rhs(line)
+    
+    if ")" not in rhs and (" " + extract_function_name(line)) in PRIMITIVE_FUNCTIONS:
+        return True
+    else:
+        return False
 
 
 def find_continuations(input_str, string_list):
@@ -115,15 +125,26 @@ def format_as_dummy_program(program_lines):
 
 
 def handle_missing_argument(node, frontier, tok, program_lines, completer, task): 
-    
+
+
     dummy_program = format_as_dummy_program("\n".join(program_lines))
-    
+
     try:
         results = completer.suggest_next_args("prog", dummy_program, task.training_examples[0]['input'])
-        print(dummy_program)
-        print(results)
+        # with the new results, append them to the program.
 
-    except ValueError:
+        for result in results:
+            new_node = Node(
+                    log_p   = 0.0,
+                    dec_ids = torch.cat([node.dec_ids,
+                                         torch.tensor(tok.encode(result, return_tensors='np', add_special_tokens=False), device='cuda').reshape(-1) ]),
+                    n_splits = node.n_splits + 1      # unchanged for greedy extension
+                )
+            
+            
+            heapq.heappush(frontier, new_node)
+        
+    except ValueError: # if there was some error making suggestions, just pass. 
         pass
 
 @dataclass(order=True)
@@ -201,7 +222,8 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
             handle_missing_variable(nodes[idx], frontier, tok, program.split("\n"))
         elif missing_argument(last_line):
             handle_missing_argument(nodes[idx], frontier, tok,program.split("\n"), completer, task)
-
+        else:
+            print(f"sank: {last_line}") # sink state
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
         tok: AutoTokenizer,
