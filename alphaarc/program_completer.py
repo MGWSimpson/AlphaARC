@@ -26,7 +26,6 @@ class ProgramCompleter:
         
         lines = partial_program.rstrip().splitlines()
         partial_line = lines[-1]
-        print(lines)
         finished_part   = "\n".join(lines[:-1])
 
         if len(lines) == 2:
@@ -46,7 +45,7 @@ class ProgramCompleter:
         try:
             body_ast = ast.parse(finished_part)
             ps.type_inferer.infer_type_from_ast(body_ast)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             raise ValueError("Everything except the last line must be valid Python") from e
 
         needs_comma = not partial_line.rstrip().endswith(",")
@@ -59,8 +58,8 @@ class ProgramCompleter:
         if supplied and supplied[-1] == "___":
             supplied = supplied[:-1]
 
-        if func_src in ps.primitive_function_to_base_type_mapping:
-            func_types = ps.primitive_function_to_base_type_mapping[func_src]
+        if func_src in ps.primitive_function_to_general_type_mapping:
+            func_types = ps.primitive_function_to_general_type_mapping[func_src]
         else:
             print("- - - ")
             print(ps.type_inferer.type_dict)
@@ -69,21 +68,18 @@ class ProgramCompleter:
             func_types = ps.type_inferer.type_dict[func_src]
         
 
-        final_candidates = []
-        for func_type in func_types:
-            next_arg_pos   = len(supplied)
-            required_type  = func_type.inputs[next_arg_pos]
 
-            try:
-                candidates = ps.sample_term_with_type(
+        final_candidates = []
+        next_arg_pos   = len(supplied)
+        required_type  = func_types['inputs'][next_arg_pos]
+
+         
+        candidates = ps.sample_term_with_type(
                     term_type=required_type,
                     terms_to_exclude=[],
                     return_all=True,
                 )
-            except ValueError or KeyError:
-                candidates = []
-
-            final_candidates.extend(candidates)
+        final_candidates.extend(candidates)
 
         return list(set(final_candidates)) 
         
@@ -96,7 +92,10 @@ if __name__ == "__main__":
     completer = ProgramCompleter(sampler)
 
     prog_text = """def solve_28bf18c6(I):
-    x1 = objects(I,"""
+    x1 = objects(I, T, T, T)
+    x2 = first(x1)
+    x3 = subgrid(x2, I)
+    O = hconcat(x3,"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program_lines)
     input_ = task.training_examples[0]['input']
