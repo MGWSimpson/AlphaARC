@@ -12,12 +12,46 @@ from torch.nn.utils.rnn import pad_sequence
 
 import torch.nn.functional as F
 
+
+from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
+
+
+
+
+
+
+# return a list of starting id's
+def compute_starting_ids_of_functions(): 
+    tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    
+    starting_ids = []
+
+    for func in PRIMITIVE_FUNCTIONS:
+        x = tokenizer.encode(func, return_tensors='np', add_special_tokens=False)[0]
+        starting_ids.append( x[0])
+
+        
+
+    return list(set(starting_ids))
+
+
+STARTING_IDS_OF_FUNCTIONS = compute_starting_ids_of_functions()
+
+
+
+def missing_function(line): 
+    LHS = line.split("=")[0]
+    RHS = line.split("=")[1]
+    return RHS.strip() == ""
+
+
+
 @dataclass(order=True)
 class Node:
 
     sort_key: float = field(init=False)
-    log_p: float # may use this later.
-    dec_ids: torch.Tensor # ancestors
+    log_p: float = field(compare=False) # may use this later.
+    dec_ids: torch.Tensor = field(compare=False) # ancestors
     n_splits: int # sorts by the number of splits
 
     def __post_init__(self):
@@ -69,8 +103,36 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
         heapq.heappush(frontier, new_node)
 
 
-def handle_entropy_spike(): 
-    pass
+# get the starting IDS of all functions
+def handle_missing_function(node, frontier): 
+    
+
+    for next_tok in STARTING_IDS_OF_FUNCTIONS: 
+        new_node = Node(
+                log_p   = 0.0,
+                dec_ids = torch.cat([node.dec_ids,
+                                     torch.tensor([next_tok], device='cuda')]),
+                n_splits = node.n_splits + 1      # unchanged for greedy extension
+            )
+        
+        heapq.heappush(frontier, new_node)
+
+    print(len(frontier))
+
+
+def handle_entropy_spike(mask, tok, nodes, log_probs, frontier): 
+    spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
+
+
+    for idx in spike_ids: 
+        
+        program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
+        last_line = program.split("\n")[-1]
+
+        if missing_function(last_line): 
+            handle_missing_function(nodes[idx], frontier)
+        else:
+            pass
 
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
@@ -78,9 +140,9 @@ def entropy_fanout_search_encdec(
         prompt_ids: torch.Tensor,
         env: LineLevelArcEnv,
         visit_budget: int = 1000,
-        tau: float = 0.5,    
+        tau: float = 1,   
         max_len: int = 128,
-        batch_size: int = 16
+        batch_size: int = 1
 
         ): 
     
@@ -96,8 +158,6 @@ def entropy_fanout_search_encdec(
 
     frontier = [Node(   log_p=0.0,
                         dec_ids=torch.tensor([bos_id], device=device),
-                        n_splits=0), Node(   log_p=0.0,
-                        dec_ids=torch.tensor([bos_id], device=device),
                         n_splits=0)]   
 
     while frontier and n_visted < visit_budget: 
@@ -111,16 +171,18 @@ def entropy_fanout_search_encdec(
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
         
+        print(entropies)
 
+        print(tok.decode(nodes[0].dec_ids))
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
         
-        handle_entropy_spike()
+        handle_entropy_spike(mask, tok, nodes, log_probs, frontier)
 
 
 if __name__ == "__main__": 
     model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-19_20-26-16/checkpoint-1647')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
-    task = Task.from_json('./data/training/0ca9ddb6.json')
+    task = Task.from_json('./data/training/6fa7a44f.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
 
     env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
