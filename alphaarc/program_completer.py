@@ -6,9 +6,16 @@ from alphaarc.dsl.primitives import PRIMITIVE_CONSTANTS, PRIMITIVE_FUNCTIONS
 from alphaarc.augment.genetic import TaskEvolver
 import random
 from alphaarc.task import Task
+
+from alphaarc.dsl.arc_types import Arrow
+
 class ProgramCompleter:
     def __init__(self, sampler: ProgramSampler):
         self.sampler = sampler  # we only need the mappings, not the RNG
+
+
+    def suggest_next_functions(self, program_name, partial_program, I):
+        pass
 
     def suggest_next_args(
         self,
@@ -55,9 +62,13 @@ class ProgramCompleter:
         if func_src in ps.primitive_function_to_base_type_mapping:
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
-            func_type = ps.type_inferer.type_dict[func_src][0]   # variable Arrow
-
+            print("- - - ")
+            print(ps.type_inferer.type_dict)
+            print(ps. primitive_function_to_general_type_mapping)
+            print("- - - ")
+            func_types = ps.type_inferer.type_dict[func_src]
         
+
         final_candidates = []
         for func_type in func_types:
             next_arg_pos   = len(supplied)
@@ -69,8 +80,8 @@ class ProgramCompleter:
                     terms_to_exclude=[],
                     return_all=True,
                 )
-            except ValueError:
-                pass
+            except ValueError or KeyError:
+                candidates = []
 
             final_candidates.extend(candidates)
 

@@ -12,8 +12,9 @@ def find_function_names(filename):
         contents = file.read()
     pattern = r"def\s+(\w+)\("
     function_names = re.findall(pattern, contents)
-    #return [" " + x for x in function_names] TODO: revert this back.
-    return [x for x in function_names]
+    # return [x for x in function_names] TODO: revert this back.
+    
+    return [" " + x for x in function_names]  
 
 
 F = False

@@ -12,7 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 import os
 import torch.nn.functional as F
 from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
-
+from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -108,6 +108,23 @@ def handle_missing_variable(node, frontier, tok, program_lines):
 
 
 
+def format_as_dummy_program(program_lines):
+    
+    return f"""def solve_28bf18c6(I):
+    {program_lines}"""
+
+
+def handle_missing_argument(node, frontier, tok, program_lines, completer, task): 
+    
+    dummy_program = format_as_dummy_program("\n".join(program_lines))
+    
+    try:
+        results = completer.suggest_next_args("prog", dummy_program, task.training_examples[0]['input'])
+        print(dummy_program)
+        print(results)
+
+    except ValueError:
+        pass
 
 @dataclass(order=True)
 class Node:
@@ -169,7 +186,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
 
 
 
-def handle_entropy_spike(mask, tok, nodes, log_probs, frontier): 
+def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task): 
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
 
@@ -183,13 +200,15 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier):
         elif missing_variable(last_line): 
             handle_missing_variable(nodes[idx], frontier, tok, program.split("\n"))
         elif missing_argument(last_line):
-            print(last_line)
+            handle_missing_argument(nodes[idx], frontier, tok,program.split("\n"), completer, task)
 
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
         tok: AutoTokenizer,
         prompt_ids: torch.Tensor,
         env: LineLevelArcEnv,
+        completer: ProgramCompleter,
+        task, 
         visit_budget: int = 1000,
         tau: float = 1,   
         max_len: int = 128,
@@ -226,7 +245,7 @@ def entropy_fanout_search_encdec(
 
         # print(tok.decode(nodes[0].dec_ids))
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
-        handle_entropy_spike(mask, tok, nodes, log_probs, frontier)
+        handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
 
 
 if __name__ == "__main__": 
@@ -237,11 +256,16 @@ if __name__ == "__main__":
 
     env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
 
-    print(task.program_lines)
+    sampler   = ProgramSampler(data_path="./data/")
+    completer = ProgramCompleter(sampler)
+
+
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,
                                     input_ids.to('cuda'),
-                                    env)
+                                    env,
+                                    completer,
+                                    task)
     
     # print(tok.batch_decode(answers))
 
