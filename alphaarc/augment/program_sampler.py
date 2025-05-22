@@ -150,7 +150,8 @@ class ProgramSample:
         self.program = ast.unparse(self.program_ast)
 
     def sample_term_with_type(self, term_type, terms_to_exclude, return_all=False):
-        filtered_type_dict = self.filter_type_dict_by_index()
+        
+        filtered_type_dict = self.type_inferer.type_dict # self.filter_type_dict_by_index()
         candidate_terms = []
         # add primitive functions
         if isinstance(term_type, dict):

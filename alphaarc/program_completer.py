@@ -19,7 +19,11 @@ class ProgramCompleter:
         
         lines = partial_program.rstrip().splitlines()
         partial_line = lines[-1]
-        finished_part   = "\n".join(lines[:-1]) or f"def {program_name}(I):\n    pass"
+        print(lines)
+        finished_part   = "\n".join(lines[:-1])
+
+        if len(lines) == 2:
+            finished_part = f"def {program_name}(I):\n    pass"
 
         ps = ProgramSample(
             program_name              = program_name,
@@ -38,28 +42,39 @@ class ProgramCompleter:
         except SyntaxError as e:
             raise ValueError("Everything except the last line must be valid Python") from e
 
-        dummy_line   = partial_line + " ___)"
-        fake_stmt    = ast.parse(dummy_line.strip()).body[0]
-        call_node    = fake_stmt.value  # ast.Call
+        needs_comma = not partial_line.rstrip().endswith(",")
+        dummy_line  = partial_line + (" ___)" if needs_comma else " ___)")
+        call_node   = ast.parse(dummy_line.strip()).body[0].value
 
         func_src = ast.unparse(call_node.func)
         supplied = [ast.unparse(arg) for arg in call_node.args]
 
+        if supplied and supplied[-1] == "___":
+            supplied = supplied[:-1]
+
         if func_src in ps.primitive_function_to_base_type_mapping:
-            func_type = random.choice(ps.primitive_function_to_base_type_mapping[func_src])
+            func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
-            func_type = ps.type_inferer.type_dict[func_src][0]  # variable pointing to Arrow
+            func_type = ps.type_inferer.type_dict[func_src][0]   # variable Arrow
 
-        next_arg_pos   = len(supplied) -1 
-        required_type  = func_type.inputs[next_arg_pos]
+        
+        final_candidates = []
+        for func_type in func_types:
+            next_arg_pos   = len(supplied)
+            required_type  = func_type.inputs[next_arg_pos]
 
-        candidates = ps.sample_term_with_type(
-            term_type=required_type,
-            terms_to_exclude=[],
-            return_all=True,
-        )
+            try:
+                candidates = ps.sample_term_with_type(
+                    term_type=required_type,
+                    terms_to_exclude=[],
+                    return_all=True,
+                )
+            except ValueError:
+                pass
 
-        return candidates
+            final_candidates.extend(candidates)
+
+        return list(set(final_candidates)) 
         
 
 
@@ -69,10 +84,9 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """def prog(I):
-        x1 = hmirror(I)
-        O = vconcat(I,"""
-    task = Task.from_json('./data/training/6fa7a44f.json')
+    prog_text = """def solve_28bf18c6(I):
+    x1 = objects(I,"""
+    task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program_lines)
     input_ = task.training_examples[0]['input']
     #     input_ = [x['input'] for x in task.training_examples]
