@@ -14,7 +14,7 @@ def find_function_names(filename):
     function_names = re.findall(pattern, contents)
     # return [x for x in function_names] TODO: revert this back.
     
-    return [" " + x for x in function_names]  
+    return [x for x in function_names]  
 
 
 F = False

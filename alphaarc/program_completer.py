@@ -57,7 +57,7 @@ class ProgramCompleter:
             if supplied and supplied[-1] == "___":
                 supplied = supplied[:-1]
 
-        except (SyntaxError, TypeError) as e:
+        except (SyntaxError, TypeError, NameError) as e:
             raise ValueError("HERE!")
         
         
@@ -91,10 +91,8 @@ if __name__ == "__main__":
     completer = ProgramCompleter(sampler)
 
     prog_text = """def solve_28bf18c6(I):
-    x1 = objects(I, T, T, T)
-    x2 = first(x1)
-    x3 = subgrid(x2, I)
-    O = hconcat(x3,"""
+    x1 = hmirror(I)
+O = vconcat(I"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program_lines)
     input_ = task.training_examples[0]['input']

@@ -20,6 +20,8 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
+SPACED_PRIMITIVE_FUNCTIONS = [" " + x for x in PRIMITIVE_FUNCTIONS]
+
 
 def extract_function_name(expression):
     match = re.search(r'=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', expression)
@@ -27,11 +29,17 @@ def extract_function_name(expression):
 
 def compute_next_token_ids(prefix, completions): 
     tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    #prefix_ids = tokenizer.encode(prefix.strip(), return_tensors='np', add_special_tokens=False)[0]
     prefix_ids = tokenizer.encode(prefix, return_tensors='np', add_special_tokens=False)[0]
+
     next_token_ids = []
     for comp in completions:
-        comp_ids = tokenizer.encode(comp, return_tensors='np', add_special_tokens=False)[0]
+        comp_str = " " + comp.strip()
+        comp_ids  = tokenizer.encode(comp_str, return_tensors='np', add_special_tokens=False)[0]
+
+        # comp_ids = tokenizer.encode(comp.strip(), return_tensors='np', add_special_tokens=False)[0]
         
+
         # Only proceed if comp_ids starts with prefix_ids
         if len(comp_ids) > len(prefix_ids) and all(comp_ids[i] == prefix_ids[i] for i in range(len(prefix_ids))):
             next_token_ids.append(comp_ids[len(prefix_ids)])
@@ -64,7 +72,7 @@ def missing_variable(line):
 def missing_argument(line): 
     rhs = get_rhs(line)
     
-    if ")" not in rhs and (" " + extract_function_name(line)) in PRIMITIVE_FUNCTIONS:
+    if ")" not in rhs and (extract_function_name(line)) in PRIMITIVE_FUNCTIONS:
         return True
     else:
         return False
@@ -77,10 +85,20 @@ def find_continuations(input_str, string_list):
 def handle_missing_function(node, frontier, line): 
     
     rhs = get_rhs(line)
-    continuations = find_continuations(rhs, PRIMITIVE_FUNCTIONS) 
-    STARTING_IDS_OF_FUNCTIONS = compute_next_token_ids(rhs, continuations)
+    raw_conts = find_continuations(rhs.strip(), PRIMITIVE_FUNCTIONS)
+    continuations = [" " + fn for fn in raw_conts]
 
-    # when computing this. it needs to be like the 
+    STARTING_IDS_OF_FUNCTIONS = compute_next_token_ids(rhs, continuations)
+    
+    if len(STARTING_IDS_OF_FUNCTIONS) == 0: 
+        new_node = Node(
+                log_p   = 0.0,
+                dec_ids = torch.cat([node.dec_ids,
+                                     torch.tensor([12], device='cuda')]), # add a ( character
+                n_splits = node.n_splits       # unchanged for greedy extension
+            )
+        heapq.heappush(frontier, new_node)
+
 
     for next_tok in STARTING_IDS_OF_FUNCTIONS: 
         new_node = Node(
@@ -119,7 +137,6 @@ def handle_missing_variable(node, frontier, tok, program_lines):
 
 
 def format_as_dummy_program(program_lines):
-    
     return f"""def solve_28bf18c6(I):
     {program_lines}"""
 
@@ -128,7 +145,6 @@ def handle_missing_argument(node, frontier, tok, program_lines, completer, task)
 
 
     dummy_program = format_as_dummy_program("\n".join(program_lines))
-
     try:
         results = completer.suggest_next_args("prog", dummy_program, task.training_examples[0]['input'])
         # with the new results, append them to the program.
@@ -137,7 +153,7 @@ def handle_missing_argument(node, frontier, tok, program_lines, completer, task)
             new_node = Node(
                     log_p   = 0.0,
                     dec_ids = torch.cat([node.dec_ids,
-                                         torch.tensor(tok.encode(result, return_tensors='np', add_special_tokens=False), device='cuda').reshape(-1) ]),
+                                         torch.tensor(tok.encode(" " + result, return_tensors='np', add_special_tokens=False), device='cuda').reshape(-1) ]),
                     n_splits = node.n_splits + 1      # unchanged for greedy extension
                 )
             
@@ -153,7 +169,7 @@ class Node:
     sort_key: float = field(init=False)
     log_p: float = field(compare=False) # may use this later.
     dec_ids: torch.Tensor = field(compare=False) # ancestors
-    n_splits: int # sorts by the number of splits
+    n_splits: int  = field(compare=True)# sorts by the number of splits
 
     def __post_init__(self):
         self.sort_key = self.n_splits
@@ -199,7 +215,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
                 log_p   = new_log_p,
                 dec_ids = torch.cat([node.dec_ids,
                                      torch.tensor([tok_id], device='cuda')]),
-                n_splits = node.n_splits      # unchanged for greedy extension
+                n_splits = node.n_splits     # unchanged for greedy extension
             )
         heapq.heappush(frontier, new_node)
 
@@ -211,19 +227,21 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
 
+ 
     for idx in spike_ids: 
-        
         program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
         last_line = program.split("\n")[-1]
 
         if missing_function(last_line): 
             handle_missing_function(nodes[idx], frontier, last_line)
-        elif missing_variable(last_line): 
+        elif missing_variable(last_line):
             handle_missing_variable(nodes[idx], frontier, tok, program.split("\n"))
         elif missing_argument(last_line):
             handle_missing_argument(nodes[idx], frontier, tok,program.split("\n"), completer, task)
         else:
             print(f"sank: {last_line}") # sink state
+
+
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
         tok: AutoTokenizer,
@@ -249,23 +267,26 @@ def entropy_fanout_search_encdec(
     n_visted = 0
 
     frontier = [Node(   log_p=0.0,
-                        dec_ids=torch.tensor([bos_id], device=device),
+                        dec_ids=torch.tensor([0],device='cuda') ,
                         n_splits=0)]   
 
     while frontier and n_visted < visit_budget: 
-        nodes = [heapq.heappop(frontier) for i in range(min(batch_size, len(frontier)))]
+        nodes = [heapq.heappop(frontier) for i in range(1)]
         batched_decoder_ids = batch_decoder_ids(nodes)
         logits = fwd_step_encdec(model, enc_out, batched_decoder_ids )
         entropies = entropy_bits(logits)
 
-        
+
+        for i in range(batched_decoder_ids.shape[0]):
+            reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
+            if reward == 1.0: 
+                print("SOLVED!")
+                exit()
+
         log_probs   = torch.log_softmax(logits, dim=-1)          # (B, |V|)
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
         
-        # print(entropies)
-
-        # print(tok.decode(nodes[0].dec_ids))
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
 
@@ -278,9 +299,11 @@ if __name__ == "__main__":
 
     env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
 
+    env.set_task(task)
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
-
+    
+    print(task.program_lines)
 
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,

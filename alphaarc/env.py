@@ -183,7 +183,6 @@ class LineLevelArcEnv (BaseEnv):
     def evaluate_program(self, program, should_token_account=True): 
         terminated = False
         reward = 0
-        # print(program)
         program = self._decode(program)
 
         

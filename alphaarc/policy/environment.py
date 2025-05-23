@@ -17,6 +17,7 @@ def execute_candidate_program(program_string, program_input, max_state_size=1_00
     valid_syntax = check_syntax(program_string)
     if valid_syntax != "Valid Syntax":
         return "Invalid Input"
+    
     if not valid_grid(program_input):
         return "Invalid Input"
     lines = program_string.split("\n")
