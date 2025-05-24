@@ -90,6 +90,7 @@ class ProgramCompleter:
         if ")" in partial_line:
             return []
 
+        required_parenth = False
         # check to see if the number of args exceeds
 
         body_ast = ast.parse(finished_part)
@@ -113,8 +114,9 @@ class ProgramCompleter:
                 rolled_back = base[:last_split + 1]
                 partial_arg = base[last_split + 1:]
             else:
-                raise Exception("Very bad")
-            
+                rolled_back = base + "("
+                required_parenth = True
+
             base = rolled_back
 
         needs_comma = not base.rstrip().endswith(",")
@@ -135,18 +137,14 @@ class ProgramCompleter:
         if func_src in ps.primitive_function_to_base_type_mapping:
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
-            print("uh oh")
-            func_types = ps.type_inferer.type_dict[func_src][0]   # variable Arrow
-
+            func_types = [get_primitive_function_type(func_src)]
 
         final_candidates = []
         next_arg_pos   = len(supplied)
 
 
         for x in func_types: 
-
             required_type  = x.inputs[next_arg_pos]
-
             try: 
                 candidates = ps.sample_term_with_type(
                             term_type=required_type,
@@ -154,7 +152,7 @@ class ProgramCompleter:
                             return_all=True,
                         )
                 final_candidates.extend(candidates)
-            except ValueError: # for some reason it throws an error if n
+            except ValueError: # for some reason it throws an error if it cant find the correct type
                 pass
         
 
@@ -168,8 +166,10 @@ class ProgramCompleter:
 
 
 
+        if required_parenth:
+            answers = ["('"+ ans for ans in answers]
 
-        if not ends_with_space(partial_line):
+        elif not ends_with_space(partial_line):
             answers = [" "+ ans for ans in answers]
 
 
@@ -211,10 +211,7 @@ if __name__ == "__main__":
     completer = ProgramCompleter(sampler)
 
     prog_text = """def solve_28bf18c6(I):
-    x1 = objects(I, T, T, T)
-    x2 = first(x1)
-    x3 = subgrid(x2, I)
-    O = hconcat(x3, x3"""
+    x1 = objects"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']
