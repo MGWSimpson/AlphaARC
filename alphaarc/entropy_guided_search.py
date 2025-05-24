@@ -203,7 +203,9 @@ def batch_decoder_ids(nodes):
     return batched_decoder_ids
 
 
-
+"""
+Code which handles non entropy spikes. Simply extend the sequence.
+"""
 def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
     extend_ids = mask.nonzero(as_tuple=False).squeeze(-1).tolist()
     for i in extend_ids:
@@ -222,12 +224,36 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
 
 
 
+"""
+Code which handles the case of entropy spikes.
+Due to definition, can technically happen at any point in the sequence of code.
+So should consdier all the cases.
+for this, lets work entirely in the string space. 
 
+Ok, so there is actually a few cases to consider: 
+-> does it have an equals sign?
+    -> if no, means we must complete the LHS.
+        -> having a full complete LHS requires only a handful of things:
+            -> must have a full complete variable.
+                -> the point at which this stops requires a partial matching code. So 
+            -> must have an equals sign.
+            -> I suppose the thing to do is this, I have just realized it. 
+            -> if it gets stuck at any point, there is actually only two things it can output. 
+            -> x7 =  or O = . this is what I handle, but there isnt any like partial matching stuff.
+            -> so yeah basically it just takes in a line, checks if its got an equals sign, then will deploy the LHS logic.
+            -> I think I am going to wrap all of this logic in the completer code. which also means I can test it. 
+    -> if yes, then it means we have to complete the RHS. 
+        -> the RHS is a touch more complex. it has the following requirements: 
+            -> if there is no function present. we must fill in the function. 
+                -> this function depends on if there is a partial match in the sequence. 
+                    -> basically we only return partially matching functions. 
+            -> if there is a function present, then there are a few things.
+
+
+"""
 def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task): 
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
-
- 
     for idx in spike_ids: 
         program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
         last_line = program.split("\n")[-1]
@@ -257,36 +283,36 @@ def entropy_fanout_search_encdec(
         ): 
     
 
-    # first encode the sequence, need only do this once.
     device = prompt_ids.device
     model.eval()
-    with torch.no_grad():
+    with torch.no_grad(): # first encode the input once.
         enc_out = model.get_encoder()(prompt_ids.unsqueeze(0))
 
-    bos_id = tok.pad_token_id
     n_visted = 0
 
     frontier = [Node(   log_p=0.0,
                         dec_ids=torch.tensor([0],device='cuda') ,
-                        n_splits=0)]   
+                        n_splits=0)]   # queue on to the frontier the starting node. which is the pad token for T5.
 
-    while frontier and n_visted < visit_budget: 
-        nodes = [heapq.heappop(frontier) for i in range(1)]
-        batched_decoder_ids = batch_decoder_ids(nodes)
-        logits = fwd_step_encdec(model, enc_out, batched_decoder_ids )
-        entropies = entropy_bits(logits)
+    while frontier and n_visted < visit_budget: # whilst there are still nodes to evaluate and its within budget. proceed search.
+        nodes = [heapq.heappop(frontier) for i in range(1)] # pop off batch size number of nodes from frontier.
+        batched_decoder_ids = batch_decoder_ids(nodes) # batch and pad the nodes decoder ids
+        logits = fwd_step_encdec(model, enc_out, batched_decoder_ids ) # perform a forward pass with the encoder-decoder
+        entropies = entropy_bits(logits) # compute the entropies.
 
 
-        for i in range(batched_decoder_ids.shape[0]):
+        for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
             if reward == 1.0: 
                 print("SOLVED!")
                 exit()
 
+        # compute the stats of the sequence
         log_probs   = torch.log_softmax(logits, dim=-1)          # (B, |V|)
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
         
+        # basically. depending on whether the entropy is too low or too high, we do different things.
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
 
