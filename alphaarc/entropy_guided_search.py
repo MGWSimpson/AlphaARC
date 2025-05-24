@@ -330,7 +330,7 @@ if __name__ == "__main__":
     completer = ProgramCompleter(sampler)
     
     print(task.program_lines)
-
+    # 
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,
                                     input_ids.to('cuda'),
@@ -338,6 +338,5 @@ if __name__ == "__main__":
                                     completer,
                                     task)
     
-    # print(tok.batch_decode(answers))
 
 
