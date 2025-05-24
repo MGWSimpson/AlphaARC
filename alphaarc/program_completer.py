@@ -90,6 +90,7 @@ class ProgramCompleter:
         if ")" in partial_line:
             return []
 
+        # check to see if the number of args exceeds
 
         body_ast = ast.parse(finished_part)
         ps.type_inferer.infer_type_from_ast(body_ast) # parse the valid args and stuff
@@ -100,7 +101,7 @@ class ProgramCompleter:
         # if it doesnt start with a ( or a ,
 
         base = partial_line.rstrip()
-
+        partial_arg = None
         if not base.endswith(",") and not base.endswith("("):
             # Find last ',' or '('
             last_comma = base.rfind(",")
@@ -141,7 +142,9 @@ class ProgramCompleter:
         final_candidates = []
         next_arg_pos   = len(supplied)
 
+
         for x in func_types: 
+
             required_type  = x.inputs[next_arg_pos]
 
             try: 
@@ -209,7 +212,9 @@ if __name__ == "__main__":
 
     prog_text = """def solve_28bf18c6(I):
     x1 = objects(I, T, T, T)
-    x2 = first(x"""
+    x2 = first(x1)
+    x3 = subgrid(x2, I)
+    O = hconcat(x3, x3"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']
