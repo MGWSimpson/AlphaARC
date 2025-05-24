@@ -100,6 +100,7 @@ class ProgramSample:
         self.program_ast = ast.parse(f"def {program_name}(I):\n   return O")
         self.program = ast.unparse(self.program_ast)
         self.type_inferer = TypeInferer(I)
+
         self.primitive_function_to_general_type_mapping = primitive_function_to_general_type_mapping
         self.primitive_function_to_base_type_mapping = primitive_function_to_base_type_mapping
         self.primitive_constant_to_type_mapping = primitive_constant_to_type_mapping
@@ -152,6 +153,10 @@ class ProgramSample:
     def sample_term_with_type(self, term_type, terms_to_exclude, return_all=False):
         
         filtered_type_dict = self.type_inferer.type_dict # self.filter_type_dict_by_index()
+
+        print(f"Looking for term_type: {term_type}")
+        print(f"Available variables and types: {filtered_type_dict}")
+        
         candidate_terms = []
         # add primitive functions
         if isinstance(term_type, dict):
