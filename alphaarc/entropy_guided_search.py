@@ -15,23 +15,34 @@ from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
 from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 import re
 import traceback
-
+import pdb; pdb.set_trace()
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 
-SPACED_PRIMITIVE_FUNCTIONS = [" " + x for x in PRIMITIVE_FUNCTIONS]
-
+import itertools
+node_counter = itertools.count()
 
 from typing import List, Optional
 from transformers import AutoTokenizer
 
-def get_first_uncommon_tokens(
+
+global_tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5p-220m")
+from typing import List, Optional
+from transformers import AutoTokenizer
+
+
+
+def format_as_dummy_program(program_lines):
+    return f"""def solve_28bf18c6(I):
+    {program_lines}"""
+
+def get_new_tokens_after_prefix(
     texts: List[str],
     common_prefix: str,
     tokenizer_name: str = "Salesforce/codet5p-220m"
 ) -> List[Optional[str]]:
-    
+ 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     prefix_tokens = tokenizer.encode(common_prefix, add_special_tokens=False)
@@ -39,13 +50,12 @@ def get_first_uncommon_tokens(
 
     tokenized_texts = [tokenizer.encode(text, add_special_tokens=False) for text in texts]
 
-    differing_tokens = [
-        tokenizer.decode([tokens[prefix_len]]) if len(tokens) > prefix_len else None
+    remaining_tokens = [
+        tokenizer.decode(tokens[prefix_len:]) if len(tokens) > prefix_len else None
         for tokens in tokenized_texts
     ]
 
-    return differing_tokens
-
+    return remaining_tokens
 
 def extract_function_name(expression):
     match = re.search(r'=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', expression)
@@ -66,16 +76,22 @@ def merge_with_overlap(s1, s2):
 
     return s1 + s2[max_overlap:]
 
-@dataclass(order=True)
+@dataclass(order=False)
 class Node:
 
     sort_key: float = field(init=False)
     log_p: float = field(compare=False) # may use this later.
     dec_ids: torch.Tensor = field(compare=False) # ancestors
-    n_splits: int  = field(compare=True)# sorts by the number of splits
+    n_splits: int  = field(compare=False)# sorts by the number of splits
 
     def __post_init__(self):
         self.sort_key = self.n_splits
+        self.counter = next(node_counter)  # assign insertion order
+
+    def __repr__(self):
+        return f"Node(sort_key={self.sort_key}, n_splits={self.n_splits}, program={global_tokenizer.decode(self.dec_ids)})"
+    
+
 
 def fwd_step_encdec(
     model: T5ForConditionalGeneration,
@@ -129,33 +145,42 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
     for idx in spike_ids: 
+
         program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
         partial_line = program.split("\n")[-1]
-        completions = completer.complete(program, task.training_examples[0]['input'])
+
+        try:
+            completions = completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         
+        # name error for fake variables
+        # index error for trying to complete something with only so many args.
+        except (NameError, IndexError, ValueError) as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            continue
 
         if len(completions) ==0:
             continue
 
         completions = [merge_with_overlap(partial_line, x) for x in completions] 
-        tokens = get_first_uncommon_tokens(completions, partial_line)
-        tokens = list(set(tokens)) # likely a better way to do this but will cope for now.
+        
+        tokens = get_new_tokens_after_prefix(completions, partial_line)
 
-        print(completions)
-        print(tokens)
+        
+
+        
         token_ids = [tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1) for x in tokens]
         
         for token_id in token_ids: # enqueue a node 
             new_node = Node(
                 log_p   = 0.0,
                 dec_ids = torch.cat([nodes[idx].dec_ids,
-                                     torch.tensor([token_id], device='cuda')]),
+                                    token_id.to('cuda')]),
                 n_splits = nodes[idx].n_splits + 1      # unchanged for greedy extension
             )
 
             heapq.heappush(frontier, new_node)
-
-        
+        # print(frontier)
+        #breakpoint()
+    
 
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
@@ -180,7 +205,7 @@ def entropy_fanout_search_encdec(
     n_visted = 0
 
     frontier = [Node(   log_p=0.0,
-                        dec_ids=torch.tensor([0],device='cuda') ,
+                        dec_ids=torch.tensor([0, 92, 21, 273, 16349, 8299, 12, 45, 13],device='cuda') ,
                         n_splits=0)]   # queue on to the frontier the starting node. which is the pad token for T5.
 
     while frontier and n_visted < visit_budget: # whilst there are still nodes to evaluate and its within budget. proceed search.
@@ -218,12 +243,12 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
     
+    # print(tok("x1 = hmirror(I)", add_special_tokens=False))
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,
                                     input_ids.to('cuda'),
                                     env,
                                     completer,
                                     task)
-    
 
 

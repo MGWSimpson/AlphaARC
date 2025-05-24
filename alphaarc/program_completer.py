@@ -138,7 +138,8 @@ class ProgramCompleter:
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
             func_types = [get_primitive_function_type(func_src)]
-
+            
+            
         final_candidates = []
         next_arg_pos   = len(supplied)
 
@@ -168,8 +169,7 @@ class ProgramCompleter:
 
         if required_parenth:
             answers = ["('"+ ans for ans in answers]
-
-        elif not ends_with_space(partial_line):
+        elif not ends_with_space(partial_line) and not partial_line.endswith("("):
             answers = [" "+ ans for ans in answers]
 
 
@@ -190,14 +190,13 @@ class ProgramCompleter:
 
     def complete(self,program_text, sample_task_input, program_name="EMPTY"): 
         
-        lines = program_text.splitlines()
+        lines = program_text.split("\n")
         lines = [l.strip() for l in lines]
         
         if len(lines) == 0:
             return self._start_program()
         
         partial_line = lines[-1]
-
 
         if "=" not in partial_line:
             return self._complete_lhs(partial_line , lines)
@@ -210,8 +209,8 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """def solve_28bf18c6(I):
-    x1 = objects"""
+    prog_text = """x1 = hmirror(I)
+    O = vconcat(I,"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']

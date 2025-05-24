@@ -154,9 +154,7 @@ class ProgramSample:
         
         filtered_type_dict = self.type_inferer.type_dict # self.filter_type_dict_by_index()
 
-        print(f"Looking for term_type: {term_type}")
-        print(f"Available variables and types: {filtered_type_dict}")
-        
+
         candidate_terms = []
         # add primitive functions
         if isinstance(term_type, dict):
@@ -164,7 +162,7 @@ class ProgramSample:
                 term_type["inputs"]
             ]
         elif isinstance(term_type, Arrow):
-            candidate_terms += self.base_type_to_primitive_function_mapping[display_type(Arrow)]
+            candidate_terms += self.base_type_to_primitive_function_mapping[display_type(term_type)]
         # add primitive constants
         else:
             if term_type in self.type_to_primitive_constant_mapping.keys():
