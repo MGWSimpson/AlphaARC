@@ -85,19 +85,49 @@ class ProgramCompleter:
             primitive_function_to_base_type_mapping    = self.sampler.primitive_function_to_base_type_mapping,
         )
 
-        body_ast = ast.parse(finished_part)
-        ps.type_inferer.infer_type_from_ast(body_ast)
         
-        needs_comma = not partial_line.rstrip().endswith(",")
-        dummy_line  = partial_line + (" ___)" if needs_comma else " ___)")
+
+        if ")" in partial_line:
+            return []
+
+
+        body_ast = ast.parse(finished_part)
+        ps.type_inferer.infer_type_from_ast(body_ast) # parse the valid args and stuff
+        
+
+
+        # this is where I should make that check.
+        # if it doesnt start with a ( or a ,
+
+        base = partial_line.rstrip()
+
+        if not base.endswith(",") and not base.endswith("("):
+            # Find last ',' or '('
+            last_comma = base.rfind(",")
+            last_paren = base.rfind("(")
+            last_split = max(last_comma, last_paren)
+
+            # If neither found, start from beginning
+            if last_split != -1:
+                rolled_back = base[:last_split + 1]
+                partial_arg = base[last_split + 1:]
+            else:
+                raise Exception("Very bad")
+            
+            base = rolled_back
+
+        needs_comma = not base.rstrip().endswith(",")
+        dummy_line  = base + (" ___)" if needs_comma else " ___)") # basically check for if its the first arg or not
+
+
         call_node   = ast.parse(dummy_line.strip()).body[0].value
         func_src = ast.unparse(call_node.func)
         supplied = [ast.unparse(arg) for arg in call_node.args]
 
         if supplied and supplied[-1] == "___":
-            supplied = supplied[:-1]
+            supplied.pop()
 
-        
+
         
         func_types = get_primitive_function_type(func_src)
         
@@ -126,14 +156,16 @@ class ProgramCompleter:
         
 
         # add in some additional checks here.
-        
         answers = list(set(final_candidates))
 
+        if partial_arg is not None:
+            answers = [c for c in answers if c.startswith(partial_arg)]
 
 
-        # check for a space in the last bit of the partial line
 
-        print(ends_with_space(partial_line))
+
+
+
         if not ends_with_space(partial_line):
             answers = [" "+ ans for ans in answers]
 
@@ -176,7 +208,8 @@ if __name__ == "__main__":
     completer = ProgramCompleter(sampler)
 
     prog_text = """def solve_28bf18c6(I):
-    x1 = objects(I, T,"""
+    x1 = objects(I, T, T, T)
+    x2 = first(x"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']
