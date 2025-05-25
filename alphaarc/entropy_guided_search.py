@@ -115,7 +115,7 @@ class Node:
     n_splits: int  = field(compare=False)# sorts by the number of splits
 
     def __post_init__(self):
-        self.sort_key = self.n_splits
+        self.sort_key = (self.n_splits, -self.log_p, )
         self.counter = next(node_counter)  # assign insertion order
 
     def __repr__(self):
@@ -195,13 +195,15 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         tokens = get_first_new_token_after_prefix(completions, partial_line)
 
         
-
-        
+        # x -> x -> x -> x ->
         token_ids = [tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1) for x in tokens]
         
         for token_id in token_ids: # enqueue a node 
+            tok_id = token_id.item()
+            log_p_tok = log_probs[idx, tok_id].item()
+
             new_node = Node(
-                log_p   = 0.0,
+                log_p   = nodes[idx].log_p + log_p_tok,
                 dec_ids = torch.cat([nodes[idx].dec_ids,
                                     token_id.to('cuda')]),
                 n_splits = (nodes[idx].n_splits + 1)      # unchanged for greedy extension
@@ -210,8 +212,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
             
             heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
-        # print(frontier)
-        #breakpoint()
+        # breakpoint()
     
 
 def entropy_fanout_search_encdec( 
@@ -277,7 +278,7 @@ def entropy_fanout_search_encdec(
 
 
 if __name__ == "__main__": 
-    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-19_20-26-16/checkpoint-1647')
+    model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     task = Task.from_json('./data/training/6fa7a44f.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
