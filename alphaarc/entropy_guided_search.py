@@ -31,11 +31,41 @@ global_tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5p-220m")
 from typing import List, Optional
 from transformers import AutoTokenizer
 
+from typing import List, Optional
+from transformers import AutoTokenizer
 
 
 def format_as_dummy_program(program_lines):
     return f"""def solve_28bf18c6(I):
     {program_lines}"""
+
+
+def get_first_new_token_after_prefix(
+    texts: List[str],
+    common_prefix: str,
+    tokenizer_name: str = "Salesforce/codet5p-220m"
+) -> List[Optional[str]]:
+
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    prefix_tokens = tokenizer.encode(common_prefix, add_special_tokens=False)
+    prefix_len = len(prefix_tokens)
+
+    tokenized_texts = [tokenizer.encode(text, add_special_tokens=False) for text in texts]
+
+    first_new_tokens = []
+    for tokens in tokenized_texts:
+        if len(tokens) > prefix_len:
+            # Get the first new token after the prefix
+            new_token = tokens[prefix_len]
+            decoded = tokenizer.decode([new_token])
+            first_new_tokens.append(decoded)
+        else:
+            first_new_tokens.append(None)
+
+    return first_new_tokens
+
+
 
 def get_new_tokens_after_prefix(
     texts: List[str],
@@ -138,7 +168,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
                                      torch.tensor([tok_id], device='cuda')]),
                 n_splits = node.n_splits     # unchanged for greedy extension
             )
-        heapq.heappush(frontier, new_node)
+        heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
 
 def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: ProgramCompleter, task): 
@@ -154,7 +184,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         
         # name error for fake variables
         # index error for trying to complete something with only so many args.
-        except (NameError, IndexError, ValueError) as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+        except (NameError, IndexError, TypeError, ValueError) as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
             continue
 
         if len(completions) ==0:
@@ -162,7 +192,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
 
         completions = [merge_with_overlap(partial_line, x) for x in completions] 
         
-        tokens = get_new_tokens_after_prefix(completions, partial_line)
+        tokens = get_first_new_token_after_prefix(completions, partial_line)
 
         
 
@@ -174,10 +204,12 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
                 log_p   = 0.0,
                 dec_ids = torch.cat([nodes[idx].dec_ids,
                                     token_id.to('cuda')]),
-                n_splits = nodes[idx].n_splits + 1      # unchanged for greedy extension
+                n_splits = (nodes[idx].n_splits + 1)      # unchanged for greedy extension
             )
 
-            heapq.heappush(frontier, new_node)
+            
+            heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
+
         # print(frontier)
         #breakpoint()
     
@@ -204,16 +236,25 @@ def entropy_fanout_search_encdec(
 
     n_visted = 0
 
-    frontier = [Node(   log_p=0.0,
-                        dec_ids=torch.tensor([0, 92, 21, 273, 16349, 8299, 12, 45, 13],device='cuda') ,
-                        n_splits=0)]   # queue on to the frontier the starting node. which is the pad token for T5.
+    num_splits = 0
+    num_continuations = 0 
 
-    while frontier and n_visted < visit_budget: # whilst there are still nodes to evaluate and its within budget. proceed search.
-        nodes = [heapq.heappop(frontier) for i in range(1)] # pop off batch size number of nodes from frontier.
+    frontier = [(0, 0, Node(   log_p=0.0,
+                        dec_ids=torch.tensor([0],device='cuda') ,
+                        n_splits=0))]   # queue on to the frontier the starting node. which is the pad token for T5.
+
+    while frontier : # whilst there are still nodes to evaluate and its within budget. proceed search.
+        nodes = [heapq.heappop(frontier)[2] for i in range(1)] # pop off batch size number of nodes from frontier.
         batched_decoder_ids = batch_decoder_ids(nodes) # batch and pad the nodes decoder ids
         logits = fwd_step_encdec(model, enc_out, batched_decoder_ids ) # perform a forward pass with the encoder-decoder
         entropies = entropy_bits(logits) # compute the entropies.
 
+        n_visted +=1
+
+
+        if n_visted % visit_budget == 0:
+            print(frontier[:50])
+            print(f"n splits: {num_splits}, n_continuations: {num_continuations}")
 
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
@@ -226,6 +267,10 @@ def entropy_fanout_search_encdec(
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
         
+
+        num_continuations += mask.sum().item()
+        num_splits += (~mask).sum().item()
+
         # basically. depending on whether the entropy is too low or too high, we do different things.
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)

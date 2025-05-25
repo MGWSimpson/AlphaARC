@@ -184,7 +184,6 @@ class LineLevelArcEnv (BaseEnv):
         terminated = False
         reward = 0
         program = self._decode(program)
-
         
         if should_token_account:
             self._add_and_check_token_budget(program)
