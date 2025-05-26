@@ -15,7 +15,8 @@ from alphaarc.dsl.primitives import PRIMITIVE_FUNCTIONS
 from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 import re
 import traceback
-import pdb; pdb.set_trace()
+
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
@@ -60,8 +61,6 @@ def get_first_new_token_after_prefix(
             new_token = tokens[prefix_len]
             decoded = tokenizer.decode([new_token])
             first_new_tokens.append(decoded)
-        else:
-            first_new_tokens.append(None)
 
     return first_new_tokens
 
@@ -184,7 +183,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         
         # name error for fake variables
         # index error for trying to complete something with only so many args.
-        except (NameError, IndexError, TypeError, ValueError) as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
             continue
 
         if len(completions) ==0:
@@ -193,6 +192,8 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         completions = [merge_with_overlap(partial_line, x) for x in completions] 
         
         tokens = get_first_new_token_after_prefix(completions, partial_line)
+
+
 
         
         # x -> x -> x -> x ->
@@ -212,7 +213,6 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
             
             heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
-        # breakpoint()
     
 
 def entropy_fanout_search_encdec( 
@@ -222,7 +222,7 @@ def entropy_fanout_search_encdec(
         env: LineLevelArcEnv,
         completer: ProgramCompleter,
         task, 
-        visit_budget: int = 1000,
+        time_limit: int, 
         tau: float = 1,   
         max_len: int = 128,
         batch_size: int = 1
@@ -243,8 +243,10 @@ def entropy_fanout_search_encdec(
     frontier = [(0, 0, Node(   log_p=0.0,
                         dec_ids=torch.tensor([0],device='cuda') ,
                         n_splits=0))]   # queue on to the frontier the starting node. which is the pad token for T5.
-
-    while frontier : # whilst there are still nodes to evaluate and its within budget. proceed search.
+    
+    start_time = time.time()
+    
+    while frontier and time.time() - start_time <= time_limit: # whilst there are still nodes to evaluate and its within budget. proceed search.
         nodes = [heapq.heappop(frontier)[2] for i in range(1)] # pop off batch size number of nodes from frontier.
         batched_decoder_ids = batch_decoder_ids(nodes) # batch and pad the nodes decoder ids
         logits = fwd_step_encdec(model, enc_out, batched_decoder_ids ) # perform a forward pass with the encoder-decoder
@@ -253,15 +255,12 @@ def entropy_fanout_search_encdec(
         n_visted +=1
 
 
-        if n_visted % visit_budget == 0:
-            print(frontier[:50])
-            print(f"n splits: {num_splits}, n_continuations: {num_continuations}")
 
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
             if reward == 1.0: 
                 print("SOLVED!")
-                exit()
+                return True
 
         # compute the stats of the sequence
         log_probs   = torch.log_softmax(logits, dim=-1)          # (B, |V|)
@@ -276,6 +275,7 @@ def entropy_fanout_search_encdec(
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
 
+    return False # if failed to solve
 
 if __name__ == "__main__": 
     model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')

@@ -209,8 +209,7 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """x1 = hmirror(I)
-    O = vconcat(I,"""
+    prog_text = """"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']
