@@ -21,7 +21,7 @@ ok quick note there may be like some very minor weird bug but will ignore it for
 """
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 import itertools
@@ -122,7 +122,6 @@ def merge_with_overlap(s1, s2):
     max_overlap = 0
     overlap_start = 0
 
-    # Try every suffix of s1 against every prefix of s2
     for i in range(1, min(len(s1), len(s2)) + 1):
         if s1[-i:] == s2[:i]:
             max_overlap = i
@@ -136,9 +135,9 @@ class Node:
     log_p: float = field(compare=False) # may use this later.
     dec_ids: torch.Tensor = field(compare=False) # ancestors
     n_splits: int  = field(compare=False)# sorts by the number of splits
-
-    def __post_init__(self):
-        self.sort_key = (self.n_splits, -self.log_p, )
+    prev_dec_ids: torch.Tensor = field(compare=False)
+    def __post_init__(self): # length normalized
+        self.sort_key = ((-self.log_p / self.dec_ids.shape[-1]), self.n_splits)
         self.counter = next(node_counter)  # assign insertion order
 
     def __repr__(self):
@@ -195,33 +194,70 @@ def batch_decoder_ids(nodes):
 
 """
 Code which handles non entropy spikes. Simply extend the sequence.
+Adjustment, do a small amount of branching rather than greedy. 
 """
-def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
+def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok):
     extend_ids = mask.nonzero(as_tuple=False).squeeze(-1).tolist()
+
     
+
     for i in extend_ids:
         node      = nodes[i]
-
-                
-        tok_id    = next_tokens[i].item()
-        new_log_p = node.log_p + log_probs[i, tok_id].item()
-
-        new_node = Node(
-                    log_p   = new_log_p,
-                    dec_ids = torch.cat([node.dec_ids,
-                                        torch.tensor([tok_id], device='cuda')]),
-                    n_splits = node.n_splits     # unchanged for greedy extension
-                )
-        heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
+        
+        program = tok.decode(nodes[i].dec_ids, skip_special_tokens=True)
+        partial_line = program.split("\n")[-1]
 
 
+        try:
+            completions = completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
+        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            traceback.print_exc()
+            continue
+            
+
+        for k in next_tokens[i]: 
+            tok_id    = k.item()
+            
+            # check to make sure that the completion is within the top; 
+            top_k_str = tok.decode(tok_id, skip_special_tokens=True)
+            line_check = partial_line + top_k_str
+            is_valid = any(valid.startswith(line_check) for valid in completions)
+            if not is_valid:
+                continue
+
+            
+            new_log_p = node.log_p + log_probs[i, tok_id].item()
+
+            new_node = Node(
+                        log_p   = new_log_p,
+                        dec_ids = torch.cat([node.dec_ids,
+                                            torch.tensor([tok_id], device='cuda')]),
+                        n_splits = node.n_splits,
+                        prev_dec_ids= node.prev_dec_ids    # unchanged for greedy extension
+                    )
+            heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
+
+"""
+In the case of non entropy spikes....
+"""
 def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: ProgramCompleter, task, task_encoded): 
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
     for idx in spike_ids: 
+        
 
         program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
+        prev_program = program.split("\n")[:-1]
         partial_line = program.split("\n")[-1]
+
+
+        if "x1" not in program and "x2" in program:
+            
+            print("ring!")
+            print(program)
+            prev_program = tok.decode(nodes[idx].prev_dec_ids, skip_special_tokens=True)
+            print(prev_program)
+            exit()
 
 
         try:
@@ -232,25 +268,32 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         
         if len(completions) ==0:
             continue
-            
+        
+        
+
+
+        prev_program_str = "\n".join(prev_program)
+        prev_program_str = prev_program_str + "\n"
+
         
         completions = [merge_with_overlap(partial_line, x) for x in completions]         
-       
-
-
-        completions = [torch.cat((torch.tensor([0]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         
+        if len(prev_program) != 0:
+            completions = [ prev_program_str + x for x in completions]
+
+
+        completions = [torch.cat((torch.tensor([0, 1]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         for new_tokens in completions: # enqueue a node 
 
             new_node = Node(
-                log_p   = compute_log_prob( task_encoded, new_tokens.to('cuda')),
+                log_p   =  0,
                 dec_ids = new_tokens.to('cuda'),
-                n_splits = (nodes[idx].n_splits + 1)      # unchanged for greedy extension
+                n_splits = (nodes[idx].n_splits + 1),
+                prev_dec_ids= nodes[idx].dec_ids 
             )
 
             
             heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
-
     
 
 def entropy_fanout_search_encdec( 
@@ -264,7 +307,7 @@ def entropy_fanout_search_encdec(
         tau: float,   
         max_len: int = 128,
         batch_size: int = 1,
-        k=1,
+        k=2,
         ): 
     
 
@@ -279,12 +322,14 @@ def entropy_fanout_search_encdec(
     num_continuations = 0 
 
     frontier = [(0, 0, Node(   log_p=0.0,
-                        dec_ids=torch.tensor([0],device='cuda') ,
-                        n_splits=0))]   # queue on to the frontier the starting node. which is the pad token for T5.
+                        dec_ids=torch.tensor([0, 1],device='cuda') ,
+                        n_splits=0,
+                        prev_dec_ids=torch.tensor([0])))]   # queue on to the frontier the starting node. which is the pad token for T5.
     
     start_time = time.time()
     
     while frontier and time.time() - start_time <= time_limit: # whilst there are still nodes to evaluate and its within budget. proceed search.
+        
         nodes = [heapq.heappop(frontier)[2] for i in range(1)] # pop off batch size number of nodes from frontier.
         batched_decoder_ids = batch_decoder_ids(nodes) # batch and pad the nodes decoder ids
         
@@ -294,31 +339,36 @@ def entropy_fanout_search_encdec(
         n_visted +=1
 
 
-
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
             
-            if reward == 1.0: 
+            if reward == 1.0:
+                print(env._decode(batched_decoder_ids[i].view(-1)))
                 print("SOLVED!")
-                return True
 
         # compute the stats of the sequence
-        log_probs   = torch.log_softmax(logits, dim=-1)          # (B, |V|)
-        next_tokens = logits.argmax(dim=-1)                      # (B,)
-        mask        = entropies < tau                            # (B,) bool
-     
+        """log_probs   = torch.log_softmax(logits, dim=-1)         
+        next_tokens = logits.argmax(dim=-1)                       
+        mask        = entropies < tau                            
+        """
+
+        log_probs   = torch.log_softmax(logits, dim=-1)
+        topk_values, topk_indices = torch.topk(log_probs, k=k, dim=-1)  # Get top-k log-probabilities and their indices
+        mask        = entropies < tau
 
         num_continuations += mask.sum().item()
         num_splits += (~mask).sum().item()
 
         # basically. depending on whether the entropy is too low or too high, we do different things.
-        handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
+
+        handle_non_entropy_spike(mask, nodes, topk_indices, log_probs, frontier, tok)
         handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task, prompt_ids.unsqueeze(0))
+        
 
     return False # if failed to solve
 
 if __name__ == "__main__": 
-    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-27_17-42-37/checkpoint-1650')
+    model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     task = Task.from_json('./data/training/c8f0f002.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
@@ -335,7 +385,7 @@ if __name__ == "__main__":
                                     env,
                                     completer,
                                     task,
-                                    tau=1,
+                                    tau=-1,
                                     time_limit=10000)
 
 
