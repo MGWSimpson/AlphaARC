@@ -61,7 +61,7 @@ def get_first_new_token_after_prefix(
             new_token = tokens[prefix_len]
             decoded = tokenizer.decode([new_token])
             first_new_tokens.append(decoded)
-
+            
     return first_new_tokens
 
 
@@ -85,6 +85,27 @@ def get_new_tokens_after_prefix(
     ]
 
     return remaining_tokens
+
+
+
+def get_decoder_suffixes(reference_ids, target_ids_list):
+    results = []
+    for target_ids in target_ids_list:
+        min_len = min(len(reference_ids), len(target_ids))
+        for i in range(min_len):
+            if reference_ids[i] != target_ids[i]:
+                results.append(target_ids[:i + 1])
+                break
+        else:
+            # No difference found in overlapping portion
+            # Include one extra token if target is longer
+            if len(target_ids) > len(reference_ids):
+                results.append(target_ids[:min_len + 1])
+            else:
+                results.append(target_ids)
+    return results
+
+
 
 def extract_function_name(expression):
     match = re.search(r'=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', expression)
@@ -156,17 +177,20 @@ Code which handles non entropy spikes. Simply extend the sequence.
 """
 def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
     extend_ids = mask.nonzero(as_tuple=False).squeeze(-1).tolist()
+    
     for i in extend_ids:
         node      = nodes[i]
+
+                
         tok_id    = next_tokens[i].item()
         new_log_p = node.log_p + log_probs[i, tok_id].item()
 
         new_node = Node(
-                log_p   = new_log_p,
-                dec_ids = torch.cat([node.dec_ids,
-                                     torch.tensor([tok_id], device='cuda')]),
-                n_splits = node.n_splits     # unchanged for greedy extension
-            )
+                    log_p   = new_log_p,
+                    dec_ids = torch.cat([node.dec_ids,
+                                        torch.tensor([tok_id], device='cuda')]),
+                    n_splits = node.n_splits     # unchanged for greedy extension
+                )
         heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
 
@@ -178,35 +202,34 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         program = tok.decode(nodes[idx].dec_ids, skip_special_tokens=True)
         partial_line = program.split("\n")[-1]
 
+
         try:
             completions = completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
-        
-        # name error for fake variables
-        # index error for trying to complete something with only so many args.
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            traceback.print_exc()
             continue
-
         if len(completions) ==0:
             continue
-
+        
+        
         completions = [merge_with_overlap(partial_line, x) for x in completions] 
-        
-        tokens = get_first_new_token_after_prefix(completions, partial_line)
 
 
 
+        # convert the completions to tokenized texts.
+
+
+        completions = [torch.cat((torch.tensor([0]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         
-        # x -> x -> x -> x ->
-        token_ids = [tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1) for x in tokens]
+        # merged_tokens = get_decoder_suffixes(nodes[idx].dec_ids, completions)
+
+
         
-        for token_id in token_ids: # enqueue a node 
-            tok_id = token_id.item()
-            log_p_tok = log_probs[idx, tok_id].item()
+        for new_tokens in completions: # enqueue a node 
 
             new_node = Node(
-                log_p   = nodes[idx].log_p + log_p_tok,
-                dec_ids = torch.cat([nodes[idx].dec_ids,
-                                    token_id.to('cuda')]),
+                log_p   = nodes[idx].log_p + 0,
+                dec_ids = new_tokens.to('cuda'),
                 n_splits = (nodes[idx].n_splits + 1)      # unchanged for greedy extension
             )
 
@@ -223,10 +246,10 @@ def entropy_fanout_search_encdec(
         completer: ProgramCompleter,
         task, 
         time_limit: int, 
-        tau: float = 1,   
+        tau: float,   
         max_len: int = 128,
-        batch_size: int = 1
-
+        batch_size: int = 1,
+        k=1,
         ): 
     
 
@@ -249,6 +272,7 @@ def entropy_fanout_search_encdec(
     while frontier and time.time() - start_time <= time_limit: # whilst there are still nodes to evaluate and its within budget. proceed search.
         nodes = [heapq.heappop(frontier)[2] for i in range(1)] # pop off batch size number of nodes from frontier.
         batched_decoder_ids = batch_decoder_ids(nodes) # batch and pad the nodes decoder ids
+        
         logits = fwd_step_encdec(model, enc_out, batched_decoder_ids ) # perform a forward pass with the encoder-decoder
         entropies = entropy_bits(logits) # compute the entropies.
 
@@ -266,7 +290,7 @@ def entropy_fanout_search_encdec(
         log_probs   = torch.log_softmax(logits, dim=-1)          # (B, |V|)
         next_tokens = logits.argmax(dim=-1)                      # (B,)
         mask        = entropies < tau                            # (B,) bool
-        
+     
 
         num_continuations += mask.sum().item()
         num_splits += (~mask).sum().item()
@@ -280,7 +304,7 @@ def entropy_fanout_search_encdec(
 if __name__ == "__main__": 
     model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
-    task = Task.from_json('./data/training/6fa7a44f.json')
+    task = Task.from_json('./data/training/c8f0f002.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
 
     env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
@@ -289,12 +313,13 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
     
-    # print(tok("x1 = hmirror(I)", add_special_tokens=False))
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,
                                     input_ids.to('cuda'),
                                     env,
                                     completer,
-                                    task)
+                                    task,
+                                    tau=-1,
+                                    time_limit=10000)
 
 

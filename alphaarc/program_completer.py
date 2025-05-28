@@ -41,10 +41,14 @@ class ProgramCompleter:
     
     # return all possible completions
     def _complete_lhs(self, partial_line, lines): 
-        if len(lines) >= 2:
+        if len(lines) > 2:
             last_line = lines[-2]
             var_name = last_line.split('=')[0].strip()  # "x1"
-            number = int(var_name[1:])
+            
+            try: 
+                number = int(var_name[1:])
+            except ValueError:
+                return []
             last_var = number + 1
         else:
             last_var = 1
@@ -168,7 +172,7 @@ class ProgramCompleter:
 
 
         if required_parenth:
-            answers = ["('"+ ans for ans in answers]
+            answers = ["("+ ans for ans in answers]
         elif not ends_with_space(partial_line) and not partial_line.endswith("("):
             answers = [" "+ ans for ans in answers]
 
@@ -193,7 +197,7 @@ class ProgramCompleter:
         lines = program_text.split("\n")
         lines = [l.strip() for l in lines]
         
-        if len(lines) == 0:
+        if len(lines) == 1:
             return self._start_program()
         
         partial_line = lines[-1]
@@ -203,13 +207,21 @@ class ProgramCompleter:
         else:
             return self._complete_rhs(partial_line, lines, program_text, sample_task_input)
 
+
+def format_as_dummy_program(program_lines):
+    return f"""def solve_28bf18c6(I):
+    {program_lines}"""
+
+
 if __name__ == "__main__":
     #genetic = TaskEvolver('./data/', train_file_path='data/training/', resume=True, primitive_functions=PRIMITIVE_FUNCTIONS, primitive_constants=PRIMITIVE_CONSTANTS )
     # genetic.infer_base_types_for_primitive_functions('./data/', True)
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """"""
+    prog_text = """O = trim"""
+    prog_text = format_as_dummy_program(prog_text)
+    print(prog_text)
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']

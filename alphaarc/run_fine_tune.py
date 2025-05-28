@@ -42,11 +42,6 @@ from transformers import (
     AutoTokenizer
 )
 
-
-from torch.utils.data import Dataset
-from torch.nn import functional as F
-from transformers import TrainerCallback, TrainerState, TrainerControl
-from torch.utils.data import DataLoader
 from transformers import DataCollatorForSeq2Seq
 import wandb
 
@@ -57,100 +52,10 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 2 
-    lr: float =5e-6
+    lr: float =1e-5
     output_dir: str = './finetune/'
-    num_epochs: int = 1
+    num_epochs: int = 15
 
-
-class StringPairLogProbCallback(TrainerCallback):
-    def __init__(self, pairs, tokenizer, batch_size, device):
-        self.dataset = StringPairDataset(pairs, tokenizer)
-        self.batch_size = batch_size
-        self.device = device
-        self.tok = tokenizer
-
-    def _run(self, model, step):
-        loader = DataLoader(
-            self.dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            collate_fn=DataCollatorForSeq2Seq(self.tok, model=model),
-        )
-
-        seq_log_probs = []
-        model.eval()
-        with torch.no_grad():
-            for batch in loader:
-                batch = {k: v.to(self.device) for k, v in batch.items()}
-                seq_log_probs.extend(batch_seq_log_probs(model, batch).cpu().tolist())
-
-        avg_lp = sum(seq_log_probs) / len(seq_log_probs)
-
-        wandb.log(
-            {
-                "strings/avg_log_prob": avg_lp,
-                "strings/per_sample_log_probs": wandb.Table(
-                    columns=["log_prob"], data=[[lp] for lp in seq_log_probs]
-                ),
-            },
-            step=step,
-        )
-
-    def on_evaluate(self, args, state: TrainerState, control: TrainerControl, **kwargs):
-        self._run(kwargs["model"], state.global_step)
-
-    def on_save(self, args, state: TrainerState, control: TrainerControl, **kwargs):
-        self._run(kwargs["model"], state.global_step)
-
-class StringPairDataset(Dataset):
-    def __init__(self, pairs, tokenizer,
-                 max_src_len=512, max_tgt_len=512):
-        self.pairs = pairs
-        self.tok   = tokenizer
-        self.max_src_len = max_src_len
-        self.max_tgt_len = max_tgt_len
-
-    def __len__(self):
-        return len(self.pairs)
-
-    def __getitem__(self, idx):
-        src, tgt = self.pairs[idx]
-
-        src_enc = self.tok(
-            src,
-            truncation=True,
-            max_length=self.max_src_len,
-        )
-        tgt_enc = self.tok(
-            tgt,
-            truncation=True,
-            max_length=self.max_tgt_len,
-        )
-
-        return {
-            "input_ids":      src_enc["input_ids"],
-            "attention_mask": src_enc["attention_mask"],
-            "labels":         tgt_enc["input_ids"],   
-        }
-
- 
-def batch_seq_log_probs(model, batch):
-    outputs = model(
-        input_ids=batch["input_ids"],
-        attention_mask=batch["attention_mask"],
-        labels=batch["labels"],
-    )
-    logits = outputs.logits[:, :-1, :].contiguous()
-    labels = batch["labels"][:, 1:].contiguous()
-
-    xent = F.cross_entropy(
-        logits.view(-1, logits.size(-1)),
-        labels.view(-1),
-        ignore_index=-100,
-        reduction="none",
-    ).view(labels.size())          # (batch, seq_len)
-
-    return -xent.sum(dim=1)        # (batch,)
 
 
 
@@ -163,7 +68,6 @@ def fine_tune(  model,
                 eval_ds,
                 lr,
                 output_dir,
-                eval_pairs,
                 ): 
     
     wandb.init(
@@ -184,10 +88,10 @@ def fine_tune(  model,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
         lr_scheduler_type='constant',
-        logging_steps=100,
+        logging_steps=200,
         eval_strategy="steps",
-        eval_steps=100,
-        save_steps=100,
+        eval_steps=550,
+        save_steps=550,
         bf16=True, 
         report_to=["wandb"],  
     )
@@ -199,14 +103,6 @@ def fine_tune(  model,
         eval_dataset=eval_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[
-        StringPairLogProbCallback(
-            pairs=eval_pairs,
-            tokenizer=tokenizer,
-            batch_size=eval_batch_size,
-            device=model.device,
-        )
-        ]
     )
 
 
@@ -332,14 +228,37 @@ def setup_output_dir(config):
     log_dir.mkdir(parents=True, exist_ok=True)
     config.output_dir = str(log_dir)
 
+def split_tasks_based_on_key( tasks, split_keys_path= 'data/split_keys.json',): 
+    split_keys = load_key_split(split_keys_path)
+
+
+    train_list = []
+    eval_list = []
+
+    for task in tasks:
+        if task.parent_key is None: # check the main key
+            if task.task_key in split_keys['train']:
+                train_list.append(task)
+            else:
+                eval_list.append(task)
+        else:
+            if task.parent_key in split_keys['train']:
+                train_list.append(task)
+         
+
+    return train_list, eval_list
+
+
 # handles all the orchestrating.
 def main(config): 
 
     setup_output_dir(config)
 
-    tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
-    train_tasks, eval_tasks = split_tasks(tasks)
+    tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'], dev_mode=False)
+    
+    train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
 
+ 
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
