@@ -158,6 +158,24 @@ def fwd_step_encdec(
     return out.logits[:, -1, :]   
 
 
+# lazy way to do this for now.
+def compute_log_prob(input_, ids): 
+
+    ids = ids.unsqueeze(0)
+
+    with torch.no_grad():
+        logits = model(input_, labels=ids).logits              # (B, L, V)
+        log_probs = torch.log_softmax(logits, dim=-1)
+
+        # Gather log p for the correct token at each position
+        token_logp = log_probs.gather(
+            dim=-1, index=ids.unsqueeze(-1)
+        ).squeeze(-1)                                # (B, L)
+
+       
+
+        return token_logp.sum(dim=-1).item()
+        
 
 def entropy_bits(logits: torch.Tensor) -> float:
     logp = F.log_softmax(logits, -1)
@@ -197,7 +215,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier):
         heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
 
-def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: ProgramCompleter, task): 
+def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: ProgramCompleter, task, task_encoded): 
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
     for idx in spike_ids: 
@@ -216,14 +234,6 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
             continue
             
         
-
-        for comp in completions:
-
-            if "x2" in comp and "x1" not in program:
-                print("HELL")
-                exit()
-
-        
         completions = [merge_with_overlap(partial_line, x) for x in completions]         
        
 
@@ -233,7 +243,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         for new_tokens in completions: # enqueue a node 
 
             new_node = Node(
-                log_p   = nodes[idx].log_p + 0,
+                log_p   = compute_log_prob( task_encoded, new_tokens.to('cuda')),
                 dec_ids = new_tokens.to('cuda'),
                 n_splits = (nodes[idx].n_splits + 1)      # unchanged for greedy extension
             )
@@ -303,12 +313,12 @@ def entropy_fanout_search_encdec(
 
         # basically. depending on whether the entropy is too low or too high, we do different things.
         handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier)
-        handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task)
+        handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer, task, prompt_ids.unsqueeze(0))
 
     return False # if failed to solve
 
 if __name__ == "__main__": 
-    model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')
+    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-27_17-42-37/checkpoint-1650')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     task = Task.from_json('./data/training/c8f0f002.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
@@ -325,7 +335,7 @@ if __name__ == "__main__":
                                     env,
                                     completer,
                                     task,
-                                    tau=-1,
+                                    tau=1,
                                     time_limit=10000)
 
 
