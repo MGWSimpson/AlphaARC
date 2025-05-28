@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
     #    prog_text = format_as_dummy_program(prog_text)
     #print(prog_text)
-    prog_text = """def solve_28bf18c6(I):"""
+    prog_text = """"""
     task = Task.from_json('./data/training/28bf18c6.json')
     print(task.program)
     input_ = task.training_examples[0]['input']

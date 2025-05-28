@@ -251,14 +251,6 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         partial_line = program.split("\n")[-1]
 
 
-        if "x1" not in program and "x2" in program:
-            
-            print("ring!")
-            print(program)
-            prev_program = tok.decode(nodes[idx].prev_dec_ids, skip_special_tokens=True)
-            print(prev_program)
-            exit()
-
 
         try:
             completions = completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
@@ -307,7 +299,7 @@ def entropy_fanout_search_encdec(
         tau: float,   
         max_len: int = 128,
         batch_size: int = 1,
-        k=2,
+        k=4,
         ): 
     
 
@@ -343,8 +335,8 @@ def entropy_fanout_search_encdec(
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
             
             if reward == 1.0:
-                print(env._decode(batched_decoder_ids[i].view(-1)))
                 print("SOLVED!")
+                return True
 
         # compute the stats of the sequence
         """log_probs   = torch.log_softmax(logits, dim=-1)         
@@ -385,7 +377,7 @@ if __name__ == "__main__":
                                     env,
                                     completer,
                                     task,
-                                    tau=-1,
+                                    tau=1,
                                     time_limit=10000)
 
 
