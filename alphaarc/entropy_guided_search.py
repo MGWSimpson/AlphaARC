@@ -16,6 +16,9 @@ from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 import re
 import traceback
 
+"""
+ok quick note there may be like some very minor weird bug but will ignore it for now as it should just fade out of the program.
+"""
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
@@ -208,22 +211,24 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
             traceback.print_exc()
             continue
+        
         if len(completions) ==0:
             continue
+            
         
+
+        for comp in completions:
+
+            if "x2" in comp and "x1" not in program:
+                print("HELL")
+                exit()
+
         
-        completions = [merge_with_overlap(partial_line, x) for x in completions] 
-
-
-
-        # convert the completions to tokenized texts.
+        completions = [merge_with_overlap(partial_line, x) for x in completions]         
+       
 
 
         completions = [torch.cat((torch.tensor([0]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-        
-        # merged_tokens = get_decoder_suffixes(nodes[idx].dec_ids, completions)
-
-
         
         for new_tokens in completions: # enqueue a node 
 
@@ -282,6 +287,7 @@ def entropy_fanout_search_encdec(
 
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
+            
             if reward == 1.0: 
                 print("SOLVED!")
                 return True
