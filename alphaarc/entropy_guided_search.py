@@ -16,9 +16,7 @@ from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 import re
 import traceback
 
-"""
-ok quick note there may be like some very minor weird bug but will ignore it for now as it should just fade out of the program.
-"""
+
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -72,8 +70,7 @@ def get_first_new_token_after_prefix(
 def get_new_tokens_after_prefix(
     texts: List[str],
     common_prefix: str,
-    tokenizer_name: str = "Salesforce/codet5p-220m"
-) -> List[Optional[str]]:
+    tokenizer_name: str = "Salesforce/codet5p-220m") -> List[Optional[str]]:
  
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
@@ -136,8 +133,9 @@ class Node:
     dec_ids: torch.Tensor = field(compare=False) # ancestors
     n_splits: int  = field(compare=False)# sorts by the number of splits
     prev_dec_ids: torch.Tensor = field(compare=False)
-    def __post_init__(self): # length normalized
-        self.sort_key = ((-self.log_p / self.dec_ids.shape[-1]), self.n_splits)
+
+    def __post_init__(self):  
+        self.sort_key = (-self.log_p)
         self.counter = next(node_counter)  # assign insertion order
 
     def __repr__(self):
@@ -174,7 +172,20 @@ def compute_log_prob(input_, ids):
        
 
         return token_logp.sum(dim=-1).item()
-        
+
+
+
+
+def compute_log_probs_batched(input_batch, ids_batch):
+    
+    with torch.no_grad():
+        logits = model(input_ids=input_batch, labels=ids_batch).logits  # (B, L, V)
+        log_probs = torch.log_softmax(logits, dim=-1)
+
+        token_logp = log_probs.gather(dim=-1, index=ids_batch.unsqueeze(-1)).squeeze(-1)  # (B, L)
+        return token_logp.sum(dim=-1)  # (B,)
+
+
 
 def entropy_bits(logits: torch.Tensor) -> float:
     logp = F.log_softmax(logits, -1)
@@ -192,10 +203,6 @@ def batch_decoder_ids(nodes):
     return batched_decoder_ids
 
 
-"""
-Code which handles non entropy spikes. Simply extend the sequence.
-Adjustment, do a small amount of branching rather than greedy. 
-"""
 def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok):
     extend_ids = mask.nonzero(as_tuple=False).squeeze(-1).tolist()
 
@@ -214,6 +221,10 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok)
             traceback.print_exc()
             continue
             
+        
+
+        
+        
 
         for k in next_tokens[i]: 
             tok_id    = k.item()
@@ -227,7 +238,6 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok)
 
             
             new_log_p = node.log_p + log_probs[i, tok_id].item()
-
             new_node = Node(
                         log_p   = new_log_p,
                         dec_ids = torch.cat([node.dec_ids,
@@ -237,9 +247,7 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok)
                     )
             heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
 
-"""
-In the case of non entropy spikes....
-"""
+
 def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: ProgramCompleter, task, task_encoded): 
     spike_ids = (~mask).nonzero(as_tuple=False).squeeze(-1).tolist()           
 
@@ -275,10 +283,11 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
 
 
         completions = [torch.cat((torch.tensor([0, 1]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+        
         for new_tokens in completions: # enqueue a node 
 
-            new_node = Node(
-                log_p   =  0,
+            new_node = Node( 
+                log_p   =   compute_log_prob(task_encoded.to('cuda'), new_tokens.to('cuda')),
                 dec_ids = new_tokens.to('cuda'),
                 n_splits = (nodes[idx].n_splits + 1),
                 prev_dec_ids= nodes[idx].dec_ids 
@@ -299,7 +308,7 @@ def entropy_fanout_search_encdec(
         tau: float,   
         max_len: int = 128,
         batch_size: int = 1,
-        k=4,
+        k=2,
         ): 
     
 
@@ -338,11 +347,7 @@ def entropy_fanout_search_encdec(
                 print("SOLVED!")
                 return True
 
-        # compute the stats of the sequence
-        """log_probs   = torch.log_softmax(logits, dim=-1)         
-        next_tokens = logits.argmax(dim=-1)                       
-        mask        = entropies < tau                            
-        """
+       
 
         log_probs   = torch.log_softmax(logits, dim=-1)
         topk_values, topk_indices = torch.topk(log_probs, k=k, dim=-1)  # Get top-k log-probabilities and their indices
@@ -360,13 +365,13 @@ def entropy_fanout_search_encdec(
     return False # if failed to solve
 
 if __name__ == "__main__": 
-    model = T5ForConditionalGeneration.from_pretrained('./finetune-checkpoint/dev-checkpoint')
+    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-27_17-42-37/checkpoint-1650')
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     task = Task.from_json('./data/training/c8f0f002.json')
     input_ids = torch.tensor(encode_task(task, tok, model))
 
     env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
-
+    
     env.set_task(task)
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
