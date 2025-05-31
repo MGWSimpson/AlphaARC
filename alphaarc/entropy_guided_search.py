@@ -206,7 +206,6 @@ def batch_decoder_ids(nodes):
 def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok):
     extend_ids = mask.nonzero(as_tuple=False).squeeze(-1).tolist()
 
-    
 
     for i in extend_ids:
         node      = nodes[i]
@@ -284,6 +283,9 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
 
         completions = [torch.cat((torch.tensor([0, 1]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         
+        # TODO: what needs to happen here is instead of doing this weird node thing, it needs to instead compute all the log probs in a batch.
+        
+
         for new_tokens in completions: # enqueue a node 
 
             new_node = Node( 
@@ -308,7 +310,7 @@ def entropy_fanout_search_encdec(
         tau: float,   
         max_len: int = 128,
         batch_size: int = 1,
-        k=2,
+        k=1,
         ): 
     
 
@@ -376,13 +378,16 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
     
+
+    time_limit = (60 * 5)
+
     answers = entropy_fanout_search_encdec( model.to('cuda'), 
                                     tok,
                                     input_ids.to('cuda'),
                                     env,
                                     completer,
                                     task,
-                                    tau=1,
-                                    time_limit=10000)
+                                    tau=0.5,
+                                    time_limit=time_limit)
 
 
