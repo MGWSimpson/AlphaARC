@@ -134,8 +134,10 @@ class Node:
     n_splits: int  = field(compare=False)# sorts by the number of splits
     prev_dec_ids: torch.Tensor = field(compare=False)
 
-    def __post_init__(self):  
-        self.sort_key = (-self.log_p)
+    def __post_init__(self):
+
+        length_normalized_log_p = self.log_p / self.dec_ids.shape[-1]
+        self.sort_key = (- length_normalized_log_p)
         self.counter = next(node_counter)  # assign insertion order
 
     def __repr__(self):
@@ -179,7 +181,7 @@ def compute_log_prob(input_, ids):
 def compute_log_probs_batched(input_batch, ids_batch):
     
     with torch.no_grad():
-        logits = model(input_ids=input_batch, labels=ids_batch).logits  # (B, L, V)
+        logits = model(input_ids=input_batch.repeat(ids_batch.shape[0], 1), labels=ids_batch[ids_batch == 0] = -100).logits  # (B, L, V)
         log_probs = torch.log_softmax(logits, dim=-1)
 
         token_logp = log_probs.gather(dim=-1, index=ids_batch.unsqueeze(-1)).squeeze(-1)  # (B, L)
@@ -236,9 +238,8 @@ def handle_non_entropy_spike(mask, nodes, next_tokens, log_probs, frontier, tok)
                 continue
 
             
-            new_log_p = node.log_p + log_probs[i, tok_id].item()
             new_node = Node(
-                        log_p   = new_log_p,
+                        log_p   =  node.log_p + log_probs[i, tok_id].item(),
                         dec_ids = torch.cat([node.dec_ids,
                                             torch.tensor([tok_id], device='cuda')]),
                         n_splits = node.n_splits,
@@ -282,14 +283,14 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
 
 
         completions = [torch.cat((torch.tensor([0, 1]), tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-        
-        # TODO: what needs to happen here is instead of doing this weird node thing, it needs to instead compute all the log probs in a batch.
-        
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        for new_tokens in completions: # enqueue a node 
-
+        log_ps = compute_log_probs_batched(task_encoded.to('cuda'), completions_batched.to ('cuda'))
+        
+    
+        for i, new_tokens in enumerate(completions):
             new_node = Node( 
-                log_p   =   compute_log_prob(task_encoded.to('cuda'), new_tokens.to('cuda')),
+                log_p   =   nodes[idx].log_p + log_ps[i],
                 dec_ids = new_tokens.to('cuda'),
                 n_splits = (nodes[idx].n_splits + 1),
                 prev_dec_ids= nodes[idx].dec_ids 
@@ -297,7 +298,7 @@ def handle_entropy_spike(mask, tok, nodes, log_probs, frontier, completer: Progr
 
             
             heapq.heappush(frontier,  (new_node.sort_key, new_node.counter, new_node))
-    
+
 
 def entropy_fanout_search_encdec( 
         model: T5ForConditionalGeneration,
@@ -345,6 +346,8 @@ def entropy_fanout_search_encdec(
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
             
+
+
             if reward == 1.0:
                 print("SOLVED!")
                 return True
