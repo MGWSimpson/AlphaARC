@@ -135,9 +135,9 @@ class Node:
     prev_dec_ids: torch.Tensor = field(compare=False)
 
     def __post_init__(self):
-
         length_normalized_log_p = self.log_p / self.dec_ids.shape[-1]
         self.sort_key = (- length_normalized_log_p)
+        self.length_normalized_log_p = length_normalized_log_p
         self.counter = next(node_counter)  # assign insertion order
 
     def __repr__(self):
@@ -181,10 +181,17 @@ def compute_log_prob(input_, ids):
 def compute_log_probs_batched(input_batch, ids_batch):
     
     with torch.no_grad():
-        logits = model(input_ids=input_batch.repeat(ids_batch.shape[0], 1), labels=ids_batch[ids_batch == 0] = -100).logits  # (B, L, V)
+        labels = ids_batch.clone()
+
+        labels[labels == 0] = -100
+        mask = (labels != -100)
+        labels[:, 0] = 0
+
+        logits = model(input_ids=input_batch.repeat(ids_batch.shape[0], 1), labels=labels).logits  # (B, L, V)
         log_probs = torch.log_softmax(logits, dim=-1)
 
         token_logp = log_probs.gather(dim=-1, index=ids_batch.unsqueeze(-1)).squeeze(-1)  # (B, L)
+        token_logp = token_logp * mask
         return token_logp.sum(dim=-1)  # (B,)
 
 
@@ -342,6 +349,7 @@ def entropy_fanout_search_encdec(
 
         n_visted +=1
 
+        print(nodes[0].length_normalized_log_p)
 
         for i in range(batched_decoder_ids.shape[0]): # a bit random, but we evaluate here.
             reward, terminated = env.evaluate_program(batched_decoder_ids[i].view(-1), should_token_account=False)
