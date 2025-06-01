@@ -4,6 +4,8 @@ import copy
 import numpy as np
 import torch
 from alphaarc.env import LineLevelArcEnv
+from transformers import AutoTokenizer, T5ForConditionalGeneration
+from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 
 # -- helpers --
 def puct_score(parent, child):
@@ -15,23 +17,65 @@ def puct_score(parent, child):
 
     return value_score + prior_score
 
-# -- previously fan out search logic -- 
+
+def entropy_bits(logits):
+    pass
+
+# -- previously fan out search logic --
+# -- quick note, can add multi core stuff in here -- 
 class EntropyModelWrapper:
+    def __init__(self, model_path, completer, tokenizer_path="Salesforce/codet5p-220m"):
+        self.model = T5ForConditionalGeneration(model_path)
+        self.completer = completer
+        self.tok = AutoTokenizer.from_pretrained(tokenizer_path)
 
-    def __init__(self):
+
+    def _fwd_step_encdec(self, enc_out, dec_ids): 
+        out = self.model(   encoder_outputs=enc_out,
+                            decoder_input_ids=dec_ids)  
+        
+        return out.logits[:, -1, :]   
+
+    
+    
+    def _handle_entropy_spike(self): 
         pass
 
-    def predict(self): # so this is where I would return it.
+    def _handle_non_entropy_spike(self):
         pass
 
-    def encode(self): 
-        pass
+    """
+    Contains the fanout logic. For now, will just focus on having one
+    """
+    def predict(self, enc_out, state, task): # so this is where I would return it.
+        
 
-    def eval(self): 
-        pass
+        logits = self._fwd_step_encdec(enc_out, state)
+        entropy = entropy_bits(logits).item()
 
-    def rollout(self):
-        pass
+        if entropy > self.tau:
+            return self._handle_entropy_spike()
+        else: 
+            return self._handle_non_entropy_spike()
+
+
+        
+        
+
+    def encode(self, prompt_ids): 
+        with torch.no_grad(): # first encode the input once.
+            enc_out = self.model.get_encoder()(prompt_ids.unsqueeze(0))
+        return enc_out
+
+    def eval(self):
+        self.model.eval()
+
+    def rollout(self, enc_out, next_state):
+        
+        with torch.no_grad(): 
+            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state)
+        
+        return output
 
 class Node: 
     def __init__(self, prior= 0):
@@ -95,7 +139,7 @@ def rollout( state,
             model: EntropyModelWrapper,
             env: LineLevelArcEnv): 
     
-    program = model.rollout()
+    program = model.rollout(state, next_action)
     value = env.evaluate_program(program)
     return value
 
@@ -123,10 +167,9 @@ def run_search(env: LineLevelArcEnv,
 
 
         start_time = time.time()
-
-        # initialize the tree.
         root = Node(0)
-        actions, action_probs = model.predict(enc_out, state) # perform the predictions, but with 
+        init_state = torch.tensor([0, 1], device='cuda')
+        actions, action_probs = model.predict(enc_out, init_state, task) # perform the predictions, but with 
         root.expand(state, actions, action_probs)
 
 
@@ -145,7 +188,7 @@ def run_search(env: LineLevelArcEnv,
             # expansion 
             next_state, value, terminated = env.step(action=action, state=state)
             if not terminated: 
-                actions,action_probs = model.predict(enc_out, next_state)
+                actions,action_probs = model.predict(enc_out, next_state, task)
                 value = rollout(model, next_state, actions) # rollout
                 node.expand(next_state, actions, action_probs)
 
