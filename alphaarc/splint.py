@@ -12,6 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 from alphaarc.task import Task
 import torch.nn.functional as F
 import traceback
+import random
 
 import torch.nn as nn
 
@@ -80,10 +81,16 @@ def compute_log_probs_batched(model, input_batch, ids_batch):
 # -- previously fan out search logic --
 # -- quick note, can add multi core stuff in here -- 
 class EntropyModelWrapper:
-    def __init__(self, model, tokenizer, completer):
+    def __init__(self, model, tokenizer, completer, tau, k):
         self.model = model
         self.completer = completer
         self.tok = tokenizer
+
+        # tau = the threshold for an entropy spike
+        self.tau = tau
+
+        # k = the default fan out when not handling entropy spikes.
+        self.k = k
 
 
     def _fwd_step_encdec(self, enc_out, dec_ids): 
@@ -95,7 +102,9 @@ class EntropyModelWrapper:
     
     
     def _handle_entropy_spike(self, state, enc_out, input_ids): 
+        
         program = self.tok.decode(state, skip_special_tokens=True)
+
         prev_program = program.split("\n")[:-1]
         partial_line = program.split("\n")[-1]
 
@@ -106,7 +115,7 @@ class EntropyModelWrapper:
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
             traceback.print_exc()
             return return_empty_nodes()
-        
+    
         if len(completions) ==0:
             return return_empty_nodes()
 
@@ -124,13 +133,14 @@ class EntropyModelWrapper:
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        log_ps = compute_log_probs_batched(input_ids .to('cuda'), completions_batched.to ('cuda'))
-
+        # TODO, shouldnt actually be log probs, need to change it to softmaxs.
+        log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
         return completions, log_ps
 
 
     def _handle_non_entropy_spike(self, state, task, next_tokens):    
-        program = self.tok.decode(state, skip_special_tokens=True)
+
+        program = self.tok.decode(state. squeeze(), skip_special_tokens=True)
         partial_line = program.split("\n")[-1]
 
 
@@ -142,9 +152,10 @@ class EntropyModelWrapper:
             
         
 
+
         
-        completions = []
-        log_ps = []
+        comps = []
+        probs = []
 
         for k in next_tokens: 
             tok_id    = k.item()
@@ -156,29 +167,31 @@ class EntropyModelWrapper:
             if not is_valid:
                 continue
             
+            
             new_state = torch.cat([state,
                                    torch.tensor([tok_id], device='cuda')])
             
-            completions.append(new_state)
-            log_ps.append(0)
+            comps.append(new_state)
+            probs.append(0)
 
-        return completions, log_ps
+        return comps, probs
 
     """
     Contains the fanout logic. 
     TODO: remove the input ids.
     """
     def predict(self, enc_out, state, task, input_ids): # so this is where I would return it.
-
-        logits = self._fwd_step_encdec(enc_out, state)
+        logits = self._fwd_step_encdec(enc_out, state.unsqueeze(0))
         entropy = entropy_bits(logits).item()
+        topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
         if entropy > self.tau:
-            return self._handle_entropy_spike(state, enc_out, input_ids)
+            comps, probs = self._handle_entropy_spike(state, enc_out, input_ids)
         else: 
-            return self._handle_non_entropy_spike()
+            comps, probs = self._handle_non_entropy_spike(state, task, topk_indices)
 
-
+        # format the returns.
+        return comps, probs
         
         
 
@@ -214,8 +227,15 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
 
-    def expand(self, state, actions, action_probs): 
-        self.state = state.copy()
+    def expand(self, state, actions, action_probs):
+        # will manage sending to device here.
+
+        state = state.to('cpu')
+        
+        actions = [x.to('cpu') for x in actions]
+        
+
+        self.state = state.clone()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(prior=prob) for prob in action_probs]
 
@@ -255,13 +275,18 @@ class Node:
 
 
 def rollout( state,
-            next_action,
+            actions,
+            enc_out,
             model: EntropyModelWrapper,
             env: LineLevelArcEnv): 
-    
-    program = model.rollout(state, next_action)
-    value = env.evaluate_program(program)
-    return value
+
+
+    # need to make a random choice of actions    
+    action = random.choice(actions)
+    action= torch.cat((state, action))
+    program = model.rollout(enc_out, action.unsqueeze(0).to('cuda'))
+    reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
+    return reward
 
 
 
@@ -280,8 +305,6 @@ def run_search(env: LineLevelArcEnv,
 
         
         model.eval()
-
-
         with torch.no_grad():
             enc_out = model.encode(prompt_ids)
 
@@ -289,14 +312,14 @@ def run_search(env: LineLevelArcEnv,
         start_time = time.time()
         root = Node(0)
         init_state = torch.tensor([0, 1], device='cuda')
+
         actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
-        root.expand(state, actions, action_probs)
+        root.expand(init_state, actions, action_probs)
 
 
         while (time.time() - start_time) < time_limit:
             node = root
             search_path = [node]
-            
             # SELECT
             while node.expanded():
                 action, node = node.select_child()
@@ -306,10 +329,15 @@ def run_search(env: LineLevelArcEnv,
             state = parent.state
 
             # expansion 
-            next_state, value, terminated = env.step(action=action, state=state)
+            next_state, value, terminated = env.step(action=action, state=state, should_do_token_accounting=False)
+            
+            # for some reason this is a numpy array
+            next_state = torch.tensor(next_state)
+
             if not terminated: 
-                actions,action_probs = model.predict(enc_out, next_state, task, prompt_ids)
-                value = rollout(model, next_state, actions) # rollout
+                actions, action_probs = model.predict(enc_out, next_state.to('cuda'), task, prompt_ids)
+                
+                value = rollout(state, actions, enc_out, model, env) # rollout
                 node.expand(next_state, actions, action_probs)
 
             # backprop
@@ -330,10 +358,11 @@ if __name__ == "__main__":
     tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
     
     sampler   = ProgramSampler(data_path="./data/")
+    
     completer = ProgramCompleter(sampler)
 
 
-    model_wrapper = EntropyModelWrapper(model, tok, completer)
+    model_wrapper = EntropyModelWrapper(model, tok, completer, tau=1, k=1)
 
 
     task = Task.from_json('./data/training/c8f0f002.json')

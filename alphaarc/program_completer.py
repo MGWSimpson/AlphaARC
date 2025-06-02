@@ -47,9 +47,10 @@ class ProgramCompleter:
             
             try: 
                 number = int(var_name[1:])
+                last_var = number + 1
             except ValueError:
-                return []
-            last_var = number + 1
+                last_var = 1
+
         else:
             last_var = 1
 

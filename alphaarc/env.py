@@ -7,6 +7,10 @@ import numpy as np
 import torch
 from alphaarc.augment.mutate_grid import valid_grid
 
+"""
+quick note, changed it to where a partial program no longer messes up
+"""
+
 def append_action_to_state(state, action): 
     return state + action
 
@@ -103,12 +107,13 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(observation)
 
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
             if output == "Invalid Input": 
-                terminated = True # TODO: change this back to false
+                terminated = False # TODO: change this back to false
 
             if self._if_program_returns(program): 
                terminated = True
@@ -185,17 +190,17 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(program)
         
-
-        print(program )
         if should_token_account:
             self._add_and_check_token_budget(program)
 
+        print(program)
+        
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
             if output == "Invalid Input": 
-                terminated = True 
+                terminated = False
 
             if "O" in program:
                terminated = True
