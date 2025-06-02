@@ -3,13 +3,20 @@ import math
 import copy
 import numpy as np
 import torch
+import os 
 from alphaarc.env import LineLevelArcEnv
 from transformers import AutoTokenizer, T5ForConditionalGeneration
 from alphaarc.program_completer import ProgramCompleter, ProgramSampler
 from alphaarc.policy.tokenize import tokenize_task
+from torch.nn.utils.rnn import pad_sequence
+from alphaarc.task import Task
 import torch.nn.functional as F
 import traceback
-from torch.nn.utils.rnn import pad_sequence
+
+import torch.nn as nn
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 # -- helpers --
@@ -73,10 +80,10 @@ def compute_log_probs_batched(model, input_batch, ids_batch):
 # -- previously fan out search logic --
 # -- quick note, can add multi core stuff in here -- 
 class EntropyModelWrapper:
-    def __init__(self, model_path, completer, tokenizer_path="Salesforce/codet5p-220m"):
-        self.model = T5ForConditionalGeneration(model_path)
+    def __init__(self, model, tokenizer, completer):
+        self.model = model
         self.completer = completer
-        self.tok = AutoTokenizer.from_pretrained(tokenizer_path)
+        self.tok = tokenizer
 
 
     def _fwd_step_encdec(self, enc_out, dec_ids): 
@@ -282,7 +289,7 @@ def run_search(env: LineLevelArcEnv,
         start_time = time.time()
         root = Node(0)
         init_state = torch.tensor([0, 1], device='cuda')
-        actions, action_probs = model.predict(enc_out, init_state, task) # perform the predictions, but with 
+        actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
         root.expand(state, actions, action_probs)
 
 
@@ -301,7 +308,7 @@ def run_search(env: LineLevelArcEnv,
             # expansion 
             next_state, value, terminated = env.step(action=action, state=state)
             if not terminated: 
-                actions,action_probs = model.predict(enc_out, next_state, task)
+                actions,action_probs = model.predict(enc_out, next_state, task, prompt_ids)
                 value = rollout(model, next_state, actions) # rollout
                 node.expand(next_state, actions, action_probs)
 
@@ -316,4 +323,29 @@ def run_search(env: LineLevelArcEnv,
 
 
 if __name__ == "__main__":
-    run_search()
+
+    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-27_17-42-37/checkpoint-1650')
+    model.to('cuda')
+    
+    tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    
+    sampler   = ProgramSampler(data_path="./data/")
+    completer = ProgramCompleter(sampler)
+
+
+    model_wrapper = EntropyModelWrapper(model, tok, completer)
+
+
+    task = Task.from_json('./data/training/c8f0f002.json')
+    input_ids = torch.tensor(encode_task(task, tok, model)).to('cuda')
+    env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
+
+    env.set_task(task)
+
+    time_limit = (60 * 5)
+
+    run_search( env,
+                task,
+                input_ids,
+                model_wrapper,
+                time_limit=time_limit)
