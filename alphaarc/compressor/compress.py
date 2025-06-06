@@ -6,6 +6,7 @@ from alphaarc.task import Task
 from alphaarc import PROJECT_FOLDER_PATH
 from alphaarc.policy.environment import execute_candidate_program
 from pathlib import Path
+import json
 
 def find_grid_functions(filename):
     with open(filename, "r") as file:
@@ -205,11 +206,15 @@ def collate_task_inputs(task: Task):
 
 
 
+"""
+Need to add this thing where basically any new tasks are then added back to the queue
 
+"""
 def main():
-    
     data_dir = Path("data/training")    # directory with your JSON files
     tasks = []                          # collect Task objects here
+
+    new_tasks = []
 
     for json_file in data_dir.glob("*.json"):     # iterate over every .json in the folder
         task = Task.from_json(json_file)          # load each file
@@ -218,7 +223,15 @@ def main():
 
     for task in tasks:
         program_lines = task.program_lines.split("\n")    
-        compress(program_lines, task)    
+        new_tasks.extend(compress(program_lines, task))
+
+
+    json_objects = [task.to_dict() for task in new_tasks]
+
+    with open("data/new_tasks.jsonl", "w") as f:
+        for item in json_objects:
+            f.write(json.dumps(item) + "\n")
+
 
     
 
