@@ -17,7 +17,7 @@ import random
 import torch.nn as nn
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 
 # -- helpers --
@@ -238,6 +238,7 @@ class Node:
         self.state = state.clone()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(prior=prob) for prob in action_probs]
+    
 
     def select_action(self, temperature):
         """
@@ -360,7 +361,6 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     
     completer = ProgramCompleter(sampler)
-
 
     model_wrapper = EntropyModelWrapper(model, tok, completer, tau=1, k=1)
 

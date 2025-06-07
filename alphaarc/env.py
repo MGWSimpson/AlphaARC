@@ -193,7 +193,6 @@ class LineLevelArcEnv (BaseEnv):
         if should_token_account:
             self._add_and_check_token_budget(program)
 
-        print(program)
         
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
