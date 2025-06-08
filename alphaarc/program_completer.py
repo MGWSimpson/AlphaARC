@@ -193,7 +193,6 @@ class ProgramCompleter:
         # answers = partial line
 
         if is_final_arg(x, next_arg_pos): 
-            print([if_program_returns(ans) for ans in answers])
             return [ans + (")" if if_program_returns(ans) else ")\n") for ans in answers]
         else: 
             return [ans +"," for ans in answers]

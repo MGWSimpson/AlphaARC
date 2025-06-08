@@ -124,17 +124,12 @@ class MCTSMethod(BaseMethod):
         xtime = time.time()
         while len(completions) > 0: # if we can still generate completions, keep going
             try:
-                print("----")
-                print(program)
                 completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
-                print(completions)
                 random_action = random.choice(completions) # needs to merge with overlap
                 program = program + random_action
             except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
-                print(e)
                 break
         
-        print(f"took {time.time() - xtime}")
         program = self.tok.encode(program, add_special_tokens=False, return_tensors='pt')
         return program
         
@@ -181,12 +176,24 @@ class TGMCTSMethod(BaseMethod):
         self.completer = completer
 
     
-    def rollout(self, enc_out, next_state):
+    def rollout(self, enc_out, next_state, task):
+
         with torch.no_grad(): 
-            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state)
+            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
         return output
     
+
+    def eval(self): 
+        self.model.eval()
+
+
+    
+    def encode(self, prompt_ids): 
+        with torch.no_grad(): # first encode the input once.
+            enc_out = self.model.get_encoder()(prompt_ids.unsqueeze(0))
+        return enc_out
+
     def predict(self, enc_out, state, task, prompt_ids):
         program = self.tok.decode(state, skip_special_tokens=True)
 
@@ -221,6 +228,7 @@ class TGMCTSMethod(BaseMethod):
 
         # then compute priors over all.
         priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+
 
         return completions, priors
 
@@ -368,7 +376,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/tg_mcts.yaml')
         
 
     args = parser.parse_args()
