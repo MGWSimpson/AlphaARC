@@ -19,6 +19,8 @@ import torch.nn.functional as F
 import traceback
 import random
 import torch.nn as nn
+from alphaarc.configs import load_config, build_curriculum, build_env
+from alphaarc.utils import load_key_split, relabel_task
 
 import argparse
 
@@ -482,47 +484,53 @@ def run_search(env: LineLevelArcEnv,
 set up small rig for running the experiment
 """
 def run_experiment( method: BaseMethod,
-                    tasks: list,
+                    tasks: list[Task],
                     time_limit: int,
                     tok: AutoTokenizer,
                     ):
-
-
-    for task_id in tasks:
-        task = Task.from_json(f'./data/training/{task_id}.json')
+    for task in tasks:
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
+        print(f"starting task: {task.task_key}")
         run_search(env, task, input_ids,  method, time_limit)
 
 
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--method', type=str, default='TGMCTS')
-
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/mcts.yaml')
+        
 
     args = parser.parse_args()
+    config = load_config(args.config_path)
+    curriculum = build_curriculum(config['training_curriculum_config'])
+    config = load_config(args.config_path)
+    
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    
 
-    # TODO: add proper config files
-    model = T5ForConditionalGeneration.from_pretrained('./finetune/2025-05-27_17-42-37/checkpoint-1650')
+    print(config['model_path'])
+    model = T5ForConditionalGeneration.from_pretrained(config['model_path'])
     model.to('cuda')
-    tok = AutoTokenizer.from_pretrained('Salesforce/codet5p-220m')
+    tok = AutoTokenizer.from_pretrained(config['tokenizer_path'])
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
     
     
-    if args.method == "MCTS": 
+    
+    if config['method'] == "MCTS": 
         method = MCTSMethod(uses_model=False, tok=tok, completer=completer)
-    elif args.method == "TGMCTS":
+    elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
-    elif args.method == "SPLINTMCTS":
-        method = SplintMCTSMethod(True, model, tok, completer, 0.5, 1)
+    elif config['method'] == "SPLINTMCTS":
+        method = SplintMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer, tau=0.5, k=1)
     else:
         raise ValueError("Method does not exist!")
 
     run_experiment(method=method,
-                   tasks=None,
+                   tasks=curriculum.generate_curriculum(),
                    time_limit=(60 * 3),
                    tok=tok)
 
