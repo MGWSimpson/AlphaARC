@@ -193,6 +193,9 @@ class LineLevelArcEnv (BaseEnv):
         if should_token_account:
             self._add_and_check_token_budget(program)
 
+
+        lines = program.split("\n")
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -200,7 +203,7 @@ class LineLevelArcEnv (BaseEnv):
             if output == "Invalid Input": 
                 terminated = False
 
-            if output != "Invalid Input" and self._if_program_returns(program):
+            if output != "Invalid Input" and self._if_program_returns(lines[-1]):
                 terminated = True
                 reward = -1
                

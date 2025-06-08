@@ -11,7 +11,7 @@ from alphaarc.augment.type_inference import get_primitive_function_type
 from alphaarc.dsl.arc_types import Arrow
 import traceback
 
-
+import copy
 
 
 def get_rhs(line):
@@ -32,10 +32,17 @@ def find_continuations(input_str, string_list):
 def is_final_arg(arrow_object, next_arg_pos):
     return len(arrow_object.inputs) == next_arg_pos + 1
 
+def if_program_returns(string): 
+        str_arr = string.split("=")
+        lhs = str_arr[0]
+        return "O" in lhs
+
 class ProgramCompleter:
     def __init__(self, sampler: ProgramSampler):
         self.sampler = sampler  # we only need the mappings, not the RNG
+        self.use_sample = None
 
+        
     def _start_program(self):
         return ["O =", f"x1 ="]
     
@@ -53,6 +60,10 @@ class ProgramCompleter:
 
         else:
             last_var = 1
+
+
+        if any(["O" in line.split("=")[0] for line in lines]):
+            return []
 
         to_add = ["O =", f"x{last_var} ="]
         # filter based on partial completions
@@ -79,15 +90,17 @@ class ProgramCompleter:
         if len(lines) == 2:
             finished_part = f"def {program_name}(I):\n    pass"
 
+
+        sampler = copy.deepcopy(self.sampler)
         ps = ProgramSample(
             program_name              = program_name,
             I                         = I,
-            primitive_function_to_general_type_mapping = self.sampler.primitive_function_to_general_type_mapping,
-            primitive_constant_to_type_mapping          = self.sampler.primitive_constant_to_type_mapping,
-            general_type_to_primitive_function_mapping = self.sampler.general_type_to_primitive_function_mapping,
-            base_type_to_primitive_function_mapping    = self.sampler.base_type_to_primitive_function_mapping,
-            type_to_primitive_constant_mapping         = self.sampler.type_to_primitive_constant_mapping,
-            primitive_function_to_base_type_mapping    = self.sampler.primitive_function_to_base_type_mapping,
+            primitive_function_to_general_type_mapping = sampler.primitive_function_to_general_type_mapping,
+            primitive_constant_to_type_mapping          =  sampler.primitive_constant_to_type_mapping,
+            general_type_to_primitive_function_mapping =  sampler.general_type_to_primitive_function_mapping,
+            base_type_to_primitive_function_mapping    = sampler.base_type_to_primitive_function_mapping,
+            type_to_primitive_constant_mapping         =  sampler.type_to_primitive_constant_mapping,
+            primitive_function_to_base_type_mapping    =  sampler.primitive_function_to_base_type_mapping,
         )
 
         
@@ -176,10 +189,12 @@ class ProgramCompleter:
             answers = ["("+ ans for ans in answers]
         elif not ends_with_space(partial_line) and not partial_line.endswith("("):
             answers = [" "+ ans for ans in answers]
-
+        
+        # answers = partial line
 
         if is_final_arg(x, next_arg_pos): 
-            return [ans +")\n" for ans in answers]
+            print([if_program_returns(ans) for ans in answers])
+            return [ans + (")" if if_program_returns(ans) else ")\n") for ans in answers]
         else: 
             return [ans +"," for ans in answers]
 
@@ -198,6 +213,10 @@ class ProgramCompleter:
         lines = program_text.split("\n")
         lines = [l.strip() for l in lines]
         
+        if len(lines) > 50:
+            return []
+
+
         if len(lines) == 1:
             return self._start_program()
         

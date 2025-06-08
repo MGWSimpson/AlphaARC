@@ -121,14 +121,20 @@ class MCTSMethod(BaseMethod):
         program = self.tok.decode(state.squeeze(), skip_special_tokens=True)
 
         completions = [None]
+        xtime = time.time()
         while len(completions) > 0: # if we can still generate completions, keep going
             try:
+                print("----")
+                print(program)
                 completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
+                print(completions)
                 random_action = random.choice(completions) # needs to merge with overlap
                 program = program + random_action
             except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+                print(e)
                 break
-
+        
+        print(f"took {time.time() - xtime}")
         program = self.tok.encode(program, add_special_tokens=False, return_tensors='pt')
         return program
         
@@ -163,6 +169,60 @@ class MCTSMethod(BaseMethod):
         priors = [1 for i in range(len(completions))]
         return completions, priors
 
+
+
+class TGMCTSMethod(BaseMethod): 
+    
+    def __init__(self, uses_model, model, tok, completer):
+        super().__init__(uses_model)
+
+        self.model = model
+        self.tok = tok 
+        self.completer = completer
+
+    
+    def rollout(self, enc_out, next_state):
+        with torch.no_grad(): 
+            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state)
+        
+        return output
+    
+    def predict(self, enc_out, state, task, prompt_ids):
+        program = self.tok.decode(state, skip_special_tokens=True)
+
+        prev_program = program.split("\n")[:-1]
+        partial_line = program.split("\n")[-1]
+
+
+
+        try:
+            completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
+        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            traceback.print_exc()
+            return return_empty_nodes()
+    
+        if len(completions) ==0:
+            return return_empty_nodes()
+
+        prev_program_str = "\n".join(prev_program)
+        prev_program_str = prev_program_str + "\n"
+
+        
+        completions = [merge_with_overlap(partial_line, x) for x in completions]         
+        
+        if len(prev_program) != 0:
+            completions = [ prev_program_str + x for x in completions]
+
+
+        completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+
+        # then compute priors over all.
+        priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+
+        return completions, priors
 
 class Node: 
     def __init__(self,parent, prior= 0):
@@ -213,13 +273,15 @@ def rollout( state,
             task): 
 
 
+
     
+    start_time = time.time ()
     # need to make a random choice of actions    
-    """action = random.choice(actions)
-    program = model.rollout(enc_out, action.unsqueeze(0).to('cuda'), task)
+    action = random.choice(actions)
+    program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    """
-    return 0
+    
+    return reward
 
 def backpropagate(path, value):
     for node in reversed(path):    
