@@ -97,7 +97,7 @@ class LineLevelArcEnv (BaseEnv):
     # state =  previous program tokens 
     # note that we should only not do token accounting when you have already generated the actions (as in the case of search algs results)
     def step(self, action, state, should_do_token_accounting=True): 
-        action = self._add_new_line_if_absent(action)
+        # action = self._add_new_line_if_absent(action)
 
         if should_do_token_accounting: 
             self._add_and_check_token_budget(action)
