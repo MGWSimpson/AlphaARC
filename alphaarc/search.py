@@ -83,6 +83,14 @@ def entropy_bits(logits):
     return (-(p * logp).sum(dim=-1) / math.log(2))
 
 
+# will need to redistribute the probs
+def prune_node(node):
+     if node.parent:
+        idx = node.parent.children.index(node)
+        del node.parent.children[idx]
+        del node.parent.child_actions[idx]
+        if len(node.parent.children) == 0 and node.parent.expanded:
+            prune_node(node.parent)
 
 
 # -- end helpers --
@@ -140,7 +148,6 @@ class MCTSMethod(BaseMethod):
             return return_empty_nodes()
     
         if len(completions) ==0:
-            print(repr(program))
             return return_empty_nodes()
 
         prev_program_str = "\n".join(prev_program)
@@ -153,15 +160,14 @@ class MCTSMethod(BaseMethod):
             completions = [ prev_program_str + x for x in completions]
 
         completions = [self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1) for x in completions]
-
-        priors = [0 for i in range(len(completions))]
-
+        priors = [1 for i in range(len(completions))]
         return completions, priors
 
 
 class Node: 
-    def __init__(self, prior= 0):
+    def __init__(self,parent, prior= 0):
         self.prior = prior
+        self.parent = parent
         self.visit_count = 0
         self.value_sum = 0
         self.child_actions = None
@@ -181,25 +187,8 @@ class Node:
         actions = [x.to('cpu') for x in actions]
         self.state = state.clone()
         self.child_actions = copy.deepcopy(actions)
-        self.children = [Node(prior=prob) for prob in action_probs]
+        self.children = [Node(parent=self, prior=prob) for prob in action_probs]
 
-    """
-        Select action according to the visit count distribution and the temperature.
-    """
-    def select_action(self, temperature):
-        
-        visit_counts = np.array([child.visit_count for child in self.children])
-        actions = self.child_actions
-        if temperature == 0:
-            action = actions[np.argmax(visit_counts)]
-        elif temperature == float("inf"):
-            action = np.random.choice(actions)
-        else:
-            visit_count_distribution = visit_counts ** (1 / temperature)
-            visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
-            action_index = np.random.choice(len(actions), p=visit_count_distribution)
-            action = actions[action_index]
-        return action
 
     def select_child(self): 
         best_score = -np.inf
@@ -226,11 +215,11 @@ def rollout( state,
 
     
     # need to make a random choice of actions    
-    action = random.choice(actions)
-    action= torch.cat((state, action))
+    """action = random.choice(actions)
     program = model.rollout(enc_out, action.unsqueeze(0).to('cuda'), task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    return reward
+    """
+    return 0
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -253,7 +242,7 @@ def run_search(env: LineLevelArcEnv,
     
 
     start_time = time.time()
-    root = Node(0)
+    root = Node(None, 0)
 
     init_state = torch.tensor([0,1], device='cuda')
     actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
@@ -262,6 +251,8 @@ def run_search(env: LineLevelArcEnv,
     while (time.time() - start_time) < time_limit:
         node = root
         search_path = [node]
+
+
         # SELECT
         while node.expanded():
             action, node = node.select_child()
@@ -270,24 +261,28 @@ def run_search(env: LineLevelArcEnv,
         parent = search_path[-2]
         state = parent.state
 
-        # 
-        # expansion 
-        next_state, value, terminated = env.step(action=action, state=state, should_do_token_accounting=False)
+        next_state = copy.deepcopy(action) # given how the models work, the actions include the appended state 
+        value, terminated = env.evaluate_program(next_state, should_token_account=False)
         
-        print(env.tokenizer.decode(next_state, skip_special_tokens=True))
-        print(env.tokenizer.decode(action, skip_special_tokens=True))
-
+        if value == 1.0:
+            return True
+        
         next_state = torch.tensor(next_state)
-
         if not terminated: 
             actions, action_probs = model.predict(enc_out, next_state.to('cuda'), task, prompt_ids)
-           
-            value = rollout(state, actions, enc_out, model, env, task) # rollout
-            node.expand(next_state, actions, action_probs)
+            # if no further actions
+            if len(actions) == 0: 
+                value = -1.0
+            else:
+                value = rollout(state, actions, enc_out, model, env, task) # rollout
+                
+                if value == 1.0:
+                    return True
+                
+                node.expand(next_state, actions, action_probs) # check in here.
 
-            # backprop
         backpropagate(search_path, value)
-    return root
+    return False
 
 """
 set up small rig for running the experiment
@@ -297,12 +292,15 @@ def run_experiment( method: BaseMethod,
                     time_limit: int,
                     tok: AutoTokenizer,
                     ):
-    for task in tasks:
+    for task in tasks[:1]:
+        task = Task.from_json('./data/training/c8f0f002.json')
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
         print(f"starting task: {task.task_key}")
-        run_search(env, task, input_ids,  method, time_limit)
+        if run_search(env, task, input_ids,  method, time_limit):
+            print("SOLVED")
+
 
 
 

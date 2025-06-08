@@ -193,7 +193,6 @@ class LineLevelArcEnv (BaseEnv):
         if should_token_account:
             self._add_and_check_token_budget(program)
 
-        
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -201,23 +200,25 @@ class LineLevelArcEnv (BaseEnv):
             if output == "Invalid Input": 
                 terminated = False
 
-            if "O" in program:
-               terminated = True
-
+            if output != "Invalid Input" and self._if_program_returns(program):
+                terminated = True
+                reward = -1
+               
             if output == self.goal_states[i]:
                 reward +=1
 
 
 
+
         if reward == len(self.initial_states):
             reward = 1.0 
+        else:
+            reward = -1.0
+
+        if output == "Invalid Input":
+            reward = 0.0
 
         
-        else:
-            reward = 0
-
-
-
         
         if len(program) > self.max_length:
             terminated = True
