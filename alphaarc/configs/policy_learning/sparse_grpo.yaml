@@ -1,10 +1,11 @@
-model_path: 'finetune/2025-05-27_16-12-04/checkpoint-1500'
+method: "SPARSEGRPO"
+model_path: 'finetune/2025-05-19_20-26-16/checkpoint-1647'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
 n_epochs: 5
 
-num_return_sequences: 24
+num_return_sequences: 8
 
 training_curriculum_config:
   type: BaselineCurriculum
@@ -26,4 +27,4 @@ env_config:
     max_task_len: 256
     max_state_len: 256
     n_actions:  5
-    token_budget:  50000
+    token_budget:  500

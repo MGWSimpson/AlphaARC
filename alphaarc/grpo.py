@@ -84,7 +84,8 @@ class GRPOTrainer:
                  batch_size=2, 
                  lr=5e-6,
                  beta= 0.04,
-                 clip_param = 0.2): 
+                 clip_param = 0.2,
+                 sparse_variant=False): 
         
         self.tokenizer = tokenizer
         self.optimizer = AdamW(policy_model.parameters(), lr=lr)
@@ -107,6 +108,8 @@ class GRPOTrainer:
         self.batch_size = batch_size
         self.beta = beta
         self.clip_param = clip_param
+        
+
 
 
         self.run = wandb.init(
@@ -173,11 +176,12 @@ class GRPOTrainer:
         advantages = advantages.unsqueeze(1)
 
 
-        """if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
-            advantages[advantages == 1] = 1
+        if self.sparse_variant:
 
-        if advantages.all() == 0: # replace advantage with negative advantage -> should be changed to if enabled.
-            advantages[advantages == 0] = -1"""
+            #if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
+            #    advantages[advantages == 1] = 1
+            if advantages.all() == 0: # replace advantage with negative advantage -> should be changed to if enabled.
+                advantages[advantages == 0] = -1
 
         completion_mask = (decoder_input_ids != 0).int()
         
@@ -267,20 +271,6 @@ class GRPOTrainer:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
-
-            """x = self.tokenizer( task[0].program_lines, add_special_tokens=False, return_tensors='pt')['input_ids']
-            x = x.to('cuda')
-            
-            with torch.inference_mode():
-                policy_logits =  compute_logits(input_ids, x, self.policy_model ).unsqueeze(0)
-                answer_log_probs = compute_per_token_log_probs(policy_logits, x)
-
-
-            print("-----")
-            # print(self.tokenizer.batch_decode(decoder_input_ids))
-            print(task[0].program_lines)
-            print(f"sum log prob of answer: {answer_log_probs.cpu().sum().item()}")
-            print("-----")"""
             answers.extend([x for x in decoder_input_ids])  
 
         answer_tensor = pad_sequence(answers, batch_first=True)
