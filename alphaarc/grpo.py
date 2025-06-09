@@ -384,7 +384,6 @@ class GRPOTrainer:
             loss.backward()
 
 
-            # you would basically insert it here, for each of the decoder ids, you would relabel it
             for i in range(decoder_input_ids.shape[0]):
                 
 
@@ -404,7 +403,6 @@ class GRPOTrainer:
                     # self.grad_accumulate_cntr = 0
 
                 grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                # log metrics
                 self.run.log({  "loss": loss.detach().cpu().item(),
                                 "percent_clipped": clp_mask.cpu().float().mean().item(),
                                 "advantage": adv.cpu().mean().item(),
