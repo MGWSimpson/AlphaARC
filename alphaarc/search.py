@@ -1,6 +1,3 @@
-"""
-File contains all the code for running the tree search based experiments.
-"""
 
 import copy
 import time
