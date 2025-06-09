@@ -228,6 +228,142 @@ class TGMCTSMethod(BaseMethod):
         priors = F.softmax(priors, dim=-1)
         return completions, priors
 
+
+class SplintMCTSMethod(BaseMethod):
+    def __init__(self, uses_model, model, tokenizer, completer, tau, k):
+        super().__init__(uses_model) 
+
+        self.model = model
+        self.completer = completer
+        self.tok = tokenizer
+
+        self.tau = tau
+        self.k = k
+
+
+    def _fwd_step_encdec(self, enc_out, dec_ids): 
+        out = self.model(   encoder_outputs=enc_out,
+                            decoder_input_ids=dec_ids)  
+        
+        return out.logits[:, -1, :]   
+
+    
+    
+    def _handle_entropy_spike(self, state, enc_out, input_ids, task): 
+        
+        program = self.tok.decode(state, skip_special_tokens=True)
+
+        prev_program = program.split("\n")[:-1]
+        partial_line = program.split("\n")[-1]
+
+
+
+        try:
+            completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
+        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            traceback.print_exc()
+            return return_empty_nodes()
+    
+        if len(completions) ==0:
+            return return_empty_nodes()
+
+        prev_program_str = "\n".join(prev_program)
+        prev_program_str = prev_program_str + "\n"
+
+        
+        completions = [merge_with_overlap(partial_line, x) for x in completions]         
+        
+        if len(prev_program) != 0:
+            completions = [ prev_program_str + x for x in completions]
+
+
+        completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+
+        log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        log_ps = F.softmax(log_ps, dim=-1)
+
+        return completions, log_ps
+
+
+    """
+    Here, you handle the problem I was running into by accessing the completions logit.
+    This just gets around the whole problem of it being or not being a valid completion.
+    And retains the whole token efficency thing.    
+    """
+    def _handle_non_entropy_spike(self, state, enc_out, input_ids, task):    
+
+        program = self.tok.decode(state, skip_special_tokens=True)
+
+        prev_program = program.split("\n")[:-1]
+        partial_line = program.split("\n")[-1]
+
+
+
+        try:
+            completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
+        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+            traceback.print_exc()
+            return return_empty_nodes()
+    
+        if len(completions) ==0:
+            return return_empty_nodes()
+
+        prev_program_str = "\n".join(prev_program)
+        prev_program_str = prev_program_str + "\n"
+
+        
+        completions = [merge_with_overlap(partial_line, x) for x in completions]         
+        
+        if len(prev_program) != 0:
+            completions = [ prev_program_str + x for x in completions]
+
+
+        completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+        log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        topk_values, topk_indices = torch.topk(-log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
+        
+        completions = [completions[i.item()] for i in topk_indices]
+        probs = F.softmax(topk_values, dim=-1)
+
+        return completions, probs
+
+
+
+
+    def predict(self, enc_out, state, task, input_ids): # so this is where I would return it.
+        logits = self._fwd_step_encdec(enc_out, state.unsqueeze(0))
+        entropy = entropy_bits(logits).item()
+        topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
+
+        if entropy > self.tau:
+            comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
+        else: 
+            comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
+
+        # format the returns.
+        return comps, probs
+        
+        
+
+    def encode(self, prompt_ids): 
+        with torch.no_grad(): # first encode the input once.
+            enc_out = self.model.get_encoder()(prompt_ids.unsqueeze(0))
+        return enc_out
+
+    def eval(self):
+        self.model.eval()
+
+    # perform a rollout from the current state.
+    def rollout(self, enc_out, next_state, task):
+        with torch.no_grad(): 
+            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state)
+        
+        return output
+
 class Node: 
     def __init__(self,parent, prior= 0):
         self.prior = prior
@@ -276,12 +412,13 @@ def rollout( state,
             env: LineLevelArcEnv,
             task): 
 
-    start_time = time.time ()
+    """start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    return reward
+    """
+    return 0
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -370,7 +507,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/splint_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -395,7 +532,7 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer, tau=0.5, k=1)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
     else:
         raise ValueError("Method does not exist!")
 
