@@ -276,16 +276,12 @@ def rollout( state,
             env: LineLevelArcEnv,
             task): 
 
-
-
-    """
     start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    """
-    return 0
+    return reward
 
 def backpropagate(path, value):
     for node in reversed(path):    
