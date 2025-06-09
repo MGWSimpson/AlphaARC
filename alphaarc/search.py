@@ -225,8 +225,7 @@ class TGMCTSMethod(BaseMethod):
 
         # then compute priors over all.
         priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
-
-
+        priors = F.softmax(priors, dim=-1)
         return completions, priors
 
 class Node: 
@@ -279,14 +278,14 @@ def rollout( state,
 
 
 
-    
+    """
     start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    
-    return reward
+    """
+    return 0
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -320,7 +319,6 @@ def run_search(env: LineLevelArcEnv,
         search_path = [node]
 
 
-        # SELECT
         while node.expanded():
             action, node = node.select_child()
             search_path.append(node)
@@ -328,9 +326,12 @@ def run_search(env: LineLevelArcEnv,
         parent = search_path[-2]
         state = parent.state
 
+
+        print(env. tokenizer.decode(action, skip_special_tokens=True))
+
         next_state = copy.deepcopy(action) # given how the models work, the actions include the appended state 
         value, terminated = env.evaluate_program(next_state, should_token_account=False)
-        
+
         if value == 1.0:
             return True
         
