@@ -360,7 +360,7 @@ class SplintMCTSMethod(BaseMethod):
     # perform a rollout from the current state.
     def rollout(self, enc_out, next_state, task):
         with torch.no_grad(): 
-            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state)
+            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
         return output
 
@@ -412,12 +412,11 @@ def rollout( state,
             env: LineLevelArcEnv,
             task): 
 
-    """start_time = time.time ()
+    start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    """
     return 0
 
 def backpropagate(path, value):
@@ -458,9 +457,6 @@ def run_search(env: LineLevelArcEnv,
 
         parent = search_path[-2]
         state = parent.state
-
-
-        print(env. tokenizer.decode(action, skip_special_tokens=True))
 
         next_state = copy.deepcopy(action) # given how the models work, the actions include the appended state 
         value, terminated = env.evaluate_program(next_state, should_token_account=False)
