@@ -20,11 +20,13 @@ from transformers import T5ForConditionalGeneration, AutoTokenizer
 import wandb
 import random
 import os
+import shutil
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
+# --helpers --
 
 def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
@@ -34,6 +36,26 @@ def save_answer(answer_dict):
     with open("data.jsonl", "w") as f:
         json.dump(answer_dict, f)
 
+
+def prepare_output_dir(output_dir):
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)  
+    os.makedirs(output_dir)
+
+def save_stats_to_file(stats, output_dir):
+    stats_path = os.path.join(output_dir, "epoch_stats.jsonl")
+    with open(stats_path, "w") as f:
+        for entry in stats:
+            json.dump(entry, f)
+            f.write("\n")
+
+
+def save_model(model, output_dir, epoch): 
+    model.save_pretrained(os.path.join(output_dir, f"model_epoch_{epoch}"))
+
+
+
+# -- end helpers --
 
 def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer, model, answer_dict):
         for i in range(answers.shape[0]):
@@ -82,24 +104,38 @@ def run_experiment(n_meta_epochs,
                    replay_buffer, 
                    tokenizer,
                    model,
-                   grpo_trainer: GRPOTrainer):
+                   grpo_trainer: GRPOTrainer,
+                   save_model_every=10,
+                   output_dir='./results/method'):
      
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
 
+    full_curriculum = full_curriculum[:5]
     answers_dict = defaultdict(list)
-
+    epoch_stats = []
 
     for epoch in tqdm(range(n_meta_epochs)):
         random.shuffle(full_curriculum)
+        solved_this_epoch = []
         for i in tqdm(range(len(full_curriculum))):
             task = full_curriculum[i]
             relabelled_tasks = []
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model, answers_dict, grpo_trainer):
-                solved_task_ids.append(task.task_key)
+                solved_this_epoch.append(task.task_key)
                 print(f"solved: {len(set(solved_task_ids))}")
-                print(set(solved_task_ids))
 
+        solved_task_ids.extend(solved_this_epoch)
+        if epoch % save_model_every == 0:
+            save_model(model, output_dir, epoch)
+
+        epoch_stats.append({
+            "epoch": epoch,
+            "solved_this_epoch": len(solved_this_epoch),
+            "cumulative_solved": len(set(solved_task_ids)),
+            # TODO: add more info
+        })
+        save_stats_to_file(epoch_stats, output_dir)
 
             
         
@@ -124,7 +160,7 @@ def main():
 
 
 
-    method = config.method
+    method = config['method']
 
     if method == "GRPO": 
         grpo_trainer = GRPOTrainer( ref_model, 
@@ -142,6 +178,9 @@ def main():
         raise ValueError('Specified method does not exist')
     
     
+    output_dir =  f"results/{method.lower()}"
+    prepare_output_dir(output_dir)
+
     pl.seed_everything(0)
     run_experiment(n_meta_epochs=100,
                    curriculum=curriculum,
@@ -149,7 +188,8 @@ def main():
                    replay_buffer=replay_buffer,
                    tokenizer=tokenizer,
                    model=model,
-                   grpo_trainer=grpo_trainer)
+                   grpo_trainer=grpo_trainer,
+                   output_dir=output_dir)
 
 
 
