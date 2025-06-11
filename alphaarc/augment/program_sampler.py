@@ -8,7 +8,7 @@ import os
 import pickle
 import random
 import traceback
-
+from alphaarc.task import Task
 import numpy as np
 from arrow import Arrow
 
@@ -142,19 +142,16 @@ class ProgramSample:
         self.program_ast = add_variable_definition_to_ast(
             self.program_ast, self.program_name, variable_definition=new_variable
         )
-        self.add_variable_to_memory(
+        """self.add_variable_to_memory(
             index_to_insert=self.memory_index, new_variable_value=new_variable_value
         )
         self.add_variable_type_dict(
             index_to_insert=self.memory_index, new_variable_type=variable_type
         )
-        self.program = ast.unparse(self.program_ast)
+        self.program = ast.unparse(self.program_ast)"""
 
     def sample_term_with_type(self, term_type, terms_to_exclude, return_all=False):
-        
         filtered_type_dict = self.type_inferer.type_dict # self.filter_type_dict_by_index()
-
-
         candidate_terms = []
         # add primitive functions
         if isinstance(term_type, dict):
@@ -165,21 +162,41 @@ class ProgramSample:
             candidate_terms += self.base_type_to_primitive_function_mapping[display_type(term_type)]
         # add primitive constants
         else:
-            if term_type in self.type_to_primitive_constant_mapping.keys():
+            if term_type in self.type_to_primitive_constant_mapping.keys() :
                 candidate_terms += self.type_to_primitive_constant_mapping[term_type]
+
+            if term_type is "Any": 
+                for x in self.type_to_primitive_constant_mapping.values():
+                    candidate_terms +=  x
+        
+        if term_type == "Callable": 
+            candidate_terms.extend(PRIMITIVE_FUNCTIONS)
+
         # add variables in memory
         for var_name, var_type in filtered_type_dict.items():
-            if var_type[0] == term_type:
+            print(var_type[0])
+            if var_type[0] == term_type or (term_type == "Container" and var_name.startswith("x")):
                 candidate_terms.append(var_name)
+        
         # filter out excluded terms
         candidate_terms = [term for term in candidate_terms if term not in terms_to_exclude]
         if not candidate_terms:
             raise ValueError(f"No candidate terms of type {display_type(term_type)} found")
-        
+
         if return_all: 
             return candidate_terms
         else:
             return random.choice(candidate_terms)
+
+
+    def get_memory_functions(self): 
+        filtered_type_dict = self.filter_type_dict_by_index()
+        candidate_terms = []
+        for var_name, var_type in filtered_type_dict.items():
+            if var_type[0].startswith("Callable"):
+                candidate_terms.append(var_name)
+        
+        return candidate_terms
 
     def sample_function_with_output_type(self, output_type):
         filtered_type_dict = self.filter_type_dict_by_index()
@@ -214,7 +231,9 @@ class ProgramSample:
         for var_name, var_type in filtered_type_dict.items():
             if var_type[0].startswith("Arrow"):
                 candidate_terms.append(var_name)
-        return random.choice(candidate_terms)
+        
+
+        return "apply"
 
     def filter_memory_by_index(self):
         filtered_memory = {"I": self.type_inferer.memory["I"]}
@@ -250,14 +269,33 @@ class ProgramSample:
             )
         else:
             new_func = self.sample_function()
+            
             if new_func.startswith("x"):
                 new_func_type = self.type_inferer.type_dict[new_func][0]
             else:
                 new_func_type = random.choice(
                     self.primitive_function_to_base_type_mapping[new_func]
                 )
+
+            
             for arg_type in new_func_type.inputs:
                 arg = self.sample_term_with_type(term_type=arg_type, terms_to_exclude=[])
                 args.append(arg)
         new_variable_value = f"{new_func}({','.join(args)})"
         return new_variable_value
+
+
+def load_tasks_from_folders(dir_path):
+        tasks = []
+        file_paths = [os.path.join(dir_path, f) for f in os.listdir(dir_path)]
+        new_tasks = [Task.from_json(path, False) for path in file_paths]
+        tasks.extend(new_tasks)
+        return tasks
+
+if __name__ == "__main__": 
+    tasks = load_tasks_from_folders('./data/training/')
+    sampler   = ProgramSampler(data_path="./data/")
+
+    for task in tasks[:1]:
+        
+        print(sampler.sample("yes", task.training_examples[0]['input'])) 

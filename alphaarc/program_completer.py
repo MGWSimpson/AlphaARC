@@ -33,9 +33,9 @@ def is_final_arg(arrow_object, next_arg_pos):
     return len(arrow_object.inputs) == next_arg_pos + 1
 
 def if_program_returns(string): 
-        str_arr = string.split("=")
-        lhs = str_arr[0]
-        return "O" in lhs
+    str_arr = string.split("=")
+    lhs = str_arr[0]
+    return "O" in lhs
 
 class ProgramCompleter:
     def __init__(self, sampler: ProgramSampler):
@@ -71,10 +71,47 @@ class ProgramCompleter:
 
         return filtered
     
-    def _complete_missing_functions(self, partial_line): 
+
+    def _infer_memory_functions(self, partial_program, I, program_name='dummy_program'): 
+        lines = partial_program.splitlines()
+        partial_line = lines[-1]
+        finished_part   = "\n".join(lines[:-1])
+
+        if len(lines) == 2:
+            finished_part = f"def {program_name}(I):\n    pass"
+
+
+        sampler = copy.deepcopy(self.sampler)
+        ps = ProgramSample(
+            program_name              = program_name,
+            I                         = I,
+            primitive_function_to_general_type_mapping = sampler.primitive_function_to_general_type_mapping,
+            primitive_constant_to_type_mapping          =  sampler.primitive_constant_to_type_mapping,
+            general_type_to_primitive_function_mapping =  sampler.general_type_to_primitive_function_mapping,
+            base_type_to_primitive_function_mapping    = sampler.base_type_to_primitive_function_mapping,
+            type_to_primitive_constant_mapping         =  sampler.type_to_primitive_constant_mapping,
+            primitive_function_to_base_type_mapping    =  sampler.primitive_function_to_base_type_mapping,
+        )
+        body_ast = ast.parse(finished_part)
+        ps.type_inferer.infer_type_from_ast(body_ast) # parse the valid args and stuff
+        ps.memory_index += len(lines) - 2
+        
+        functions = ps.get_memory_functions()
+
+        
+        return functions
+        
+
+
+    def _complete_missing_functions(self, partial_program, sample_task_input, partial_line): 
         # we know there is a equals
         rhs = get_rhs(partial_line)
-        continuations = find_continuations(rhs.strip(), PRIMITIVE_FUNCTIONS)
+        
+        memory_functions = self._infer_memory_functions(partial_program, sample_task_input)
+
+
+
+        continuations = find_continuations(rhs.strip(), PRIMITIVE_FUNCTIONS + memory_functions)
         if not starts_with_space(rhs): 
             continuations = [" " + cont for cont in continuations]
         continuations = [cont + "(" for cont in continuations]
@@ -114,8 +151,6 @@ class ProgramCompleter:
         body_ast = ast.parse(finished_part)
         ps.type_inferer.infer_type_from_ast(body_ast) # parse the valid args and stuff
         
-
-
         # this is where I should make that check.
         # if it doesnt start with a ( or a ,
 
@@ -155,26 +190,29 @@ class ProgramCompleter:
         if func_src in ps.primitive_function_to_base_type_mapping:
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
-            func_types = [get_primitive_function_type(func_src)]
-            
-            
+            func_types = [Arrow(ps.primitive_function_to_general_type_mapping[func_src]['inputs'], 
+                                ps.primitive_function_to_general_type_mapping[func_src]['output'])]
+        
+
         final_candidates = []
         next_arg_pos   = len(supplied)
 
 
         for x in func_types: 
             required_type  = x.inputs[next_arg_pos]
+             
             try: 
+
                 candidates = ps.sample_term_with_type(
                             term_type=required_type,
                             terms_to_exclude=[],
                             return_all=True,
                         )
+                
                 final_candidates.extend(candidates)
-            except ValueError: # for some reason it throws an error if it cant find the correct type
-                pass
+            except ValueError as e: # for some reason it throws an error if it cant find the correct type
+                traceback.print_exc()
         
-
         # add in some additional checks here.
         answers = list(set(final_candidates))
 
@@ -193,7 +231,7 @@ class ProgramCompleter:
         # answers = partial line
 
         if is_final_arg(x, next_arg_pos): 
-            return [ans + (")" if if_program_returns(ans) else ")\n") for ans in answers]
+            return [ans + (")" if if_program_returns(partial_line) else ")\n") for ans in answers]
         else: 
             return [ans +"," for ans in answers]
 
@@ -202,7 +240,7 @@ class ProgramCompleter:
         
         # need to figure out if you are completing a function or an argument.
         if all(prim_fun not in partial_line for prim_fun in PRIMITIVE_FUNCTIONS): # in the case we are missing a function. Lets return all functions
-            return self._complete_missing_functions(partial_line)
+            return self._complete_missing_functions(program_text, sample_task_input, partial_line)
         else:
             return self._complete_missing_args(program_text, sample_task_input)
         
@@ -238,12 +276,21 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-
-    #    prog_text = format_as_dummy_program(prog_text)
-    #print(prog_text)
-    prog_text = """"""
-    task = Task.from_json('./data/training/28bf18c6.json')
-    print(task.program)
+    prog_text = """x1 = ofcolor(I, TWO)
+    x2 = ofcolor(I, FIVE)
+    x3 = prapply(connect, x1, x2)
+    x4 = mfilter(x3, vline)
+    x5 = underfill(I, TWO, x4)
+    x6 = matcher(numcolors, TWO)
+    x7 = objects(x5, F, F, T)
+    x8 = sfilter(x7, x6)
+    x9 = difference(x7, x8)
+    x10 = colorfilter(x9, TWO)
+    x11 = mapply(toindices,"""
+    
+    prog_text = format_as_dummy_program(prog_text)
+    print(prog_text)
+    task = Task.from_json('./data/training/af902bf9.json')
     input_ = task.training_examples[0]['input']
 
     print(completer.complete(prog_text, input_))
