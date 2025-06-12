@@ -2,7 +2,7 @@ import re
 import ast
 from typing import List
 from alphaarc.augment.program_sampler import ProgramSampler, ProgramSample
-from alphaarc.augment.type_inference import display_type
+from alphaarc.augment.type_inference import display_type, contains_non_base_type
 from alphaarc.dsl.primitives import PRIMITIVE_CONSTANTS, PRIMITIVE_FUNCTIONS
 from alphaarc.augment.genetic import TaskEvolver
 import random
@@ -187,7 +187,7 @@ class ProgramCompleter:
         
         func_types = get_primitive_function_type(func_src)
         
-        if func_src in ps.primitive_function_to_base_type_mapping:
+        if func_src in ps.primitive_function_to_base_type_mapping and func_src != "apply":
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         else:
             func_types = [Arrow(ps.primitive_function_to_general_type_mapping[func_src]['inputs'], 
@@ -286,7 +286,10 @@ if __name__ == "__main__":
     x8 = sfilter(x7, x6)
     x9 = difference(x7, x8)
     x10 = colorfilter(x9, TWO)
-    x11 = mapply(toindices,"""
+    x11 = mapply(toindices, x10)
+    x12 = apply(urcorner, x8)
+    x13 = shift(x12, UNITY)
+    x14 = rbind( """
     
     prog_text = format_as_dummy_program(prog_text)
     print(prog_text)

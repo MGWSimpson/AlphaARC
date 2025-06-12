@@ -12,6 +12,7 @@ from alphaarc.task import Task
 import numpy as np
 from arrow import Arrow
 
+from alphaarc.augment.type_inference import contains_non_base_type
 from alphaarc.augment.genetic import (
     build_general_type_to_primitive_function_mapping,
     build_primitive_function_to_general_type_mapping,
@@ -165,17 +166,16 @@ class ProgramSample:
             if term_type in self.type_to_primitive_constant_mapping.keys() :
                 candidate_terms += self.type_to_primitive_constant_mapping[term_type]
 
-            if term_type is "Any": 
+            if term_type == "Any": 
                 for x in self.type_to_primitive_constant_mapping.values():
                     candidate_terms +=  x
         
-        if term_type == "Callable": 
+        if term_type == "Callable" or (isinstance(term_type, Arrow) and term_type.output == "Callable"): 
             candidate_terms.extend(PRIMITIVE_FUNCTIONS)
 
         # add variables in memory
         for var_name, var_type in filtered_type_dict.items():
-            print(var_type[0])
-            if var_type[0] == term_type or (term_type == "Container" and var_name.startswith("x")):
+            if var_type[0] == term_type or ((contains_non_base_type(term_type)) and var_name.startswith("x")):
                 candidate_terms.append(var_name)
         
         # filter out excluded terms
