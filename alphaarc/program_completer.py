@@ -10,7 +10,7 @@ from alphaarc.task import Task
 from alphaarc.augment.type_inference import get_primitive_function_type
 from alphaarc.dsl.arc_types import Arrow
 import traceback
-
+import time 
 import copy
 
 
@@ -120,6 +120,7 @@ class ProgramCompleter:
 
     # TODO: need to check for partial args
     def _complete_missing_args(self, partial_program, I, program_name="yes"):
+        
         lines = partial_program.splitlines()
         partial_line = lines[-1]
         finished_part   = "\n".join(lines[:-1])
@@ -150,7 +151,7 @@ class ProgramCompleter:
 
         body_ast = ast.parse(finished_part)
         ps.type_inferer.infer_type_from_ast(body_ast) # parse the valid args and stuff
-        
+
         # this is where I should make that check.
         # if it doesnt start with a ( or a ,
 
@@ -180,23 +181,30 @@ class ProgramCompleter:
         func_src = ast.unparse(call_node.func)
         supplied = [ast.unparse(arg) for arg in call_node.args]
 
+
         if supplied and supplied[-1] == "___":
             supplied.pop()
 
+        contains_any = False
+        if not func_src.startswith("x"):
+            func_types = get_primitive_function_type(func_src)
 
-        
-        func_types = get_primitive_function_type(func_src)
-        
-        if func_src in ps.primitive_function_to_base_type_mapping and func_src != "apply":
+            for i in func_types.inputs:
+                if i == "Any":
+                    contains_any = True
+
+        if func_src in ps.primitive_function_to_base_type_mapping and not contains_any and func_src != "apply":
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
-        else:
+        elif func_src in ps.primitive_function_to_general_type_mapping: 
             func_types = [Arrow(ps.primitive_function_to_general_type_mapping[func_src]['inputs'], 
                                 ps.primitive_function_to_general_type_mapping[func_src]['output'])]
-        
+        else: # case where an X is being used.
+            func_types = [Arrow(["Any"], 
+                                "Any")]
 
         final_candidates = []
         next_arg_pos   = len(supplied)
-
+            
 
         for x in func_types: 
             required_type  = x.inputs[next_arg_pos]
@@ -211,8 +219,8 @@ class ProgramCompleter:
                 
                 final_candidates.extend(candidates)
             except ValueError as e: # for some reason it throws an error if it cant find the correct type
-                traceback.print_exc()
-        
+                # traceback.print_stack()
+                pass
         # add in some additional checks here.
         answers = list(set(final_candidates))
 
@@ -228,7 +236,8 @@ class ProgramCompleter:
         elif not ends_with_space(partial_line) and not partial_line.endswith("("):
             answers = [" "+ ans for ans in answers]
         
-        # answers = partial line
+
+
 
         if is_final_arg(x, next_arg_pos): 
             return [ans + (")" if if_program_returns(partial_line) else ")\n") for ans in answers]
@@ -239,7 +248,7 @@ class ProgramCompleter:
     def _complete_rhs(self, partial_line, lines, program_text, sample_task_input): 
         
         # need to figure out if you are completing a function or an argument.
-        if all(prim_fun not in partial_line for prim_fun in PRIMITIVE_FUNCTIONS): # in the case we are missing a function. Lets return all functions
+        if all("(" not in partial_line for prim_fun in PRIMITIVE_FUNCTIONS): # in the case we are missing a function. Lets return all functions
             return self._complete_missing_functions(program_text, sample_task_input, partial_line)
         else:
             return self._complete_missing_args(program_text, sample_task_input)
@@ -252,7 +261,6 @@ class ProgramCompleter:
         
         if len(lines) > 50:
             return []
-
 
         if len(lines) == 1:
             return self._start_program()
@@ -276,24 +284,47 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """x1 = ofcolor(I, TWO)
-    x2 = ofcolor(I, FIVE)
-    x3 = prapply(connect, x1, x2)
-    x4 = mfilter(x3, vline)
-    x5 = underfill(I, TWO, x4)
-    x6 = matcher(numcolors, TWO)
-    x7 = objects(x5, F, F, T)
-    x8 = sfilter(x7, x6)
-    x9 = difference(x7, x8)
-    x10 = colorfilter(x9, TWO)
-    x11 = mapply(toindices, x10)
-    x12 = apply(urcorner, x8)
-    x13 = shift(x12, UNITY)
-    x14 = rbind( """
+    prog_text = """x1 = asindices(I)
+    x2 = fork(product, identity, identity)
+    x3 = lbind(canvas, ZERO)
+    x4 = compose(asobject, x3)
+    x5 = fork(multiply, first, last)
+    x6 = compose(positive, size)
+    x7 = lbind(lbind, shift)
+    x8 = rbind(fork, x5)
+    x9 = lbind(x8, multiply)
+    x10 = lbind(chain, x6)
+    x11 = rbind(x10, x4)
+    x12 = lbind(lbind, occurrences)
+    x13 = chain(x9, x11, x12)
+    x14 = compose(x2, first)
+    x15 = compose(x13, last)
+    x16 = fork(argmax, x14, x15)
+    x17 = chain(x7, x4, x16)
+    x18 = compose(x4, x16)
+    x19 = fork(occurrences, last, x18)
+    x20 = fork(mapply, x17, x19)
+    x21 = multiply(TWO, SIX)
+    x22 = interval(THREE, x21, ONE)
+    x23 = astuple(x22, I)
+    x24 = x20(x23)
+    x25 = fill(I, THREE, x24)
+    x26 = interval(THREE, TEN, ONE)
+    x27 = astuple(x26, x25)
+    x28 = x20(x27)
+    x29 = fill(x25, THREE, x28)
+    x30 = astuple(x26, x29)
+    x31 = x20(x30)
+    x32 = fill(x29, THREE, x31)
+    x33 = rbind(toobject, x32)
+    x34 = rbind(colorcount, THREE)
+    x35 = chain(x34, x33, neighbors)
+    x36 = matcher(x35, EIGHT)
+    x37 = sfilter(x1, x36)
+    x38 = fill(I, """
     
     prog_text = format_as_dummy_program(prog_text)
-    print(prog_text)
     task = Task.from_json('./data/training/af902bf9.json')
     input_ = task.training_examples[0]['input']
 
-    print(completer.complete(prog_text, input_))
+    [repr(x ) for x in completer.complete(prog_text, input_)]

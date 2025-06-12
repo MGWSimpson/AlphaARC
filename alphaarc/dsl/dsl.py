@@ -408,8 +408,8 @@ def interval(
 
 
 def astuple(
-    a: Integer,
-    b: Integer
+    a: Any,
+    b: Any
 ) -> IntegerTuple:
     """ constructs a tuple """
     return (a, b)

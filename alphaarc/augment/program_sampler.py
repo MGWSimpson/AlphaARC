@@ -12,6 +12,8 @@ from alphaarc.task import Task
 import numpy as np
 from arrow import Arrow
 
+import alphaarc.dsl.arc_types as arc_types
+
 from alphaarc.augment.type_inference import contains_non_base_type
 from alphaarc.augment.genetic import (
     build_general_type_to_primitive_function_mapping,
@@ -152,6 +154,7 @@ class ProgramSample:
         self.program = ast.unparse(self.program_ast)"""
 
     def sample_term_with_type(self, term_type, terms_to_exclude, return_all=False):
+
         filtered_type_dict = self.type_inferer.type_dict # self.filter_type_dict_by_index()
         candidate_terms = []
         # add primitive functions
@@ -170,12 +173,19 @@ class ProgramSample:
                 for x in self.type_to_primitive_constant_mapping.values():
                     candidate_terms +=  x
         
-        if term_type == "Callable" or (isinstance(term_type, Arrow) and term_type.output == "Callable"): 
+        if term_type == "Callable" or term_type == "Any" or (isinstance(term_type, Arrow) and term_type.output == "Callable"): 
             candidate_terms.extend(PRIMITIVE_FUNCTIONS)
+
+
+        if term_type == "Integer": 
+            candidate_terms.append("I")
 
         # add variables in memory
         for var_name, var_type in filtered_type_dict.items():
-            if var_type[0] == term_type or ((contains_non_base_type(term_type)) and var_name.startswith("x")):
+            if (contains_non_base_type(var_type[0])) and (var_name.startswith("x") or var_name.startswith("I")):
+                candidate_terms.append(var_name)
+
+            if var_type[0] == term_type or ((contains_non_base_type(term_type)) and (var_name.startswith("x") or var_name.startswith("I"))):
                 candidate_terms.append(var_name)
         
         # filter out excluded terms

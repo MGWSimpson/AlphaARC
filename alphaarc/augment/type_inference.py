@@ -19,10 +19,11 @@ BASE_TYPES = [
     "Cell",
     "Object",
     "Objects",
-    "Indices",
-    "IndicesSet",
+    
 ]
 NON_BASE_TYPES = [
+    "Indices",
+    "IndicesSet",
     "Numerical",
     "Patch",
     "Element",
