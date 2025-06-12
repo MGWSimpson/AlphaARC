@@ -4,11 +4,43 @@ from importlib import import_module
 from typing import Any, Dict, Iterable, List, Union
 from matplotlib import pyplot as plt
 
+import shutil
+
+import os
 
 import numpy as np
 import json
 
 import copy
+
+
+# -- start new -- 
+
+
+
+def save_answer(answer_dict):
+    with open("data.jsonl", "w") as f:
+        json.dump(answer_dict, f)
+
+
+def prepare_output_dir(output_dir):
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)  
+    os.makedirs(output_dir)
+
+def save_stats_to_file(stats, output_dir):
+    stats_path = os.path.join(output_dir, "epoch_stats.jsonl")
+    with open(stats_path, "w") as f:
+        for entry in stats:
+            json.dump(entry, f)
+            f.write("\n")
+
+
+def save_model(model, output_dir, epoch): 
+    model.save_pretrained(os.path.join(output_dir, f"model_epoch_{epoch}"))
+
+
+# -- end new -- 
 
 def load_key_split(split_keys_path): 
     with open(split_keys_path) as fp:

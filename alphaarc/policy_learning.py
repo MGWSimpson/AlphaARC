@@ -8,7 +8,6 @@ from alphaarc.buffers import ReplayBuffer
 from alphaarc.configs import load_config, build_curriculum, build_env
 from alphaarc.utils import load_key_split, relabel_task
 from alphaarc.env import BaseEnv
-from alphaarc.policy.tokenize import tokenize_task
 import numpy as np
 from tqdm import tqdm
 from grpo import GRPOTrainer
@@ -22,36 +21,13 @@ import random
 import os
 import shutil
 
+from alphaarc.utils import encode_task, save_answer, prepare_output_dir, save_stats_to_file, save_model
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 # --helpers --
-
-def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
-    tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
-    return tokenized_task
-
-def save_answer(answer_dict):
-    with open("data.jsonl", "w") as f:
-        json.dump(answer_dict, f)
-
-
-def prepare_output_dir(output_dir):
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)  
-    os.makedirs(output_dir)
-
-def save_stats_to_file(stats, output_dir):
-    stats_path = os.path.join(output_dir, "epoch_stats.jsonl")
-    with open(stats_path, "w") as f:
-        for entry in stats:
-            json.dump(entry, f)
-            f.write("\n")
-
-
-def save_model(model, output_dir, epoch): 
-    model.save_pretrained(os.path.join(output_dir, f"model_epoch_{epoch}"))
 
 
 

@@ -18,11 +18,38 @@ import random
 import torch.nn as nn
 from alphaarc.configs import load_config, build_curriculum, build_env
 from alphaarc.utils import load_key_split, relabel_task
+import pytorch_lightning as pl
 
+from alphaarc.utils import prepare_output_dir, save_stats_to_file
 import argparse
+import json
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+
+# -- experiment helpers -- 
+
+
+def init_metrics():
+    return []
+
+
+def track_task_metrics(task_key, success, start_time, extra=None):
+    return {
+        "task": task_key,
+        "success": success,
+        "time_sec": round(time.time() - start_time, 2),
+        "extra": extra or {}
+    }
+
+def save_metrics_to_file(metrics, output_path):
+    os.makedirs(output_path, exist_ok=True)
+    path = os.path.join(output_path, "experiment_results.json")
+    with open(path, "w") as f:
+        json.dump(metrics, f, indent=2)
+
+
+# -- end experiment helpers
 
 # -- helpers --
 
@@ -486,22 +513,32 @@ def run_experiment( method: BaseMethod,
                     tasks: list[Task],
                     time_limit: int,
                     tok: AutoTokenizer,
+                    output_path
                     ):
-    for task in tasks[:1]:
-        task = Task.from_json('./data/training/c8f0f002.json')
+    
+    metrics = init_metrics()
+
+    for task in tasks:
+        # task = Task.from_json('./data/training/c8f0f002.json')
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
-        print(f"starting task: {task.task_key}")
-        if run_search(env, task, input_ids,  method, time_limit):
-            print("SOLVED")
 
+
+        print(f"starting task: {task.task_key}")
+        start_time = time.time()
+        solved = run_search(env, task, input_ids,  method, time_limit)
+        print("SOLVED" if solved else "FAILED")
+
+        metrics.append(track_task_metrics(task.task_key, solved, start_time))
+
+    save_metrics_to_file(metrics, output_path)
 
 
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -530,10 +567,19 @@ def main():
     else:
         raise ValueError("Method does not exist!")
 
+
+     
+    output_dir =  f"results/{config['method'].lower()}"
+    prepare_output_dir(output_dir)
+    pl.seed_everything(0)
+    
+
+
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
                    time_limit=(60 * 3),
-                   tok=tok)
+                   tok=tok,
+                   output_path=output_dir)
 
 
 if __name__ == "__main__": 
