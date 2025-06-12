@@ -481,9 +481,7 @@ def run_search(env: LineLevelArcEnv,
         backpropagate(search_path, value)
     return False
 
-"""
-set up small rig for running the experiment
-"""
+
 def run_experiment( method: BaseMethod,
                     tasks: list[Task],
                     time_limit: int,

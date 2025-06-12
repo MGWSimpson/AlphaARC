@@ -193,7 +193,7 @@ class ProgramCompleter:
                 if i == "Any":
                     contains_any = True
 
-        if func_src in ps.primitive_function_to_base_type_mapping and not contains_any and func_src != "apply":
+        if func_src in ps.primitive_function_to_base_type_mapping and not contains_any and func_src != "apply" and func_src != "product" and func_src != "last":
             func_types = ps.primitive_function_to_base_type_mapping[func_src]
         elif func_src in ps.primitive_function_to_general_type_mapping: 
             func_types = [Arrow(ps.primitive_function_to_general_type_mapping[func_src]['inputs'], 
@@ -259,8 +259,8 @@ class ProgramCompleter:
         lines = program_text.split("\n")
         lines = [l.strip() for l in lines]
         
-        if len(lines) > 50:
-            return []
+        """if len(lines) > 50:
+            return []"""
 
         if len(lines) == 1:
             return self._start_program()
@@ -284,47 +284,21 @@ if __name__ == "__main__":
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
 
-    prog_text = """x1 = asindices(I)
-    x2 = fork(product, identity, identity)
-    x3 = lbind(canvas, ZERO)
-    x4 = compose(asobject, x3)
-    x5 = fork(multiply, first, last)
-    x6 = compose(positive, size)
-    x7 = lbind(lbind, shift)
-    x8 = rbind(fork, x5)
-    x9 = lbind(x8, multiply)
-    x10 = lbind(chain, x6)
-    x11 = rbind(x10, x4)
-    x12 = lbind(lbind, occurrences)
-    x13 = chain(x9, x11, x12)
-    x14 = compose(x2, first)
-    x15 = compose(x13, last)
-    x16 = fork(argmax, x14, x15)
-    x17 = chain(x7, x4, x16)
-    x18 = compose(x4, x16)
-    x19 = fork(occurrences, last, x18)
-    x20 = fork(mapply, x17, x19)
-    x21 = multiply(TWO, SIX)
-    x22 = interval(THREE, x21, ONE)
-    x23 = astuple(x22, I)
-    x24 = x20(x23)
-    x25 = fill(I, THREE, x24)
-    x26 = interval(THREE, TEN, ONE)
-    x27 = astuple(x26, x25)
-    x28 = x20(x27)
-    x29 = fill(x25, THREE, x28)
-    x30 = astuple(x26, x29)
-    x31 = x20(x30)
-    x32 = fill(x29, THREE, x31)
-    x33 = rbind(toobject, x32)
-    x34 = rbind(colorcount, THREE)
-    x35 = chain(x34, x33, neighbors)
-    x36 = matcher(x35, EIGHT)
-    x37 = sfilter(x1, x36)
-    x38 = fill(I, """
+    prog_text = """x1 = objects(I, T, T, T)
+    x2 = apply(size, x1)
+    x3 = maximum(x2)
+    x4 = lbind(greater, x3)
+    x5 = compose(x4, size)
+    x6 = sfilter(x1, x5)
+    x7 = difference(x1, x6)
+    x8 = first(x7)
+    x9 = interval(ONE, FOUR, ONE)
+    x10 = lbind(multiply, FOUR)
+    x11 = apply(x10, x9)
+    x12 = product("""
     
     prog_text = format_as_dummy_program(prog_text)
-    task = Task.from_json('./data/training/af902bf9.json')
+    task = Task.from_json('./data/training/045e512c.json')
     input_ = task.training_examples[0]['input']
 
-    [repr(x ) for x in completer.complete(prog_text, input_)]
+    [print(repr(x )) for x in completer.complete(prog_text, input_)]
