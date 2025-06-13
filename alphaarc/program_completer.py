@@ -259,8 +259,8 @@ class ProgramCompleter:
         lines = program_text.split("\n")
         lines = [l.strip() for l in lines]
         
-        """if len(lines) > 50:
-            return []"""
+        if len(lines) > 50:
+            return []
 
         if len(lines) == 1:
             return self._start_program()

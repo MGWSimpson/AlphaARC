@@ -130,6 +130,9 @@ class BaseMethod:
     def predict(enc_out, init_state, task, prompt_ids): 
         raise NotImplementedError 
     
+ 
+    def collect_stats(self): 
+        return {}
     
 # generates all actions + no priors 
 class MCTSMethod(BaseMethod): 
@@ -169,7 +172,6 @@ class MCTSMethod(BaseMethod):
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
-            traceback.print_exc()
             return return_empty_nodes()
     
         if len(completions) ==0:
@@ -229,7 +231,6 @@ class TGMCTSMethod(BaseMethod):
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
-            traceback.print_exc()
             return return_empty_nodes()
     
         if len(completions) ==0:
@@ -263,9 +264,14 @@ class SplintMCTSMethod(BaseMethod):
         self.model = model
         self.completer = completer
         self.tok = tokenizer
-
         self.tau = tau
         self.k = k
+
+
+        # stats
+
+        self.n_entropy_spikes = 0
+        self.n_non_entropy_spikes = 0
 
 
     def _fwd_step_encdec(self, enc_out, dec_ids): 
@@ -288,7 +294,6 @@ class SplintMCTSMethod(BaseMethod):
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
-            traceback.print_exc()
             return return_empty_nodes()
     
         if len(completions) ==0:
@@ -367,8 +372,10 @@ class SplintMCTSMethod(BaseMethod):
         topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
         if entropy > self.tau:
+            self.n_entropy_spikes +=1
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
         else: 
+            self.n_non_entropy_spikes +=1
             comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
 
         # format the returns.
@@ -390,6 +397,10 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
         return output
+    
+    def collect_stats(self):
+        return {"n_entropy_spikes": self.n_entropy_spikes, "n_non_entropy_spikes": self.n_non_entropy_spikes}
+    
 
 class Node: 
     def __init__(self,parent, prior= 0):
@@ -458,6 +469,8 @@ def run_search(env: LineLevelArcEnv,
                time_limit=60):
     
 
+
+    stats = {"max_depth": 0}
     if model.uses_model:
         model.eval()
         with torch.no_grad():
@@ -482,6 +495,9 @@ def run_search(env: LineLevelArcEnv,
             action, node = node.select_child()
             search_path.append(node)
 
+        if len(search_path) > stats['max_depth']: # note taking
+            stats['max_depth'] = len(search_path)
+
         parent = search_path[-2]
         state = parent.state
 
@@ -499,13 +515,13 @@ def run_search(env: LineLevelArcEnv,
                 value = -1.0
             else:
                 value = rollout(state, actions, enc_out, model, env, task) # rollout
-                
                 if value == 1.0:
                     return True
                 
                 node.expand(next_state, actions, action_probs) # check in here.
 
         backpropagate(search_path, value)
+    print(model.collect_stats())
     return False
 
 
@@ -518,8 +534,7 @@ def run_experiment( method: BaseMethod,
     
     metrics = init_metrics()
 
-    for task in tasks:
-        # task = Task.from_json('./data/training/c8f0f002.json')
+    for task in tasks[:1]:
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
@@ -562,7 +577,7 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=1, k=2)
     else:
         raise ValueError("Method does not exist!")
 
