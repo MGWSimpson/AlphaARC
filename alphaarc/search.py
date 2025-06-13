@@ -24,8 +24,46 @@ from alphaarc.utils import prepare_output_dir, save_stats_to_file
 import argparse
 import json
 
+import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+
+
+# -- tree viz --
+
+import itertools, json, pathlib, webbrowser, tempfile, textwrap
+import networkx as nx
+
+class TreeRecorder:
+    _ids = itertools.count()
+
+    def __init__(self, active=False):
+        self.g = nx.DiGraph()
+        self.meta = {}   
+        self.active = active 
+
+    def new_id(self):
+        return next(self._ids)
+
+    def add_node(self, node_id, label):
+        self.g.add_node(node_id, label=label)
+
+    def add_edge(self, parent_id, child_id, label=""):
+        self.g.add_edge(parent_id, child_id, label=label)
+
+    def to_html(self, path="search_tree.html"):
+        from pyvis.network import Network         
+        nt = Network(height="800px", width="1200px", directed=True)
+        for n, data in self.g.nodes(data=True):
+            nt.add_node(n, label=data["label"],
+                         title=self.meta.get(n, ""), shape="box")
+        for u, v, data in self.g.edges(data=True):
+            nt.add_edge(u, v, label=data.get("label", ""))
+        nt.show(path)
+        webbrowser.open(f"file://{pathlib.Path(path).resolve()}")
+
+
+# -- end --
 
 # -- experiment helpers -- 
 
@@ -101,6 +139,33 @@ def compute_log_probs_batched(model, input_batch, ids_batch):
         token_logp = log_probs.gather(dim=-1, index=ids_batch.unsqueeze(-1)).squeeze(-1)  # (B, L)
         token_logp = token_logp * mask
         return token_logp.sum(dim=-1)  # (B,)
+
+def compute_prior(model, input_batch, ids_batch):
+   
+    with torch.no_grad():
+        labels = ids_batch.clone()
+        labels[labels == 0] = -100     # ignore padding
+        labels[:, 0] = 0               # keep first token (assuming BOS-0 convention)
+        mask = labels != -100
+
+        logits = model(
+            input_ids=input_batch.repeat(ids_batch.size(0), 1),  # (B, L)
+            labels=labels
+        ).logits                         # (B, L, V)
+
+        log_probs = torch.log_softmax(logits, dim=-1)             # (B, L, V)
+        token_ll = log_probs.gather(dim=-1,
+                                    index=ids_batch.unsqueeze(-1)
+                                   ).squeeze(-1)                  # (B, L)
+
+        seq_logp = (token_ll * mask).sum(dim=-1)                  # (B,)
+
+        prior = torch.softmax(seq_logp, dim=0)                    # (B,)
+
+        return prior
+
+
+
 
 def entropy_bits(logits):
     logp = F.log_softmax(logits, -1)
@@ -253,8 +318,11 @@ class TGMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
         # then compute priors over all.
-        priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+        """priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
         priors = F.softmax(priors, dim=-1)
+        """
+        priors = compute_prior(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+
         return completions, priors
 
 
@@ -314,10 +382,11 @@ class SplintMCTSMethod(BaseMethod):
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
-        log_ps = F.softmax(log_ps, dim=-1)
+        #log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        #log_ps = F.softmax(log_ps, dim=-1)
 
-        return completions, log_ps
+        priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        return completions, priors
 
 
     """
@@ -353,16 +422,22 @@ class SplintMCTSMethod(BaseMethod):
             completions = [ prev_program_str + x for x in completions]
 
 
+
         completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
-        log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
-        topk_values, topk_indices = torch.topk(-log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+        
+        # log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        
+        priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        topk_values, topk_indices = torch.topk(priors, k=min(self.k, priors.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         completions = [completions[i.item()] for i in topk_indices]
-        probs = F.softmax(topk_values, dim=-1)
 
-        return completions, probs
+        priors = topk_values
+        priors = priors / priors.sum() 
+
+        return completions, priors
 
 
 
@@ -376,6 +451,7 @@ class SplintMCTSMethod(BaseMethod):
             self.n_entropy_spikes +=1
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
         else: 
+
             self.n_non_entropy_spikes +=1
             comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
 
@@ -404,7 +480,12 @@ class SplintMCTSMethod(BaseMethod):
     
 
 class Node: 
-    def __init__(self,parent, prior= 0):
+    def __init__(self,parent, recorder, prior= 0):
+
+        if recorder.active:
+            self.id = recorder.new_id()  
+            recorder.add_node(self.id, label=f"V={prior:.2f}")
+
         self.prior = prior
         self.parent = parent
         self.visit_count = 0
@@ -421,12 +502,18 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
     
-    def expand(self, state, actions, action_probs):
+    def expand(self, state, actions, action_probs, recorder, tok):
         state = state.to('cpu')
         actions = [x.to('cpu') for x in actions]
         self.state = state.clone()
         self.child_actions = copy.deepcopy(actions)
-        self.children = [Node(parent=self, prior=prob) for prob in action_probs]
+        self.children = [Node(parent=self, recorder=recorder, prior=prob) for prob in action_probs]
+
+
+        if recorder.active:
+            for act, child, prob in zip(actions, self.children, action_probs):
+                act_str = tok.decode(act)
+                recorder.add_edge(self.id, child.id, label=f"{prob:.2f} | {act_str}")
 
 
     def select_child(self): 
@@ -467,7 +554,8 @@ def run_search(env: LineLevelArcEnv,
                task, 
                prompt_ids,
                model, 
-               time_limit=60):
+               time_limit,
+               recorder):
     
 
 
@@ -481,12 +569,13 @@ def run_search(env: LineLevelArcEnv,
     
 
     start_time = time.time()
-    root = Node(None, 0)
+    root = Node(None, recorder,  0)
 
     init_state = torch.tensor([0,1], device='cuda')
     actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
-    root.expand(init_state, actions, action_probs)
+    
 
+    root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
     while (time.time() - start_time) < time_limit:
         node = root
         search_path = [node]
@@ -501,6 +590,7 @@ def run_search(env: LineLevelArcEnv,
 
         parent = search_path[-2]
         state = parent.state
+
 
         next_state = copy.deepcopy(action) # given how the models work, the actions include the appended state 
         value, terminated = env.evaluate_program(next_state, should_token_account=False)
@@ -519,7 +609,7 @@ def run_search(env: LineLevelArcEnv,
                 if value == 1.0:
                     return True
                 
-                node.expand(next_state, actions, action_probs) # check in here.
+                node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
 
         backpropagate(search_path, value)
     print(model.collect_stats())
@@ -535,20 +625,22 @@ def run_experiment( method: BaseMethod,
     
     metrics = init_metrics()
 
-    for task in tasks[:1]:
-        task = Task.from_json('./data/training/c8f0f002.json')
-        input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
-        env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
-        env.set_task(task)
+    recorder = TreeRecorder(active=False)    # import this where you build the tree
+
+    task = Task.from_json(f'./data/training/25ff71a9.json')
+    input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
+    env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
+    env.set_task(task)
 
 
-        print(f"starting task: {task.task_key}")
-        start_time = time.time()
-        solved = run_search(env, task, input_ids,  method, time_limit)
-        print("SOLVED" if solved else "FAILED")
-        metrics.append(track_task_metrics(task.task_key, solved, start_time))
+    print(f"starting task: {task.task_key}")
+    start_time = time.time()
+    solved = run_search(env, task, input_ids,  method, time_limit,recorder)
+    print("SOLVED" if solved else "FAILED")
+    metrics.append(track_task_metrics(task.task_key, solved, start_time))
+        # recorder.to_html(f"tree_{task.task_key}.html")
 
-    save_metrics_to_file(metrics, output_path)
+    # save_metrics_to_file(metrics, output_path)
 
 
 
@@ -579,7 +671,7 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.3, k=1)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
     else:
         raise ValueError("Method does not exist!")
 
@@ -593,7 +685,7 @@ def main():
 
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(60 * 3),
+                   time_limit=(3 * 60),
                    tok=tok,
                    output_path=output_dir)
 

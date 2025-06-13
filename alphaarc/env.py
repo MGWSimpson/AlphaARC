@@ -190,6 +190,8 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(program)
         
+        print("- - - - ")
+        print(program)
         if should_token_account:
             self._add_and_check_token_budget(program)
 
@@ -200,15 +202,16 @@ class LineLevelArcEnv (BaseEnv):
             candidate_program = append_return(program)
             # candidate_program = program
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
+
             if output == "Invalid Input": 
                 terminated = False
 
-            if output != "Invalid Input" and self._if_program_returns(lines[-1]):
+            if output != "Invalid Input" and self._if_program_returns(lines[-1]) and output != self.goal_states[i]:
                 terminated = True
                 reward = -1
                
             if output == self.goal_states[i]:
-                reward +=1
+                reward +=1 
 
 
 
