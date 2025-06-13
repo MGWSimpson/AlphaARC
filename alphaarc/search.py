@@ -25,7 +25,7 @@ import argparse
 import json
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # -- experiment helpers -- 
 
@@ -53,12 +53,13 @@ def save_metrics_to_file(metrics, output_path):
 
 # -- helpers --
 
-def puct_score(parent, child):
-    prior_score = child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
+def puct_score(parent, child, c_puct=1):
     if child.visit_count > 0:
         value_score = child.value()
     else:
         value_score = 0
+
+    prior_score = c_puct * child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
     return value_score + prior_score
 
@@ -455,7 +456,7 @@ def rollout( state,
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    return 0
+    return reward
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -535,6 +536,7 @@ def run_experiment( method: BaseMethod,
     metrics = init_metrics()
 
     for task in tasks[:1]:
+        task = Task.from_json('./data/training/c8f0f002.json')
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
@@ -577,7 +579,7 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=1, k=2)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.3, k=1)
     else:
         raise ValueError("Method does not exist!")
 
