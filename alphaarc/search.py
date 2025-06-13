@@ -529,7 +529,6 @@ def run_experiment( method: BaseMethod,
         start_time = time.time()
         solved = run_search(env, task, input_ids,  method, time_limit)
         print("SOLVED" if solved else "FAILED")
-
         metrics.append(track_task_metrics(task.task_key, solved, start_time))
 
     save_metrics_to_file(metrics, output_path)
