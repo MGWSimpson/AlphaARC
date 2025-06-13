@@ -358,7 +358,7 @@ class SplintMCTSMethod(BaseMethod):
         prev_program = program.split("\n")[:-1]
         partial_line = program.split("\n")[-1]
 
-
+    
 
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
@@ -386,6 +386,7 @@ class SplintMCTSMethod(BaseMethod):
         #log_ps = F.softmax(log_ps, dim=-1)
 
         priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        # priors[:] = 1
         return completions, priors
 
 
@@ -447,14 +448,17 @@ class SplintMCTSMethod(BaseMethod):
         entropy = entropy_bits(logits).item()
         topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
+
+        start_time = time.time()
         if entropy > self.tau:
             self.n_entropy_spikes +=1
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
+            print(f"completer time: {time.time() - start_time}")
         else: 
 
             self.n_non_entropy_spikes +=1
             comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
-
+            print(f"non entropy spike time: { time.time() - start_time}")
         # format the returns.
         return comps, probs
         
@@ -520,14 +524,15 @@ class Node:
         best_score = -np.inf
         best_action = -1
         best_child = None
-
+        
+        score_list = []
         for i in range(len(self.children)):
             score = puct_score(self, self.children[i])
+            score_list.append(score)
             if score > best_score:
                 best_score = score
                 best_action = self.child_actions[i]
                 best_child = self.children[i]
-
 
         return best_action, best_child    
 
@@ -559,7 +564,7 @@ def run_search(env: LineLevelArcEnv,
     
 
 
-    stats = {"max_depth": 0}
+    stats = {"max_depth": 0, "nodes_expanded":0}
     if model.uses_model:
         model.eval()
         with torch.no_grad():
@@ -610,9 +615,11 @@ def run_search(env: LineLevelArcEnv,
                     return True
                 
                 node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
+                stats['nodes_expanded'] += 1
 
         backpropagate(search_path, value)
     print(model.collect_stats())
+    print(stats)
     return False
 
 
@@ -627,17 +634,19 @@ def run_experiment( method: BaseMethod,
 
     recorder = TreeRecorder(active=False)    # import this where you build the tree
 
-    task = Task.from_json(f'./data/training/25ff71a9.json')
-    input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
-    env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
-    env.set_task(task)
+    
+    for task in tasks[:1 ]:
+        task = Task.from_json("./data/training/d9fac9be.json")
+        input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
+        env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
+        env.set_task(task)
 
 
-    print(f"starting task: {task.task_key}")
-    start_time = time.time()
-    solved = run_search(env, task, input_ids,  method, time_limit,recorder)
-    print("SOLVED" if solved else "FAILED")
-    metrics.append(track_task_metrics(task.task_key, solved, start_time))
+        print(f"starting task: {task.task_key}")
+        start_time = time.time()
+        solved = run_search(env, task, input_ids,  method, time_limit,recorder)
+        print("SOLVED" if solved else "FAILED")
+        metrics.append(track_task_metrics(task.task_key, solved, start_time))
         # recorder.to_html(f"tree_{task.task_key}.html")
 
     # save_metrics_to_file(metrics, output_path)
@@ -671,21 +680,21 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.5, k=1)
     else:
         raise ValueError("Method does not exist!")
 
 
      
     output_dir =  f"results/{config['method'].lower()}"
-    prepare_output_dir(output_dir)
+    # prepare_output_dir(output_dir)
     pl.seed_everything(0)
     
 
 
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(3 * 60),
+                   time_limit=(100),
                    tok=tok,
                    output_path=output_dir)
 

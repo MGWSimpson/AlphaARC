@@ -190,8 +190,7 @@ class LineLevelArcEnv (BaseEnv):
         reward = 0
         program = self._decode(program)
         
-        print("- - - - ")
-        print(program)
+      
         if should_token_account:
             self._add_and_check_token_budget(program)
 
