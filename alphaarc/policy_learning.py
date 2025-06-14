@@ -25,7 +25,7 @@ from alphaarc.policy.tokenize import tokenize_task
 from alphaarc.utils import save_answer, prepare_output_dir, save_stats_to_file, save_model
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 # --helpers --
@@ -119,7 +119,7 @@ def run_experiment(n_meta_epochs,
         
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/grpo.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/internal_grpo.yaml')
     args = parser.parse_args()
         
     config = load_config(args.config_path)
@@ -149,13 +149,16 @@ def main():
         grpo_trainer = GRPOTrainer(ref_model,
                                    model,
                                    tokenizer, 
+                                   env,
                                    sparse_variant=True)    
     
     elif method == "INTERNALGRPO": 
         grpo_trainer = GRPOTrainer(ref_model,
                                    model,
-                                   tokenizer, 
-                                   sparse_variant=True)    
+                                   tokenizer,
+                                   env, 
+                                   sparse_variant=False,
+                                   internal_mode=True)    
     elif method == "SAMPLE":
         grpo_trainer = None 
     else:
@@ -166,7 +169,7 @@ def main():
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=10,
+    run_experiment(n_meta_epochs=1,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,

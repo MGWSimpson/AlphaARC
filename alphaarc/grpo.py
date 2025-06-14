@@ -349,12 +349,6 @@ class GRPOTrainer:
                 policy_logits =  compute_logits(input_ids, x, self.policy_model ).unsqueeze(0)
                 answer_log_probs = compute_per_token_log_probs(policy_logits, x)
 
-            print("-----")
-            # print(self.tokenizer.batch_decode(decoder_input_ids))
-            print(task[0].program_lines)
-            print(f"sum log prob of answer: {answer_log_probs.cpu().sum().item()}")
-            print("-----")
-
 
             answers.extend([x for x in decoder_input_ids])  
 

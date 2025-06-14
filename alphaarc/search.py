@@ -459,7 +459,6 @@ class SplintMCTSMethod(BaseMethod):
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
-            traceback.print_exc()
             return return_empty_nodes()
     
         if len(completions) ==0:
@@ -499,15 +498,18 @@ class SplintMCTSMethod(BaseMethod):
         topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
         if entropy > self.tau:
+
             self.n_entropy_spikes +=1
             if self.curr_nb_streak:
                 self.nb_streaks.append(self.curr_nb_streak)
 
             self.curr_nb_streak =0
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
+
         else: 
             self.n_non_entropy_spikes += 1
             self.curr_nb_streak  += 1
+
 
             comps, log_ps = self._dfs_completer_trusted(
                            state, 0, enc_out, task, input_ids)
@@ -515,6 +517,8 @@ class SplintMCTSMethod(BaseMethod):
             
             probs = torch.tensor(log_ps)
             probs = torch.softmax(probs, dim=0)                    # (B,)
+
+
 
         # format the returns.
         return comps, probs
@@ -730,7 +734,9 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-    for task in tasks:
+    for task in tasks[8:9]:
+        print(task.program_lines)
+        torch.cuda.empty_cache()
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
