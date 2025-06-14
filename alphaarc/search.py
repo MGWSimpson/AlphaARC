@@ -19,7 +19,7 @@ import torch.nn as nn
 from alphaarc.configs import load_config, build_curriculum, build_env
 from alphaarc.utils import load_key_split, relabel_task
 import pytorch_lightning as pl
-
+import statistics
 from alphaarc.utils import prepare_output_dir, save_stats_to_file
 import argparse
 import json
@@ -343,6 +343,11 @@ class SplintMCTSMethod(BaseMethod):
         self.n_non_entropy_spikes = 0
 
 
+        self.curr_nb_streak   = 0      # length of the *current* run
+        self.nb_streaks = []
+
+  
+            
     def _fwd_step_encdec(self, enc_out, dec_ids): 
         out = self.model(   encoder_outputs=enc_out,
                             decoder_input_ids=dec_ids)  
@@ -382,8 +387,6 @@ class SplintMCTSMethod(BaseMethod):
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        #log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
-        #log_ps = F.softmax(log_ps, dim=-1)
 
         priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
         return completions, priors
@@ -449,9 +452,14 @@ class SplintMCTSMethod(BaseMethod):
 
         if entropy > self.tau:
             self.n_entropy_spikes +=1
+
+            self.nb_streaks.append(self.curr_nb_streak)
+            self.curr_nb_streak =0
+
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
         else: 
-            self.n_non_entropy_spikes +=1
+            self.n_non_entropy_spikes += 1
+            self.curr_nb_streak  += 1
             comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
         # format the returns.
         return comps, probs
@@ -474,7 +482,17 @@ class SplintMCTSMethod(BaseMethod):
         return output
     
     def collect_stats(self):
-        return {"n_entropy_spikes": self.n_entropy_spikes, "n_non_entropy_spikes": self.n_non_entropy_spikes}
+
+        if self.curr_nb_streak:
+            self.nb_streaks.append(self.curr_nb_streak)
+        
+        return {
+            "n_entropy_spikes"     : self.n_entropy_spikes,
+            "n_non_entropy_spikes" : self.n_non_entropy_spikes,
+            "max_non_bp_streak"    : max(self.nb_streaks),
+            "avg_non_bp_streak"    : statistics.mean(self.nb_streaks),
+            "median_non_bp_streak" : statistics.median(self.nb_streaks)
+        }
     
 
 class Node: 
@@ -694,7 +712,7 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.3, k=2)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
     else:
         raise ValueError("Method does not exist!")
 
