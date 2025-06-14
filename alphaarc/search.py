@@ -114,15 +114,11 @@ def format_as_dummy_program(program_lines):
 def return_empty_nodes(): 
     return [], []
 
-def merge_with_overlap(s1, s2):
-    max_overlap = 0
-    overlap_start = 0
-
-    for i in range(1, min(len(s1), len(s2)) + 1):
-        if s1[-i:] == s2[:i]:
-            max_overlap = i
-
-    return s1 + s2[max_overlap:]
+def merge_with_overlap(s1: str, s2: str) -> str:
+    for i in range(min(len(s1), len(s2)), 0, -1):
+        if s1[-i:] == s2[:i] and i < len(s2):
+            return s1 + s2[i:]
+    return s1 + s2
 
 def compute_log_probs_batched(model, input_batch, ids_batch):
     
@@ -305,9 +301,8 @@ class TGMCTSMethod(BaseMethod):
         prev_program_str = "\n".join(prev_program)
         prev_program_str = prev_program_str + "\n"
 
-        
         completions = [merge_with_overlap(partial_line, x) for x in completions]         
-        
+
         if len(prev_program) != 0:
             completions = [ prev_program_str + x for x in completions]
 
@@ -317,10 +312,6 @@ class TGMCTSMethod(BaseMethod):
 
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        # then compute priors over all.
-        """priors = compute_log_probs_batched(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
-        priors = F.softmax(priors, dim=-1)
-        """
         priors = compute_prior(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
 
         return completions, priors
@@ -346,7 +337,68 @@ class SplintMCTSMethod(BaseMethod):
         self.curr_nb_streak   = 0      # length of the *current* run
         self.nb_streaks = []
 
-  
+        self.collapsed_lens = []
+    
+    def _dfs_completer_trusted(
+        self,
+        state,    
+        prior,        
+        enc_out,
+        task, input_ids,
+        depth=0, max_depth=50):
+
+
+        # to ensure that it doesn't search forever.      
+        if depth >= max_depth:
+            self.collapsed_lens.append(depth)
+            return [state], [prior]
+
+
+        # compute from the current state, what are the new actions, note that ctions are like the full programs and priors.
+        comps, priors = self._handle_non_entropy_spike(
+                            state, enc_out, input_ids, task)
+        
+        
+        if not comps:                    
+            self.collapsed_lens.append(depth)
+            return [state], [prior]
+
+
+        # zip them up 
+        pairs = zip(priors.tolist(), comps)
+
+        leaves, logps = [], []
+
+
+        
+        for p, comp in pairs:
+            new_state = comp
+
+            # check entropy of the new completion.
+
+            nxt_logits = self._fwd_step_encdec(enc_out, new_state.unsqueeze(0).to('cuda'))
+            if entropy_bits(nxt_logits).item() > self.tau:  # if its a breakpoint, then we stop and return
+                self.collapsed_lens.append(depth + 1)
+                leaves.append(new_state)
+                logps.append(p)
+            else:  # still trusted: dive deeper, first check to see if its a terminated program however.
+
+                # if not terminated program, then dive deeper.
+                c, lp = self._dfs_completer_trusted(
+                            new_state,
+                            p, 
+                            enc_out, 
+                            task, 
+                            input_ids,
+                            depth + 1, max_depth)
+                leaves.extend(c)
+                logps.extend(lp)
+
+        return leaves, logps
+
+    
+    
+
             
     def _fwd_step_encdec(self, enc_out, dec_ids): 
         out = self.model(   encoder_outputs=enc_out,
@@ -431,7 +483,6 @@ class SplintMCTSMethod(BaseMethod):
         
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
-        # log_ps = compute_log_probs_batched(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
         
         priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
         topk_values, topk_indices = torch.topk(priors, k=min(self.k, priors.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
@@ -452,17 +503,20 @@ class SplintMCTSMethod(BaseMethod):
 
         if entropy > self.tau:
             self.n_entropy_spikes +=1
-
             if self.curr_nb_streak:
                 self.nb_streaks.append(self.curr_nb_streak)
 
             self.curr_nb_streak =0
-
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
         else: 
             self.n_non_entropy_spikes += 1
             self.curr_nb_streak  += 1
-            comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
+
+            comps, probs = self._dfs_completer_trusted(
+                           state, 0, enc_out, task, input_ids)
+            
+            probs = torch.tensor(probs)
+            probs = probs / probs.sum()
         # format the returns.
         return comps, probs
         
@@ -511,9 +565,10 @@ class Node:
         self.child_actions = None
         self.children = []
         self.state = None
+        self.is_expanded = False
 
     def expanded(self):
-        return len(self.children) > 0
+        return self.is_expanded
 
     def value(self):
         if self.visit_count == 0:
@@ -527,6 +582,7 @@ class Node:
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(parent=self, recorder=recorder, prior=prob) for prob in action_probs]
 
+        self.is_expanded = True
 
         if recorder.active:
             for act, child, prob in zip(actions, self.children, action_probs):
@@ -561,8 +617,9 @@ def rollout( state,
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
-    reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    return reward, program
+    # reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
+
+    return 0, program
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -601,7 +658,8 @@ def run_search(env: LineLevelArcEnv,
     
 
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
-    while (time.time() - start_time) < time_limit:
+    #while (time.time() - start_time) < time_limit:
+    while stats["nodes_expanded"] < 1000:
         node = root
         search_path = [node]
 
@@ -627,28 +685,30 @@ def run_search(env: LineLevelArcEnv,
             stats['solved_program'] = env.tokenizer.decode(next_state)
             return True, stats
         
-        if value == -1.0:
-            value = 0 
+        # if value == -1.0:
+        #     value = 0 
         
         next_state = torch.tensor(next_state)
         if not terminated: 
             actions, action_probs = model.predict(enc_out, next_state.to('cuda'), task, prompt_ids)
-            # if no further actions
-            if len(actions) == 0: 
-                value = -1.0
-            else:
-                value, program = rollout(state, actions, enc_out, model, env, task) # rollout
-                if value == 1.0:
-                    stats['extra'] = model.collect_stats()
-                    stats['solved_program'] = env.tokenizer.batch_decode(program)
-                    return True, stats
+            
+            value, program = rollout(state, actions, enc_out, model, env, task) # rollout
+            if value == 1.0:
+                stats['extra'] = model.collect_stats()
+                stats['solved_program'] = env.tokenizer.batch_decode(program)
+                return True, stats
 
-                node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
-                stats['nodes_expanded'] += 1
-                stats['avg_branching_factor'] += len(node.children)
+                
+            node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
 
-            if value == -1.0:
-                value = 0
+            print(env.tokenizer.batch_decode(node.child_actions))
+            breakpoint()
+              
+            stats['nodes_expanded'] += 1
+            stats['avg_branching_factor'] += len(node.children)
+
+            # if value == -1.0:
+            #     value = 0
 
         backpropagate(search_path, value)
     stats['extra'] = model.collect_stats()
@@ -689,7 +749,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
         
 
     args = parser.parse_args()
