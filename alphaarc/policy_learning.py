@@ -20,8 +20,9 @@ import wandb
 import random
 import os
 import shutil
+from alphaarc.policy.tokenize import tokenize_task
 
-from alphaarc.utils import encode_task, save_answer, prepare_output_dir, save_stats_to_file, save_model
+from alphaarc.utils import save_answer, prepare_output_dir, save_stats_to_file, save_model
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
@@ -30,6 +31,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 # --helpers --
 
 
+def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
+    tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
+    return tokenized_task
 
 # -- end helpers --
 
@@ -64,7 +68,7 @@ def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict, 
         answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     
     else:
-        answers = grpo_trainer.generate_answers([task], 24)
+        answers = grpo_trainer.generate_answers([task], env,  24)
 
     
     solved = evaluate_solutions(answers, task, env, relabelled_tasks
@@ -86,8 +90,7 @@ def run_experiment(n_meta_epochs,
      
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
-
-    full_curriculum = full_curriculum[:5]
+    full_curriculum = full_curriculum
     answers_dict = defaultdict(list)
     epoch_stats = []
 
@@ -109,7 +112,6 @@ def run_experiment(n_meta_epochs,
             "epoch": epoch,
             "solved_this_epoch": len(solved_this_epoch),
             "cumulative_solved": len(set(solved_task_ids)),
-            # TODO: add more info
         })
         save_stats_to_file(epoch_stats, output_dir)
 
@@ -117,7 +119,7 @@ def run_experiment(n_meta_epochs,
         
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sample.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/grpo.yaml')
     args = parser.parse_args()
         
     config = load_config(args.config_path)
@@ -164,7 +166,7 @@ def main():
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=100,
+    run_experiment(n_meta_epochs=10,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,

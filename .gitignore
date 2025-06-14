@@ -31,6 +31,8 @@ pretrained
 *.csv
 
 
+results/
+
 finetune/*
 
 
