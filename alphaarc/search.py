@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 # -- tree viz --
@@ -139,14 +139,15 @@ def compute_log_probs_batched(model, input_batch, ids_batch):
 def compute_prior(model, input_batch, ids_batch):
    
     with torch.no_grad():
+        ids_batch = ids_batch.to('cuda')
         labels = ids_batch.clone()
         labels[labels == 0] = -100     # ignore padding
         labels[:, 0] = 0               # keep first token (assuming BOS-0 convention)
         mask = labels != -100
 
         logits = model(
-            input_ids=input_batch.repeat(ids_batch.size(0), 1),  # (B, L)
-            labels=labels
+            input_ids=input_batch.repeat(ids_batch.size(0), 1).to('cuda'),  # (B, L)
+            labels=labels.to('cuda')
         ).logits                         # (B, L, V)
 
         log_probs = torch.log_softmax(logits, dim=-1)             # (B, L, V)
@@ -155,7 +156,7 @@ def compute_prior(model, input_batch, ids_batch):
                                    ).squeeze(-1)                  # (B, L)
 
         seq_logp = (token_ll * mask).sum(dim=-1)                  # (B,)
-        return seq_logp
+        return seq_logp.to('cpu')
 
 
 
@@ -266,7 +267,7 @@ class TGMCTSMethod(BaseMethod):
         with torch.no_grad(): 
             output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
-        return output
+        return output.to('cpu')
     
 
     def eval(self): 
@@ -309,7 +310,7 @@ class TGMCTSMethod(BaseMethod):
 
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        seq_logp = compute_prior(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+        seq_logp = compute_prior(self.model, prompt_ids, completions_batched)
         priors = torch.softmax(seq_logp, dim=0)                    # (B,)
 
         return completions, priors
@@ -343,13 +344,7 @@ class SplintMCTSMethod(BaseMethod):
         prior,        
         enc_out,
         task, input_ids,
-        depth=0, max_depth=50):
-
-
-        # to ensure that it doesn't search forever.      
-        if depth >= max_depth:
-            self.collapsed_lens.append(depth)
-            return [state], [prior]
+        depth=0):
 
 
         # compute from the current state, what are the new actions, note that ctions are like the full programs and priors.
@@ -374,7 +369,7 @@ class SplintMCTSMethod(BaseMethod):
 
             # check entropy of the new completion.
 
-            nxt_logits = self._fwd_step_encdec(enc_out, new_state.unsqueeze(0).to('cuda'))
+            nxt_logits = self._fwd_step_encdec(enc_out, new_state.unsqueeze(0))
             if entropy_bits(nxt_logits).item() > self.tau:  # if its a breakpoint, then we stop and return
                 self.collapsed_lens.append(depth + 1)
                 leaves.append(new_state)
@@ -388,7 +383,7 @@ class SplintMCTSMethod(BaseMethod):
                             enc_out, 
                             task, 
                             input_ids,
-                            depth + 1, max_depth)
+                            depth + 1)
                 leaves.extend(c)
                 logps.extend(lp)
 
@@ -399,10 +394,11 @@ class SplintMCTSMethod(BaseMethod):
 
             
     def _fwd_step_encdec(self, enc_out, dec_ids): 
-        out = self.model(   encoder_outputs=enc_out,
-                            decoder_input_ids=dec_ids)  
-        
-        return out.logits[:, -1, :]   
+        with torch.no_grad():
+            out = self.model(   encoder_outputs=enc_out,
+                                decoder_input_ids=dec_ids.to('cuda')).logits.to('cpu')
+            
+        return out[:, -1, :]
 
     
     
@@ -438,7 +434,7 @@ class SplintMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
 
-        log_ps = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        log_ps = compute_prior(self.model, input_ids, completions_batched)
         priors = torch.softmax(log_ps, dim=0)                    # (B,)
         return completions, priors
 
@@ -483,7 +479,7 @@ class SplintMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
         
-        log_ps = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        log_ps = compute_prior(self.model, input_ids  , completions_batched)
         topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         completions = [completions[i.item()] for i in topk_indices]
 
@@ -517,7 +513,6 @@ class SplintMCTSMethod(BaseMethod):
             probs = torch.tensor(log_ps)
             probs = torch.softmax(probs, dim=0)                    # (B,)
 
-
         # format the returns.
         return comps, probs
         
@@ -536,7 +531,7 @@ class SplintMCTSMethod(BaseMethod):
         with torch.no_grad(): 
             output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
-        return output
+        return output.to('cpu')
     
     def collect_stats(self):
 
@@ -617,11 +612,10 @@ def rollout( state,
     start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
-    
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
 
-    return reward, "program"
+    return reward, program
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -647,6 +641,7 @@ def run_search(env: LineLevelArcEnv,
     if model.uses_model:
         model.eval()
         with torch.no_grad():
+            print(prompt_ids.shape)
             enc_out = model.encode(prompt_ids)
     else:
         enc_out = None
@@ -655,13 +650,13 @@ def run_search(env: LineLevelArcEnv,
     start_time = time.time()
     root = Node(None, recorder,  0)
 
-    init_state = torch.tensor([0,1], device='cuda')
+    init_state = torch.tensor([0,1])
     actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
     
 
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
     #while (time.time() - start_time) < time_limit:
-    while stats["nodes_expanded"] < 500:
+    while stats["nodes_expanded"] < time_limit:
         node = root
         search_path = [node]
 
@@ -692,7 +687,7 @@ def run_search(env: LineLevelArcEnv,
         
         next_state = torch.tensor(next_state)
         if not terminated: 
-            actions, action_probs = model.predict(enc_out, next_state.to('cuda'), task, prompt_ids)
+            actions, action_probs = model.predict(enc_out, next_state, task, prompt_ids)
 
             if len(actions ) != 0:
                 value, program = rollout(state, actions, enc_out, model, env, task) # rollout
@@ -727,9 +722,14 @@ def run_experiment( method: BaseMethod,
 
     recorder = TreeRecorder(active=False)    # import this where you build the tree
 
+
+    # lets sort the list by program length
+
+
+    tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-    for task in tasks[:1]:
-        task = Task.from_json("./data/training/aabf363d.json")
+    for task in tasks:
+        task = Task.from_json("./data/training/9edfc990.json")
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
@@ -740,7 +740,7 @@ def run_experiment( method: BaseMethod,
         solved, stats = run_search(env, task, input_ids,  method, time_limit,recorder)
         print(stats)
         print("SOLVED" if solved else "FAILED")
-        metrics.append(track_task_metrics(task.task_key, solved, start_time))
+        metrics.append(track_task_metrics(task.task_key, solved, start_time, extra=stats))
         # recorder.to_html(f"tree_{task.task_key}.html")
 
     save_metrics_to_file(metrics, output_path)
@@ -789,7 +789,7 @@ def main():
     start_time = time.time()
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(90),
+                   time_limit=(150),
                    tok=tok,
                    output_path=output_dir)
 
