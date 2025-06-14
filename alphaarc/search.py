@@ -351,7 +351,10 @@ class SplintMCTSMethod(BaseMethod):
         comps, priors = self._handle_non_entropy_spike(
                             state, enc_out, input_ids, task)
         
-        
+
+
+
+        # check here! 
         if not comps:                    
             self.collapsed_lens.append(depth)
             return [state], [prior]
@@ -641,7 +644,6 @@ def run_search(env: LineLevelArcEnv,
     if model.uses_model:
         model.eval()
         with torch.no_grad():
-            print(prompt_ids.shape)
             enc_out = model.encode(prompt_ids)
     else:
         enc_out = None
@@ -729,7 +731,6 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
     for task in tasks:
-        task = Task.from_json("./data/training/9edfc990.json")
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
