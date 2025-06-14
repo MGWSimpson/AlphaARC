@@ -148,6 +148,12 @@ def main():
                                    model,
                                    tokenizer, 
                                    sparse_variant=True)    
+    
+    elif method == "INTERNALGRPO": 
+        grpo_trainer = GRPOTrainer(ref_model,
+                                   model,
+                                   tokenizer, 
+                                   sparse_variant=True)    
     elif method == "SAMPLE":
         grpo_trainer = None 
     else:

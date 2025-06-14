@@ -85,7 +85,8 @@ class GRPOTrainer:
                  lr=5e-6,
                  beta= 0.04,
                  clip_param = 0.2,
-                 sparse_variant=False): 
+                 sparse_variant=False,
+                 internal_mode=False): 
         
         self.tokenizer = tokenizer
         self.optimizer = AdamW(policy_model.parameters(), lr=lr)
@@ -111,6 +112,10 @@ class GRPOTrainer:
         
 
 
+        self.sparse_variant = sparse_variant
+
+
+        self.internal_mode = internal_mode
 
         self.run = wandb.init(
             project="alphaarc")
@@ -249,7 +254,15 @@ class GRPOTrainer:
             self.optimizer.step()
 
 
-    def generate_answers(self, task, n_generations):
+    def generate_answers(self, task, env,  n_generations):
+        if self.internal_mode:
+            return self.generate_relabeled_answers_internal(task, env, n_generations)
+        else:
+            return self._generate_normal_answers(task, n_generations)
+
+
+
+    def _generate_normal_answers(self, task, n_generations): 
         answers = []
         for i in range(0, n_generations, self.num_gen_per_group):
             batch = task
@@ -275,7 +288,6 @@ class GRPOTrainer:
 
         answer_tensor = pad_sequence(answers, batch_first=True)
         return answer_tensor
-
 
 
     def generate_relabeled_answers_internal(self, task, env, n_generations): 

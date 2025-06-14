@@ -357,7 +357,7 @@ class SplintMCTSMethod(BaseMethod):
         # check here! 
         if not comps:                    
             self.collapsed_lens.append(depth)
-            return [state], [prior]
+            return [], []
 
 
         # zip them up 
