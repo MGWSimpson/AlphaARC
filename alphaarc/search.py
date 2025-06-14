@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 
 # -- tree viz --
@@ -97,9 +97,9 @@ def puct_score(parent, child, c_puct=1):
     else:
         value_score = 0
 
-    prior_score = c_puct * child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
+    prior_score = c_puct * child.prior  * math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
-    return value_score + prior_score
+    return prior_score + value_score 
 
 def encode_task(task, tokenizer, model, input_state_max=256, n_examples=10, max_length=256): 
     tokenized_task = np.array(tokenize_task(task, tokenizer, n_examples, input_state_max, max_length)['input_ids'])
@@ -386,7 +386,6 @@ class SplintMCTSMethod(BaseMethod):
         #log_ps = F.softmax(log_ps, dim=-1)
 
         priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
-        # priors[:] = 1
         return completions, priors
 
 
@@ -448,17 +447,12 @@ class SplintMCTSMethod(BaseMethod):
         entropy = entropy_bits(logits).item()
         topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
-
-        start_time = time.time()
         if entropy > self.tau:
             self.n_entropy_spikes +=1
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
-            print(f"completer time: {time.time() - start_time}")
         else: 
-
             self.n_non_entropy_spikes +=1
             comps, probs = self._handle_non_entropy_spike(state, enc_out, input_ids, task)
-            print(f"non entropy spike time: { time.time() - start_time}")
         # format the returns.
         return comps, probs
         
@@ -548,7 +542,7 @@ def rollout( state,
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-    return reward
+    return reward, program
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -564,7 +558,13 @@ def run_search(env: LineLevelArcEnv,
     
 
 
-    stats = {"max_depth": 0, "nodes_expanded":0}
+    stats = {"max_depth": 0, 
+             "nodes_expanded":0, 
+             "solved_program": None,
+             "nodes_traversed": 0,
+            "avg_branching_factor": 0 }
+    
+
     if model.uses_model:
         model.eval()
         with torch.no_grad():
@@ -592,6 +592,8 @@ def run_search(env: LineLevelArcEnv,
 
         if len(search_path) > stats['max_depth']: # note taking
             stats['max_depth'] = len(search_path)
+        
+        stats['nodes_traversed'] += len(search_path)
 
         parent = search_path[-2]
         state = parent.state
@@ -601,7 +603,12 @@ def run_search(env: LineLevelArcEnv,
         value, terminated = env.evaluate_program(next_state, should_token_account=False)
 
         if value == 1.0:
-            return True
+            stats['extra'] = model.collect_stats()
+            stats['solved_program'] = env.tokenizer.decode(next_state)
+            return True, stats
+        
+        if value == -1.0:
+            value = 0 
         
         next_state = torch.tensor(next_state)
         if not terminated: 
@@ -610,17 +617,23 @@ def run_search(env: LineLevelArcEnv,
             if len(actions) == 0: 
                 value = -1.0
             else:
-                value = rollout(state, actions, enc_out, model, env, task) # rollout
+                value, program = rollout(state, actions, enc_out, model, env, task) # rollout
                 if value == 1.0:
-                    return True
-                
+                    stats['extra'] = model.collect_stats()
+                    stats['solved_program'] = env.tokenizer.batch_decode(program)
+                    return True, stats
+
                 node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
                 stats['nodes_expanded'] += 1
+                stats['avg_branching_factor'] += len(node.children)
+
+            if value == -1.0:
+                value = 0
 
         backpropagate(search_path, value)
-    print(model.collect_stats())
-    print(stats)
-    return False
+    stats['extra'] = model.collect_stats()
+    
+    return False, stats
 
 
 def run_experiment( method: BaseMethod,
@@ -635,8 +648,8 @@ def run_experiment( method: BaseMethod,
     recorder = TreeRecorder(active=False)    # import this where you build the tree
 
     
-    for task in tasks[:1 ]:
-        task = Task.from_json("./data/training/d9fac9be.json")
+    for task in tasks[:1]:
+        task = Task.from_json("./data/training/aabf363d.json")
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
@@ -644,12 +657,13 @@ def run_experiment( method: BaseMethod,
 
         print(f"starting task: {task.task_key}")
         start_time = time.time()
-        solved = run_search(env, task, input_ids,  method, time_limit,recorder)
+        solved, stats = run_search(env, task, input_ids,  method, time_limit,recorder)
+        print(stats)
         print("SOLVED" if solved else "FAILED")
         metrics.append(track_task_metrics(task.task_key, solved, start_time))
         # recorder.to_html(f"tree_{task.task_key}.html")
 
-    # save_metrics_to_file(metrics, output_path)
+    save_metrics_to_file(metrics, output_path)
 
 
 
@@ -680,24 +694,26 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.5, k=1)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.3, k=2)
     else:
         raise ValueError("Method does not exist!")
 
 
      
     output_dir =  f"results/{config['method'].lower()}"
-    # prepare_output_dir(output_dir)
+    prepare_output_dir(output_dir)
     pl.seed_everything(0)
     
 
 
+    start_time = time.time()
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(100),
+                   time_limit=(90),
                    tok=tok,
                    output_path=output_dir)
 
+    print(f"end time: {time.time() - start_time}")
 
 if __name__ == "__main__": 
     main()
