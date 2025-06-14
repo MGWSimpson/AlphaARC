@@ -453,7 +453,9 @@ class SplintMCTSMethod(BaseMethod):
         if entropy > self.tau:
             self.n_entropy_spikes +=1
 
-            self.nb_streaks.append(self.curr_nb_streak)
+            if self.curr_nb_streak:
+                self.nb_streaks.append(self.curr_nb_streak)
+
             self.curr_nb_streak =0
 
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
