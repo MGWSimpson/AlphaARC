@@ -155,10 +155,7 @@ def compute_prior(model, input_batch, ids_batch):
                                    ).squeeze(-1)                  # (B, L)
 
         seq_logp = (token_ll * mask).sum(dim=-1)                  # (B,)
-
-        prior = torch.softmax(seq_logp, dim=0)                    # (B,)
-
-        return prior
+        return seq_logp
 
 
 
@@ -312,7 +309,8 @@ class TGMCTSMethod(BaseMethod):
 
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
-        priors = compute_prior(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+        seq_logp = compute_prior(self.model, prompt_ids .to('cuda'), completions_batched.to ('cuda'))
+        priors = torch.softmax(seq_logp, dim=0)                    # (B,)
 
         return completions, priors
 
@@ -440,7 +438,8 @@ class SplintMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
 
-        priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        log_ps = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        priors = torch.softmax(log_ps, dim=0)                    # (B,)
         return completions, priors
 
 
@@ -484,14 +483,13 @@ class SplintMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
         
-        priors = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
-        topk_values, topk_indices = torch.topk(priors, k=min(self.k, priors.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
+        log_ps = compute_prior(self.model, input_ids .to('cuda'), completions_batched.to ('cuda'))
+        topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         completions = [completions[i.item()] for i in topk_indices]
 
-        priors = topk_values
-        priors = priors / priors.sum() 
+        log_ps = topk_values
 
-        return completions, priors
+        return completions, log_ps
 
 
 
@@ -512,11 +510,14 @@ class SplintMCTSMethod(BaseMethod):
             self.n_non_entropy_spikes += 1
             self.curr_nb_streak  += 1
 
-            comps, probs = self._dfs_completer_trusted(
+            comps, log_ps = self._dfs_completer_trusted(
                            state, 0, enc_out, task, input_ids)
             
-            probs = torch.tensor(probs)
-            probs = probs / probs.sum()
+            
+            probs = torch.tensor(log_ps)
+            probs = torch.softmax(probs, dim=0)                    # (B,)
+
+
         # format the returns.
         return comps, probs
         
@@ -616,10 +617,11 @@ def rollout( state,
     start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
+    
     program = model.rollout(enc_out, action, task)
-    # reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
+    reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
 
-    return 0, program
+    return reward, "program"
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -659,7 +661,7 @@ def run_search(env: LineLevelArcEnv,
 
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
     #while (time.time() - start_time) < time_limit:
-    while stats["nodes_expanded"] < 1000:
+    while stats["nodes_expanded"] < 500:
         node = root
         search_path = [node]
 
@@ -685,30 +687,28 @@ def run_search(env: LineLevelArcEnv,
             stats['solved_program'] = env.tokenizer.decode(next_state)
             return True, stats
         
-        # if value == -1.0:
-        #     value = 0 
+        if value == -1.0:
+             value = 0 
         
         next_state = torch.tensor(next_state)
         if not terminated: 
             actions, action_probs = model.predict(enc_out, next_state.to('cuda'), task, prompt_ids)
-            
-            value, program = rollout(state, actions, enc_out, model, env, task) # rollout
-            if value == 1.0:
-                stats['extra'] = model.collect_stats()
-                stats['solved_program'] = env.tokenizer.batch_decode(program)
-                return True, stats
 
-                
-            node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
+            if len(actions ) != 0:
+                value, program = rollout(state, actions, enc_out, model, env, task) # rollout
+                if value == 1.0:
+                    stats['extra'] = model.collect_stats()
+                    stats['solved_program'] = env.tokenizer.batch_decode(program)
+                    return True, stats
 
-            print(env.tokenizer.batch_decode(node.child_actions))
-            breakpoint()
-              
-            stats['nodes_expanded'] += 1
-            stats['avg_branching_factor'] += len(node.children)
+                    
+                node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
 
-            # if value == -1.0:
-            #     value = 0
+                stats['nodes_expanded'] += 1
+                stats['avg_branching_factor'] += len(node.children)
+
+                if value == -1.0:
+                    value = 0
 
         backpropagate(search_path, value)
     stats['extra'] = model.collect_stats()
@@ -749,7 +749,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
         
 
     args = parser.parse_args()
