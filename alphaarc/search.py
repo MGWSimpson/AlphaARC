@@ -120,43 +120,35 @@ def merge_with_overlap(s1: str, s2: str) -> str:
             return s1 + s2[i:]
     return s1 + s2
 
-def compute_log_probs_batched(model, input_batch, ids_batch):
-    
+
+
+def compute_prior(model, input_batch, ids_batch, batch_size: int = 64,
+    device='cuda'):
+    if device is None:
+        device = next(model.parameters()).device
+
+    input_batch = input_batch.to(device)
+    seq_logps = []
+
     with torch.no_grad():
-        labels = ids_batch.clone()
+        for start in range(0, ids_batch.size(0), batch_size):
+            end = start + batch_size
+            ids_sub = ids_batch[start:end].to(device)              # (b, L_tgt)
 
-        labels[labels == 0] = -100
-        mask = (labels != -100)
-        labels[:, 0] = 0
+            labels = ids_sub.clone()
+            labels[labels == 0] = -100                             # ignore padding
+            labels[:, 0] = 0                                       # keep BOS
+            mask = labels.ne(-100)                                 # (b, L_tgt)
 
-        logits = model(input_ids=input_batch.repeat(ids_batch.shape[0], 1), labels=labels).logits  # (B, L, V)
-        log_probs = torch.log_softmax(logits, dim=-1)
+            prompt = input_batch.expand(ids_sub.size(0), -1)       # (b, L_prompt)
 
-        token_logp = log_probs.gather(dim=-1, index=ids_batch.unsqueeze(-1)).squeeze(-1)  # (B, L)
-        token_logp = token_logp * mask
-        return token_logp.sum(dim=-1)  # (B,)
+            logits = model(input_ids=prompt, labels=labels).logits # (b, L_tgt, V)
+            log_probs = torch.log_softmax(logits, dim=-1)
 
-def compute_prior(model, input_batch, ids_batch):
-   
-    with torch.no_grad():
-        ids_batch = ids_batch.to('cuda')
-        labels = ids_batch.clone()
-        labels[labels == 0] = -100     # ignore padding
-        labels[:, 0] = 0               # keep first token (assuming BOS-0 convention)
-        mask = labels != -100
+            token_ll = log_probs.gather(-1, ids_sub.unsqueeze(-1)).squeeze(-1)
+            seq_logps.append((token_ll * mask).sum(-1))            # (b,)
 
-        logits = model(
-            input_ids=input_batch.repeat(ids_batch.size(0), 1).to('cuda'),  # (B, L)
-            labels=labels.to('cuda')
-        ).logits                         # (B, L, V)
-
-        log_probs = torch.log_softmax(logits, dim=-1)             # (B, L, V)
-        token_ll = log_probs.gather(dim=-1,
-                                    index=ids_batch.unsqueeze(-1)
-                                   ).squeeze(-1)                  # (B, L)
-
-        seq_logp = (token_ll * mask).sum(dim=-1)                  # (B,)
-        return seq_logp.to('cpu')
+    return torch.cat(seq_logps, dim=0).cpu()                       # (N,)
 
 
 
@@ -735,7 +727,7 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
     for task in tasks[8:9]:
-        print(task.program_lines)
+        task = Task.from_json('./data/training/7e0986d6.json')
         torch.cuda.empty_cache()
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
@@ -756,7 +748,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
         
 
     args = parser.parse_args()
