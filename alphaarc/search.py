@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 # -- tree viz --
@@ -336,8 +336,12 @@ class SplintMCTSMethod(BaseMethod):
         prior,        
         enc_out,
         task, input_ids,
-        depth=0):
+        depth=0, 
+        max_depth=10):
 
+
+        if state.shape[-1] > 512 or depth > max_depth:
+            return [], []
 
         # compute from the current state, what are the new actions, note that ctions are like the full programs and priors.
         comps, priors = self._handle_non_entropy_spike(
@@ -430,7 +434,9 @@ class SplintMCTSMethod(BaseMethod):
 
 
         log_ps = compute_prior(self.model, input_ids, completions_batched)
-        priors = torch.softmax(log_ps, dim=0)                    # (B,)
+        priors = torch.softmax(log_ps, dim=0)      
+        
+        
         return completions, priors
 
 
@@ -726,8 +732,7 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-    for task in tasks[8:9]:
-        task = Task.from_json('./data/training/7e0986d6.json')
+    for task in tasks:
         torch.cuda.empty_cache()
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
@@ -740,15 +745,13 @@ def run_experiment( method: BaseMethod,
         print(stats)
         print("SOLVED" if solved else "FAILED")
         metrics.append(track_task_metrics(task.task_key, solved, start_time, extra=stats))
-        # recorder.to_html(f"tree_{task.task_key}.html")
-
-    save_metrics_to_file(metrics, output_path)
+        save_metrics_to_file(metrics, output_path)
 
 
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -779,7 +782,7 @@ def main():
 
 
      
-    output_dir =  f"results/{config['method'].lower()}"
+    output_dir =  f"results/{config['method'].lower()}prior"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
     

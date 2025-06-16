@@ -19,6 +19,7 @@ import os
 import wandb
 import datetime as dt
 from pathlib import Path
+import time
 
 import logging
 
@@ -27,7 +28,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 from alphaarc.task import Task
@@ -52,7 +53,7 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 2 
-    lr: float =1e-5
+    lr: float =5e-5
     output_dir: str = './finetune/'
     num_epochs: int = 15
 
@@ -65,6 +66,7 @@ def fine_tune(  model,
                 train_batch_size,
                 eval_batch_size,
                 train_ds,
+                dev_ds,
                 eval_ds,
                 lr,
                 output_dir,
@@ -88,19 +90,57 @@ def fine_tune(  model,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
         lr_scheduler_type='constant',
-        logging_steps=200,
+        logging_steps=3,
         eval_strategy="steps",
-        eval_steps=550,
-        save_steps=550,
+        eval_steps=10,
+        save_steps=10,
+        gradient_accumulation_steps=64,
         bf16=True, 
         report_to=["wandb"],  
     )
 
-    trainer = Trainer(
+   
+
+    class MultiEvalTrainer(Trainer):
+        def __init__(self, *args, eval_extra_dataset=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.eval_extra_dataset = eval_extra_dataset
+        
+        def _safe_save_metrics(self, split_name, metrics):
+            output_dir = os.path.join(self.args.output_dir, split_name)
+            os.makedirs(output_dir, exist_ok=True)
+            path = os.path.join(output_dir, "results.json")
+            with open(path, "w") as f:
+                json.dump(metrics, f, indent=4)
+
+        
+        def evaluate(self, eval_dataset=None, **kwargs):
+            # Determine logging step
+
+            # Regular dev set evaluation
+            dev_metrics = super().evaluate(eval_dataset=eval_dataset, **kwargs)
+            self.log_metrics("eval/dev", dev_metrics)
+            self._safe_save_metrics("eval/dev", dev_metrics)
+
+            # Always log dev metrics
+            wandb.log({f"dev_{k}": v for k, v in dev_metrics.items()})
+
+            # Extra test set evaluation
+            if self.eval_extra_dataset is not None:
+                test_metrics = super().evaluate(eval_dataset=self.eval_extra_dataset, **kwargs)
+                self.log_metrics("eval/test", test_metrics)
+                self._safe_save_metrics("eval/test", test_metrics)
+
+                wandb.log({f"test_{k}": v for k, v in test_metrics.items()})
+
+            return dev_metrics
+
+    trainer = MultiEvalTrainer(
         model=model,
         args=args,
         train_dataset=train_ds,
-        eval_dataset=eval_ds,
+        eval_dataset=dev_ds,
+        eval_extra_dataset=eval_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
@@ -177,7 +217,7 @@ def prune_tasks(tasks, train_set_list ):
     return tasks
     
 
-def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json', dev_mode=True):
+def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json'):
     
 
     
@@ -188,10 +228,6 @@ def load_train_tasks(dirs, files, split_keys_path= 'data/split_keys.json', dev_m
     for file_path in files:
         tasks.extend(load_tasks_from_files(file_path))
 
-
-    if dev_mode:
-        split_keys = load_key_split(split_keys_path)
-        tasks = prune_tasks(tasks, split_keys['train'])
 
     random.shuffle(tasks)
     return tasks
@@ -249,23 +285,46 @@ def split_tasks_based_on_key( tasks, split_keys_path= 'data/split_keys.json',):
     return train_list, eval_list
 
 
+
+def split_dev_tasks(train_tasks, dev_set_keys): 
+
+    new_train_tasks = []
+    dev_tasks = []
+
+    for t in train_tasks:
+        if t.parent_key is None: # check the main key
+            if t.task_key in dev_set_keys:
+                dev_tasks.append(t)
+            else:
+                new_train_tasks.append(t)
+        else:
+            if t.parent_key not in dev_set_keys:
+                new_train_tasks.append(t)
+
+
+    return new_train_tasks, dev_tasks
+
+
 # handles all the orchestrating.
 def main(config): 
 
     setup_output_dir(config)
 
-    tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'], dev_mode=False)
+    tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
     
+    # computed from task splitter
+    dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
+                    
     train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
 
- 
+    train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
     model.to(config.device)
 
 
-    train_ds, eval_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer)
+    train_ds, eval_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer), construct_ds(dev_tasks, tokenizer)
 
     fine_tune(  model, 
                 tokenizer, 
@@ -273,6 +332,7 @@ def main(config):
                 config.train_batch_size,
                 config.eval_batch_size,
                 train_ds,
+                dev_ds,
                 eval_ds, 
                 config.lr,
                 config.output_dir)

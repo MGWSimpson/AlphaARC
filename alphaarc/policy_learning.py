@@ -169,7 +169,7 @@ def main():
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=10,
+    run_experiment(n_meta_epochs=30,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
