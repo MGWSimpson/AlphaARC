@@ -1,5 +1,5 @@
 method: 'SPLINTMCTS'
-model_path: '/home/mgws3/AlphaARC/finetune/2025-06-16_01-31-36/checkpoint-80'
+model_path: '/home/mgws3/AlphaARC/finetune-checkpoint/dev-checkpoint'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1

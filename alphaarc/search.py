@@ -752,7 +752,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -771,8 +771,9 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.2
-    k = 2
+    tau = 0
+    k = 0
+    limit = 300
     
     
     if config['method'] == "MCTS": 
@@ -786,7 +787,7 @@ def main():
 
 
      
-    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}"
+    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
     
@@ -795,7 +796,7 @@ def main():
     start_time = time.time()
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(150),
+                   time_limit=(limit),
                    tok=tok,
                    output_path=output_dir)
 
