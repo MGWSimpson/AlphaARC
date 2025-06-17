@@ -1,5 +1,5 @@
 method: "SPARSEGRPO"
-model_path: 'finetune-checkpoint/dev-checkpoint'
+model_path: 'finetune/2025-06-16_01-31-36/checkpoint-80'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1

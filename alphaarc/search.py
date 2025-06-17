@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 # -- tree viz --
@@ -337,7 +337,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=10):
+        max_depth=5):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -769,6 +769,9 @@ def main():
     sampler   = ProgramSampler(data_path="./data/")
     completer = ProgramCompleter(sampler)
     
+
+    tau = 0.2
+    k = 4
     
     
     if config['method'] == "MCTS": 
@@ -776,13 +779,13 @@ def main():
     elif config['method'] == "TGMCTS":
         method = TGMCTSMethod(uses_model=True, model=model, tok=tok, completer=completer)
     elif config['method'] == "SPLINTMCTS":
-        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=0.2, k=2)
+        method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=tau, k=k)
     else:
         raise ValueError("Method does not exist!")
 
 
      
-    output_dir =  f"results/{config['method'].lower()}prior"
+    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
     

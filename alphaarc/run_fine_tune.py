@@ -53,7 +53,7 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 2 
-    lr: float =5e-5
+    lr: float =1e-5
     output_dir: str = './finetune/'
     num_epochs: int = 15
 
