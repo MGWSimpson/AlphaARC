@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 # -- tree viz --
@@ -534,7 +534,8 @@ class SplintMCTSMethod(BaseMethod):
     # perform a rollout from the current state.
     def rollout(self, enc_out, next_state, task):
         with torch.no_grad(): 
-            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
+            output = self.model.generate(encoder_outputs=enc_out, 
+                                         decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
         
         return output.to('cpu')
     
@@ -771,7 +772,7 @@ def main():
     
 
     tau = 0.2
-    k = 4
+    k = 2
     
     
     if config['method'] == "MCTS": 
