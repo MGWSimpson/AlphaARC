@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 # -- tree viz --
@@ -752,7 +752,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -771,8 +771,8 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0
-    k = 0
+    tau = 0.2
+    k = 4
     limit = 300
     
     
