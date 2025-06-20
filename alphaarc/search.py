@@ -182,7 +182,10 @@ class BaseMethod:
     def predict(enc_out, init_state, task, prompt_ids): 
         raise NotImplementedError 
     
- 
+    
+    def set_env(self, env):
+        self.env = env
+
     def collect_stats(self): 
         return {}
     
@@ -309,7 +312,7 @@ class TGMCTSMethod(BaseMethod):
 
 
 class SplintMCTSMethod(BaseMethod):
-    def __init__(self, uses_model, model, tokenizer, completer, tau, k, env):
+    def __init__(self, uses_model, model, tokenizer, completer, tau, k ):
         super().__init__(uses_model) 
 
         self.model = model
@@ -331,7 +334,6 @@ class SplintMCTSMethod(BaseMethod):
 
 
         # env
-        self.env = env
     
     def _dfs_completer_trusted(
         self,
@@ -349,8 +351,9 @@ class SplintMCTSMethod(BaseMethod):
         # make a quick check.
 
 
-        if self.env.evaluate_program(state.squeeze(), should_token_account=False):
-            return True, True
+        reward, terminated = self.env.evaluate_program(state.squeeze(), should_token_account=False)
+        if reward == 1.0:
+            return [True], [True]
 
 
         # compute from the current state, what are the new actions, note that ctions are like the full programs and priors.
@@ -523,8 +526,8 @@ class SplintMCTSMethod(BaseMethod):
                            state, 0, enc_out, task, input_ids)
             
 
-            for c in comps:
-                if c == True:
+            for comp in comps:
+                if comp is True:
                     return comps, log_ps
             
             probs = torch.tensor(log_ps)
@@ -674,7 +677,7 @@ def run_search(env: LineLevelArcEnv,
     
 
     for act in actions:
-        if act == True:
+        if act is True:
             return True, stats
 
 
@@ -715,7 +718,7 @@ def run_search(env: LineLevelArcEnv,
 
 
             for act in actions:
-                if act == True:
+                if act is True:
                     return True, stats
                 
             if len(actions ) != 0:
@@ -744,7 +747,7 @@ def run_experiment( method: BaseMethod,
                     tasks: list[Task],
                     time_limit: int,
                     tok: AutoTokenizer,
-                    output_path
+                    output_path,
                     ):
     
     metrics = init_metrics()
@@ -762,7 +765,7 @@ def run_experiment( method: BaseMethod,
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
         env = LineLevelArcEnv('Salesforce/codet5p-220m',  10, 512, 512, 10, 50000)
         env.set_task(task)
-
+        method.set_env(env)
 
         print(f"starting task: {task.task_key}")
         start_time = time.time()
@@ -776,7 +779,7 @@ def run_experiment( method: BaseMethod,
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -784,8 +787,8 @@ def main():
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
     
-    # task_key_split = load_key_split('data/split_keys.json')
-    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     
 
     model = T5ForConditionalGeneration.from_pretrained(config['model_path'])
@@ -811,10 +814,9 @@ def main():
 
 
      
-    output_dir =  f"results/eval-{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
-    
 
 
     start_time = time.time()
@@ -822,7 +824,8 @@ def main():
                    tasks=curriculum.generate_curriculum(),
                    time_limit=(limit),
                    tok=tok,
-                   output_path=output_dir)
+                   output_path=output_dir,
+                   )
 
     print(f"end time: {time.time() - start_time}")
 
