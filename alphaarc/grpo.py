@@ -182,7 +182,6 @@ class GRPOTrainer:
 
 
         if self.sparse_variant:
-
             if advantages.all() == 1: # replace advantage with negative advantage -> should be changed to if enabled.
                 advantages[advantages == 1] = 1
             

@@ -128,8 +128,8 @@ def main():
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
     
-    # task_key_split = load_key_split('data/split_keys.json')
-    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    task_key_split = load_key_split('data/split_keys.json')
+    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
@@ -144,13 +144,16 @@ def main():
         grpo_trainer = GRPOTrainer( ref_model, 
                                     model,
                                     tokenizer,
-                                    env)
+                                    env,
+                                    internal_mode=False,
+                                    sparse_variant=False)
     elif method == "SPARSEGRPO": 
         grpo_trainer = GRPOTrainer(ref_model,
                                    model,
                                    tokenizer, 
                                    env,
-                                   sparse_variant=True)    
+                                   sparse_variant=True,
+                                   internal_mode=False)    
     
     elif method == "INTERNALGRPO": 
         grpo_trainer = GRPOTrainer(ref_model,
