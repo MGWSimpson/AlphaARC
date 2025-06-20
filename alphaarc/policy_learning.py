@@ -102,7 +102,7 @@ def run_experiment(n_meta_epochs,
             relabelled_tasks = []
             if try_solve_task(task, env, relabelled_tasks, tokenizer, model, answers_dict, grpo_trainer):
                 solved_this_epoch.append(task.task_key)
-                print(f"solved: {len(set(solved_task_ids))}")
+                print(f"solved: {len(set(solved_task_ids + solved_this_epoch))}")
 
         solved_task_ids.extend(solved_this_epoch)
         if epoch % save_model_every == 0:
@@ -172,7 +172,7 @@ def main():
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=10,
+    run_experiment(n_meta_epochs=25,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
