@@ -309,7 +309,7 @@ class TGMCTSMethod(BaseMethod):
 
 
 class SplintMCTSMethod(BaseMethod):
-    def __init__(self, uses_model, model, tokenizer, completer, tau, k):
+    def __init__(self, uses_model, model, tokenizer, completer, tau, k, env):
         super().__init__(uses_model) 
 
         self.model = model
@@ -327,8 +327,11 @@ class SplintMCTSMethod(BaseMethod):
 
         self.curr_nb_streak   = 0      # length of the *current* run
         self.nb_streaks = []
-
         self.collapsed_lens = []
+
+
+        # env
+        self.env = env
     
     def _dfs_completer_trusted(
         self,
@@ -342,6 +345,13 @@ class SplintMCTSMethod(BaseMethod):
 
         if state.shape[-1] > 512 or depth > max_depth:
             return [], []
+        
+        # make a quick check.
+
+
+        if self.env.evaluate_program(state.squeeze(), should_token_account=False):
+            return True, True
+
 
         # compute from the current state, what are the new actions, note that ctions are like the full programs and priors.
         comps, priors = self._handle_non_entropy_spike(
@@ -512,6 +522,10 @@ class SplintMCTSMethod(BaseMethod):
             comps, log_ps = self._dfs_completer_trusted(
                            state, 0, enc_out, task, input_ids)
             
+
+            for c in comps:
+                if c == True:
+                    return comps, log_ps
             
             probs = torch.tensor(log_ps)
             probs = torch.softmax(probs, dim=0)                    # (B,)
@@ -659,6 +673,11 @@ def run_search(env: LineLevelArcEnv,
     actions, action_probs = model.predict(enc_out, init_state, task, prompt_ids) # perform the predictions, but with 
     
 
+    for act in actions:
+        if act == True:
+            return True, stats
+
+
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
     #while (time.time() - start_time) < time_limit:
     while stats["nodes_expanded"] < time_limit:
@@ -694,6 +713,11 @@ def run_search(env: LineLevelArcEnv,
         if not terminated: 
             actions, action_probs = model.predict(enc_out, next_state, task, prompt_ids)
 
+
+            for act in actions:
+                if act == True:
+                    return True, stats
+                
             if len(actions ) != 0:
                 value, program = rollout(state, actions, enc_out, model, env, task) # rollout
                 if value == 1.0:
