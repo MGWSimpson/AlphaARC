@@ -28,7 +28,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 from alphaarc.task import Task
@@ -135,12 +135,11 @@ def fine_tune(  model,
 
             return dev_metrics
 
-    trainer = MultiEvalTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
-        eval_dataset=dev_ds,
-        eval_extra_dataset=eval_ds,
+        eval_dataset=eval_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
@@ -315,16 +314,18 @@ def main(config):
     # computed from task splitter
     dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
                     
-    train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
+    # train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
 
-    train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
+    train_tasks, eval_ds = split_dev_tasks(tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
     model.to(config.device)
 
 
-    train_ds, eval_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer), construct_ds(dev_tasks, tokenizer)
+    train_ds, eval_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_ds, tokenizer)
+
+    dev_ds = None
 
     fine_tune(  model, 
                 tokenizer, 

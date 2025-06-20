@@ -760,8 +760,8 @@ def main():
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
     
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    # task_key_split = load_key_split('data/split_keys.json')
+    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     
 
     model = T5ForConditionalGeneration.from_pretrained(config['model_path'])
@@ -787,7 +787,7 @@ def main():
 
 
      
-    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/eval-{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
     
