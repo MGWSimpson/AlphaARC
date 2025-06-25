@@ -136,7 +136,7 @@ class GRPOTrainer:
     def _compute_reward(self, task, decoder_input_ids): 
         self.env.set_task(task)
         rewards = [self.env.evaluate_program(x, should_token_account=False)[0] for x in decoder_input_ids]
-        rewards = [x if x == 1.0 else 0 for x in rewards]
+        rewards = [x if x == 1.0 else -1 for x in rewards]
         # NOTE: changing this over to match how it was previously.
         
         return torch.tensor(rewards, dtype=torch.float, device='cuda')

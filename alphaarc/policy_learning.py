@@ -25,7 +25,7 @@ from alphaarc.policy.tokenize import tokenize_task
 from alphaarc.utils import save_answer, prepare_output_dir, save_stats_to_file, save_model
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 # --helpers --
@@ -168,11 +168,11 @@ def main():
         raise ValueError('Specified method does not exist')
     
     
-    output_dir =  f"results/{method.lower()}"
+    output_dir =  f"results/{method.lower()}-1"
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=25,
+    run_experiment(n_meta_epochs=50,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
