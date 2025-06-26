@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 # -- tree viz --
@@ -176,6 +176,8 @@ class BaseMethod:
         self.uses_model = uses_model
 
 
+        self.n_forward_calls = 0
+
     def rollout(self, enc_out, action, task): 
         raise NotImplementedError
     
@@ -269,6 +271,9 @@ class TGMCTSMethod(BaseMethod):
         self.model.eval()
 
 
+
+    def collect_stats(self):
+        return { "n_forward_calls" : self.n_forward_calls}
     
     def encode(self, prompt_ids): 
         with torch.no_grad(): # first encode the input once.
@@ -306,6 +311,8 @@ class TGMCTSMethod(BaseMethod):
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
         seq_logp = compute_prior(self.model, prompt_ids, completions_batched)
+        self.n_forward_calls += seq_logp.shape[-1]
+        
         priors = torch.softmax(seq_logp, dim=0)                    # (B,)
 
         return completions, priors
@@ -342,7 +349,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=5):
+        max_depth=2):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -410,6 +417,8 @@ class SplintMCTSMethod(BaseMethod):
             out = self.model(   encoder_outputs=enc_out,
                                 decoder_input_ids=dec_ids.to('cuda')).logits.to('cpu')
             
+            
+            
         return out[:, -1, :]
 
     
@@ -447,6 +456,8 @@ class SplintMCTSMethod(BaseMethod):
 
 
         log_ps = compute_prior(self.model, input_ids, completions_batched)
+        self.n_forward_calls += log_ps.shape[-1]
+        
         priors = torch.softmax(log_ps, dim=0)      
         
         
@@ -493,6 +504,9 @@ class SplintMCTSMethod(BaseMethod):
         
         
         log_ps = compute_prior(self.model, input_ids  , completions_batched)
+
+        self.n_forward_calls += log_ps.shape[-1]
+
         topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         completions = [completions[i.item()] for i in topk_indices]
 
@@ -504,9 +518,11 @@ class SplintMCTSMethod(BaseMethod):
 
 
     def predict(self, enc_out, state, task, input_ids): # so this is where I would return it.
+        
+
+
         logits = self._fwd_step_encdec(enc_out, state.unsqueeze(0))
         entropy = entropy_bits(logits).item()
-        topk_values, topk_indices = torch.topk(logits, k=self.k, dim=-1)  # Get top-k log-probabilities and their indices
 
         if entropy > self.tau:
 
@@ -515,6 +531,7 @@ class SplintMCTSMethod(BaseMethod):
                 self.nb_streaks.append(self.curr_nb_streak)
 
             self.curr_nb_streak =0
+
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
 
         else: 
@@ -566,7 +583,8 @@ class SplintMCTSMethod(BaseMethod):
             "n_non_entropy_spikes" : self.n_non_entropy_spikes,
             "max_non_bp_streak"    : max(self.nb_streaks),
             "avg_non_bp_streak"    : statistics.mean(self.nb_streaks),
-            "median_non_bp_streak" : statistics.median(self.nb_streaks)
+            "median_non_bp_streak" : statistics.median(self.nb_streaks),
+            "n_forward_calls" : self.n_forward_calls
         }
     
 
@@ -678,6 +696,7 @@ def run_search(env: LineLevelArcEnv,
 
     for act in actions:
         if act is True:
+            stats['extra'] = model.collect_stats()
             return True, stats
 
 
@@ -719,6 +738,7 @@ def run_search(env: LineLevelArcEnv,
 
             for act in actions:
                 if act is True:
+                    stats['extra'] = model.collect_stats()
                     return True, stats
                 
             if len(actions ) != 0:
@@ -760,6 +780,8 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
+    tasks = tasks[:8]
+
     for task in tasks:
         torch.cuda.empty_cache()
         input_ids = torch.tensor(encode_task(task, tok, None)).to('cuda')
@@ -814,7 +836,7 @@ def main():
 
 
      
-    output_dir =  f"results/{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/testing-{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
 

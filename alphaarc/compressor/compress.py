@@ -324,7 +324,6 @@ def main():
     tasks =  load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
 
 
-
     task_queue = UniqueTaskQueue()              # queue for new tasks
     processed_tasks = []    
 
