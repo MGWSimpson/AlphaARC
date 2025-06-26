@@ -42,12 +42,35 @@ def get_lines_vars(line_array):
 
 
 def check_any_var_used(vars, program_lines): 
-    for line in program_lines:
+    for l in program_lines:
+        
+        line = l.split("=")[1]
+
         for var in vars:
             if var in line:
                 return True
 
     return False
+
+
+
+def check_all_var_used(vars, program_lines):
+    
+    for var in vars:
+        
+        found = False
+        for l in program_lines:
+            line = l.split("=")[1]
+
+            if var in line:
+                found = True
+        
+        if not found:
+            return False
+        
+    
+    return True
+
 
 
 def check_input_used(program_lines):
@@ -56,12 +79,6 @@ def check_input_used(program_lines):
             return True
     return False
 
-
-def can_be_compressed(line, line_index, program_lines):
-    previous_lines = program_lines[:line_index]
-    future_lines = program_lines[line_index +1:]
-    previous_lines_vars = get_lines_vars(previous_lines)
-    return (not check_any_var_used(previous_lines_vars, future_lines)) and (not check_input_used(future_lines))
 
 
 
@@ -136,7 +153,7 @@ def create_left_task(line, line_index, program_lines, task):
     new_test_targets = []
 
     left_program_string = create_left_program_string(program_lines[:line_index + 1])
-    
+     
     for inp in [x['input'] for x in task.training_examples]:
         output = execute_candidate_program( left_program_string, inp)
         new_training_targets.append(output)
@@ -198,16 +215,36 @@ def create_right_task(line, line_index, program_lines, task):
 
     return [right_task]
 
-    
+
+
+
+def left_program_can_be_created(line, line_index, program_lines):
+    previous_lines = program_lines[:line_index+1]
+    previous_lines_vars = get_lines_vars(previous_lines)[:-1]
+    return check_all_var_used(previous_lines_vars, previous_lines) # and not check_any_var_used(previous_lines_vars, future_lines) 
+     
+
+# TODO: check this but believe it is correct.
+def right_program_can_be_created(line, line_index, program_lines):
+    previous_lines = program_lines[:line_index]
+    future_lines = program_lines[line_index +1:]
+    previous_lines_vars = get_lines_vars(previous_lines)
+    return (not check_any_var_used(previous_lines_vars, future_lines)) and (not check_input_used(future_lines))
+
+
 
 def compress(program_lines: list, task: Task):
     new_tasks = []
 
-    for i, line in enumerate(program_lines): 
-        if contains_grid_type(line):  
-            new_tasks.extend(create_left_task(line, i, program_lines, task))
-            if can_be_compressed(line, i, program_lines): 
-                new_tasks.extend(create_right_task(line, i, program_lines, task))
+    for i, line in enumerate(program_lines):   
+            
+            if contains_grid_type(line):
+                if left_program_can_be_created(line, i, program_lines):
+                    new_tasks.extend(create_left_task(line, i, program_lines, task))
+
+                if right_program_can_be_created(line, i, program_lines):
+                    new_tasks.extend(create_right_task(line, i, program_lines, task))
+
 
     return new_tasks
 
@@ -232,6 +269,8 @@ def main():
     data_dir = Path("data/training")    # directory with your JSON files
     task_queue = Queue()              # queue for new tasks
     processed_tasks = []    
+    # Queue should be a set based on the program lines.
+
 
     for json_file in data_dir.glob("*.json"):     # iterate over every .json in the folder
         task = Task.from_json(json_file)          # load each file
@@ -246,7 +285,8 @@ def main():
             task_queue.put(new_task)
             processed_tasks.append(new_task)
 
-        print(compressed_tasks[-1].program_lines)
+
+        print(compressed_tasks)
         exit()
 
     json_objects = [task.to_dict() for task in processed_tasks]
