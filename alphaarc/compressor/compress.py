@@ -30,8 +30,6 @@ GRID_FUNCTIONS = find_grid_functions(
 )
 STANDALONE_I = re.compile(r'\bI\b')      
 
-# TODO: could potentially be made more complete with the check for Any types
-# TODO: I could actually double down on this further by getting any intermediate grid and setting that as the output.
 def contains_grid_type(line):
     for grid_func in GRID_FUNCTIONS:
         if grid_func in line:
@@ -105,7 +103,10 @@ def rename_lhs_vars(lines):
 
 def create_right_program_string(program_lines, pruned_variable_name): 
     if len(program_lines) == 1:
-        program_lines[0] = program_lines[0].replace(pruned_variable_name, "I")
+        
+        if pruned_variable_name != "O":
+            result = program_lines[0].split("=")[1].replace(pruned_variable_name, "I")
+            program_lines[0] = f"O ={result}"
         return program_lines[0]
 
     program_lines = program_lines[1:]
@@ -125,16 +126,15 @@ def create_right_program_string(program_lines, pruned_variable_name):
     return "\n".join(lines)
     
     
-    
-
 
 def create_task_dict(inputs, outputs):
     return {"input": inputs, "output": outputs}
 
-def create_new_tasks(line, line_index, program_lines, task): 
-    
+
+def create_left_task(line, line_index, program_lines, task): 
     new_training_targets = []
     new_test_targets = []
+
     left_program_string = create_left_program_string(program_lines[:line_index + 1])
     
     for inp in [x['input'] for x in task.training_examples]:
@@ -158,9 +158,29 @@ def create_new_tasks(line, line_index, program_lines, task):
     
 
     left_task = Task(left_program_string, left_training_examples, left_test_examples, task.task_key+ str(line_index) + "L", parent_key=task.task_key )
+    
 
+    return [left_task]
+
+
+
+
+def create_right_task(line, line_index, program_lines, task): 
+    new_training_targets = []
+    new_test_targets = []
+   
     pruned_var = get_lines_vars([line])[0]
     right_program_string = create_right_program_string(program_lines[line_index:], pruned_variable_name=pruned_var)
+
+    
+    for inp in [x['input'] for x in task.training_examples]:
+        output = execute_candidate_program( right_program_string, inp)
+        new_training_targets.append(output)
+
+    for inp in [x['input'] for x in task.test_examples]:
+        output = execute_candidate_program( right_program_string, inp)
+        new_test_targets.append(output)
+
 
 
     right_training_example = []
@@ -176,13 +196,7 @@ def create_new_tasks(line, line_index, program_lines, task):
 
     right_task = Task(right_program_string, right_training_example, right_test_example, task.task_key+ str(line_index) + "R", parent_key=task.task_key )
 
-
-
-    
-
-    return [left_task, right_task]
-    
-    
+    return [right_task]
 
     
 
@@ -190,9 +204,10 @@ def compress(program_lines: list, task: Task):
     new_tasks = []
 
     for i, line in enumerate(program_lines): 
-        if contains_grid_type(line) and can_be_compressed(line,i, program_lines): 
-            new_tasks.extend(create_new_tasks(line, i, program_lines, task))
-
+        if contains_grid_type(line):  
+            new_tasks.extend(create_left_task(line, i, program_lines, task))
+            if can_be_compressed(line, i, program_lines): 
+                new_tasks.extend(create_right_task(line, i, program_lines, task))
 
     return new_tasks
 
@@ -230,6 +245,9 @@ def main():
         for new_task in compressed_tasks:
             task_queue.put(new_task)
             processed_tasks.append(new_task)
+
+        print(compressed_tasks[-1].program_lines)
+        exit()
 
     json_objects = [task.to_dict() for task in processed_tasks]
 
