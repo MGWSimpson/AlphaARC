@@ -10,6 +10,9 @@ import json
 from pathlib import Path
 import json
 from queue import Queue
+from alphaarc.task import Task, from_dict
+
+from alphaarc.augment.mutate_grid import valid_grid
 
 def find_grid_functions(filename):
     with open(filename, "r") as file:
@@ -159,6 +162,7 @@ def create_left_task(line, line_index, program_lines, task):
 
     left_program_string = create_left_program_string(program_lines[:line_index + 1])
     
+
     for inp in [x['input'] for x in task.training_examples]:
         output = execute_candidate_program( left_program_string, inp)
         new_training_targets.append(output)
@@ -167,6 +171,11 @@ def create_left_task(line, line_index, program_lines, task):
         output = execute_candidate_program( left_program_string, inp)
         new_test_targets.append(output)
 
+
+
+    for outputs in new_training_targets + new_test_targets:
+        if not valid_grid(outputs):
+            return []
 
 
     left_training_examples = []
@@ -239,13 +248,13 @@ def compress(program_lines: list, task: Task):
     new_tasks = []
 
     for i, line in enumerate(program_lines):   
-            
-            if contains_grid_type(line):
+            if contains_grid_type(line) and "O" not in line.split("=")[0]:
                 if left_program_can_be_created(line, i, program_lines):
-                    new_tasks.extend(create_left_task(line, i, program_lines, task))
-
-                    if right_program_can_be_created(line, i, program_lines):
-                        new_tasks.extend(create_right_task(line, i, program_lines, new_tasks[-1]))
+                    
+                    left_task = create_left_task(line, i, program_lines, task)
+                    new_tasks.extend(left_task )
+                    if right_program_can_be_created(line, i, program_lines) and len(left_task)> 0:
+                        new_tasks.extend(create_right_task(line, i, program_lines, left_task[0]))
                 
 
     return new_tasks
@@ -262,35 +271,82 @@ def collate_task_inputs(task: Task):
     return program_inputs
 
 
+class UniqueTaskQueue:
+    def __init__(self):
+        self.queue = Queue()
+        self.seen_programs = set()
 
-"""
-Need to add this thing where basically any new tasks are then added back to the queue
+    def put(self, task):
+        if task not in self.seen_programs:
+            self.queue.put(task)
+            self.seen_programs.add(task)
 
-"""
+    def get(self):
+        return self.queue.get()
+
+    def empty(self):
+        return self.queue.empty()
+
+
+def load_tasks_from_folders(dir_path):
+        tasks = []
+        file_paths = [os.path.join(dir_path, f) for f in os.listdir(dir_path)]
+        new_tasks = [Task.from_json(path, False) for path in file_paths]
+        tasks.extend(new_tasks)
+
+        return tasks
+
+def load_tasks_from_files(file_path):
+    tasks = [ ]
+    with open(file_path) as fp:
+        json_object = json.load(fp)
+    task_keys = json_object.keys()
+    new_tasks = [from_dict(json_object[key], False) for key in task_keys]
+    tasks.extend(new_tasks)
+
+    return tasks
+
+def load_train_tasks(dirs, files, ):
+    
+    tasks = []
+    for folder_path in dirs:
+         tasks.extend(load_tasks_from_folders(folder_path))
+    
+    for file_path in files:
+        tasks.extend(load_tasks_from_files(file_path))
+
+    return tasks
+
+
+
 def main():
-    data_dir = Path("data/training")    # directory with your JSON files
-    task_queue = Queue()              # queue for new tasks
+    
+    tasks =  load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
+
+
+
+    task_queue = UniqueTaskQueue()              # queue for new tasks
     processed_tasks = []    
-    # Queue should be a set based on the program lines.
 
 
-    for json_file in data_dir.glob("*.json"):     # iterate over every .json in the folder
-        task = Task.from_json(json_file)          # load each file
+    for task in tasks:
         task_queue.put(task)
-
 
     while not task_queue.empty():
         task = task_queue.get()
         program_lines = task.program_lines.split("\n")
         compressed_tasks = compress(program_lines, task)
         for new_task in compressed_tasks:
+            if new_task in task_queue.seen_programs:
+                processed_tasks.append(new_task)
+            
             task_queue.put(new_task)
-            processed_tasks.append(new_task)
 
+            
 
 
     json_objects = [task.to_dict() for task in processed_tasks]
-
+    print(f"created {len(json_objects)} tasks")
     with open("data/new_tasks.jsonl", "w") as f:
         for item in json_objects:
             f.write(json.dumps(item) + "\n")

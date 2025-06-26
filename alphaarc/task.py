@@ -117,6 +117,34 @@ class Task:
         else:
             self.extra_info = {}
 
+
+
+    def __eq__(self, other):
+        if not isinstance(other, Task):
+            return NotImplemented
+
+        if self.program_lines != other.program_lines:
+            return False
+
+        def sorted_examples(examples):
+            return sorted(examples, key=lambda ex: (ex["input"], ex["output"]))
+
+        return (
+            sorted_examples(self.training_examples) == sorted_examples(other.training_examples)
+            and sorted_examples(self.test_examples) == sorted_examples(other.test_examples)
+        )
+
+    def __hash__(self):
+        def hashable_examples(examples):
+            # Convert list of dicts to a sorted tuple of tuples for consistent hashing
+            return tuple(sorted((ex["input"], ex["output"]) for ex in examples))
+
+        return hash((
+            self.program_lines,
+            hashable_examples(self.training_examples),
+            hashable_examples(self.test_examples),
+    ))
+
     def to_dict(self):
         task_data = {
             "program": self.program,
