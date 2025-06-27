@@ -316,8 +316,7 @@ def main(config):
     dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
                     
     train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
-
-    train_tasks, dev_tasks = split_dev_tasks(tasks, dev_set_keys)
+    train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        

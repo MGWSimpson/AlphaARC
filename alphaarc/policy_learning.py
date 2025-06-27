@@ -128,8 +128,8 @@ def main():
     curriculum = build_curriculum(config['training_curriculum_config'])
     config = load_config(args.config_path)
     
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+    # task_key_split = load_key_split('data/split_keys.json')
+    # curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
@@ -168,11 +168,11 @@ def main():
         raise ValueError('Specified method does not exist')
     
     
-    output_dir =  f"results/model-test-1{method.lower()}"
+    output_dir =  f"results/eval-test-{method.lower()}"
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)
-    run_experiment(n_meta_epochs=50,
+    run_experiment(n_meta_epochs=25,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,

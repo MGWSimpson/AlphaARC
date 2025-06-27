@@ -516,10 +516,10 @@ class SplintMCTSMethod(BaseMethod):
         
         log_ps = compute_prior(self.model, input_ids  , completions_batched)
 
-        self.n_forward_calls += log_ps.shape[-1]
 
         topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
         completions = [completions[i.item()] for i in topk_indices]
+        self.n_forward_calls += topk_indices.shape[-1]
 
         log_ps = topk_values
 
@@ -676,6 +676,10 @@ def backpropagate(path, value):
         node.visit_count += 1
         node.value_sum  += value
 
+
+
+
+
 def run_search(env: LineLevelArcEnv,
                task, 
                prompt_ids,
@@ -769,7 +773,11 @@ def run_search(env: LineLevelArcEnv,
 
                 if value == -1.0:
                     value = 0
-
+            else:
+                index = parent.children.index(node)
+                parent.child_actions.pop(index)
+                parent.children.pop(index)
+                
         backpropagate(search_path, value)
     stats['extra'] = model.collect_stats()
     

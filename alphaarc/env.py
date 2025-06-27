@@ -193,6 +193,7 @@ class LineLevelArcEnv (BaseEnv):
         if should_token_account:
             self._add_and_check_token_budget(program)
 
+        print(program)
 
         lines = program.split("\n")
 
