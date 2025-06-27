@@ -23,6 +23,9 @@ import statistics
 from alphaarc.utils import prepare_output_dir, save_stats_to_file
 import argparse
 import json
+from collections import defaultdict
+from typing import List, Tuple
+import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -112,7 +115,6 @@ def format_as_dummy_program(program_lines):
 
 
 def return_empty_nodes(): 
-    print("NOOOOOOOOo")
     return [], []
 
 def merge_with_overlap(s1: str, s2: str) -> str:
@@ -147,7 +149,7 @@ def compute_prior(model, input_batch, ids_batch, batch_size: int = 64,
             log_probs = torch.log_softmax(logits, dim=-1)
 
             token_ll = log_probs.gather(-1, ids_sub.unsqueeze(-1)).squeeze(-1)
-            seq_logps.append((token_ll * mask).sum(-1))            # (b,)
+            seq_logps.append((token_ll * mask).mean(-1))            # (b,)
 
 
     return torch.cat(seq_logps, dim=0).cpu()                       # (N,)
@@ -351,7 +353,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=3):
+        max_depth=5):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -475,6 +477,74 @@ class SplintMCTSMethod(BaseMethod):
         return completions, priors
 
 
+    def _beam_search_on_completions(
+            self,
+            model,
+            tok,
+            enc_out,
+            completions: List[str],
+            beam_width: int = 4,      
+            top_n: int = 4,           
+            device: str | torch.device = "cuda",
+            ) -> List[Tuple[str, float]]:
+    
+        # boring stuff
+        device = torch.device(device)
+        model  = model.to(device).eval()
+       
+
+
+        # encoder stuff
+        bos    = torch.tensor([1], device=device)
+
+
+        # tokenize all the completions
+        comp_ids = [tok(c, add_special_tokens=False).input_ids for c in completions]
+        cursors  = [0] * len(completions)
+        cum_lp   = [0.0] * len(completions)     
+
+        alive:   List[int] = list(range(len(completions)))  # indices of live comps
+        finished: List[int] = []                            # indices already done
+
+        while (len(alive) + len(finished) > top_n):
+            groups: defaultdict[Tuple[int, ...], List[int]] = defaultdict(list)
+            for cid in alive: # create groups based on common prefixes to avoid recomp
+                prefix = tuple(comp_ids[cid][:cursors[cid]])  # tokens consumed so far
+                groups[prefix].append(cid)
+
+            for prefix, cids in groups.items():
+                dec_in = torch.tensor([bos.tolist() + list(prefix)], device=device)
+
+                with torch.no_grad():
+                    logits = model(
+                        decoder_input_ids=dec_in,
+                        encoder_outputs=enc_out
+                    ).logits[0, -1].log_softmax(-1)           # (V,)
+
+                # update every completion in the group
+                for cid in cids:
+                    if cursors[cid] == len(comp_ids[cid]):    # already finished
+                        continue
+                    tok_id = comp_ids[cid][cursors[cid]]
+                    cum_lp[cid] += float(logits[tok_id].item())
+                    cursors[cid] += 1
+
+                    if cursors[cid] == len(comp_ids[cid]):    # just finished now
+                        finished.append(cid)
+
+            alive = [cid for cid in alive if cursors[cid] < len(comp_ids[cid])]
+            pool = sorted(alive + finished, key=lambda c: cum_lp[c] / max(cursors[c], 1), reverse=True)
+            alive = pool[:beam_width]
+            
+            finished = [cid for cid in pool[beam_width:] if cid not in finished]
+
+        best = sorted(alive + finished, key=lambda c: cum_lp[c], reverse=True)[:top_n]
+        
+        pairs = [(completions[c], cum_lp[c]) for c in best]
+        completions_array, cum_lp_array = zip(*pairs)
+        
+        return completions_array, cum_lp_array
+
     """
     So the reason we aren't seeing the speed benefits and stuff is because of this, where we are computing
     it over all completions then just taking a subset.
@@ -505,24 +575,31 @@ class SplintMCTSMethod(BaseMethod):
         if len(prev_program) != 0:
             completions = [ prev_program_str + x for x in completions]
 
+                
+
+ 
 
 
-        completions = [torch.cat((torch.tensor([0, 1]), 
+        if len(completions) < self.k:
+            completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+            completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
-        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
-        
-        log_ps = compute_prior(self.model, input_ids  , completions_batched)
+            log_ps = compute_prior(self.model, input_ids  , completions_batched)
+       
+        else:
+            completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions )
+            
+            completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+            
+            log_ps = torch.tensor(log_ps)
+            
 
-
-        topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
-        completions = [completions[i.item()] for i in topk_indices]
-        self.n_forward_calls += topk_indices.shape[-1]
-
-        log_ps = topk_values
-
-        return completions, log_ps
+        self.n_forward_calls += len(completions)
+        priors = torch.softmax(log_ps, dim=0)  
+        return completions, priors
 
 
 
@@ -533,6 +610,7 @@ class SplintMCTSMethod(BaseMethod):
 
         logits = self._fwd_step_encdec(enc_out, state.unsqueeze(0))
         entropy = entropy_bits(logits).item()
+        start_time = time.time()
 
         if entropy > self.tau:
 
@@ -561,6 +639,7 @@ class SplintMCTSMethod(BaseMethod):
             
             probs = torch.tensor(log_ps)
             probs = torch.softmax(probs, dim=0)                    # (B,)
+
 
 
 
@@ -800,8 +879,6 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-
-    tasks = [tasks[6]]
 
 
     for task in tasks:
