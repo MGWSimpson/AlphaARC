@@ -26,7 +26,7 @@ import json
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 # -- tree viz --
@@ -112,6 +112,7 @@ def format_as_dummy_program(program_lines):
 
 
 def return_empty_nodes(): 
+    print("NOOOOOOOOo")
     return [], []
 
 def merge_with_overlap(s1: str, s2: str) -> str:
@@ -147,6 +148,7 @@ def compute_prior(model, input_batch, ids_batch, batch_size: int = 64,
 
             token_ll = log_probs.gather(-1, ids_sub.unsqueeze(-1)).squeeze(-1)
             seq_logps.append((token_ll * mask).sum(-1))            # (b,)
+
 
     return torch.cat(seq_logps, dim=0).cpu()                       # (N,)
 
@@ -349,7 +351,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=2):
+        max_depth=3):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -416,7 +418,9 @@ class SplintMCTSMethod(BaseMethod):
         with torch.no_grad():
             out = self.model(   encoder_outputs=enc_out,
                                 decoder_input_ids=dec_ids.to('cuda')).logits.to('cpu')
-            
+        
+
+        self.n_forward_calls += 1
             
             
         return out[:, -1, :]
@@ -425,17 +429,20 @@ class SplintMCTSMethod(BaseMethod):
     
     def _handle_entropy_spike(self, state, enc_out, input_ids, task): 
         
+        
         program = self.tok.decode(state, skip_special_tokens=True)
 
         prev_program = program.split("\n")[:-1]
         partial_line = program.split("\n")[-1]
 
-    
+        
+        start_time = time.time()
 
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
         except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
             return return_empty_nodes()
+    
     
         if len(completions) ==0:
             return return_empty_nodes()
@@ -450,16 +457,20 @@ class SplintMCTSMethod(BaseMethod):
             completions = [ prev_program_str + x for x in completions]
 
 
+
+
         completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+
 
 
         log_ps = compute_prior(self.model, input_ids, completions_batched)
         self.n_forward_calls += log_ps.shape[-1]
         
         priors = torch.softmax(log_ps, dim=0)      
-        
+                
+
         
         return completions, priors
 
@@ -535,6 +546,8 @@ class SplintMCTSMethod(BaseMethod):
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
 
         else: 
+
+            start_time = time.time()
             self.n_non_entropy_spikes += 1
             self.curr_nb_streak  += 1
 
@@ -656,7 +669,7 @@ def rollout( state,
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
 
-    return reward, program
+    return reward, np.array([0])
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -702,7 +715,7 @@ def run_search(env: LineLevelArcEnv,
 
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
     #while (time.time() - start_time) < time_limit:
-    while stats["nodes_expanded"] < time_limit:
+    while stats['nodes_expanded'] < time_limit:
         node = root
         search_path = [node]
 
@@ -780,7 +793,9 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-    tasks = tasks[:8]
+
+    tasks = [tasks[6]]
+
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -836,7 +851,7 @@ def main():
 
 
      
-    output_dir =  f"results/testing-{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/new-testing-{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
 
@@ -844,7 +859,7 @@ def main():
     start_time = time.time()
     run_experiment(method=method,
                    tasks=curriculum.generate_curriculum(),
-                   time_limit=(limit),
+                   time_limit=limit,
                    tok=tok,
                    output_path=output_dir,
                    )

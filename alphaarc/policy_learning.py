@@ -168,7 +168,7 @@ def main():
         raise ValueError('Specified method does not exist')
     
     
-    output_dir =  f"results/reward-test-1{method.lower()}"
+    output_dir =  f"results/model-test-1{method.lower()}"
     prepare_output_dir(output_dir)
 
     pl.seed_everything(0)

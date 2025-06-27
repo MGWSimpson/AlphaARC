@@ -53,9 +53,9 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 2 
-    lr: float =1e-5
+    lr: float =5e-5
     output_dir: str = './finetune/'
-    num_epochs: int = 15
+    num_epochs: int = 50
 
 
 
@@ -135,11 +135,12 @@ def fine_tune(  model,
 
             return dev_metrics
 
-    trainer = Trainer(
+    trainer = MultiEvalTrainer(
         model=model,
         args=args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
+        eval_extra_dataset=dev_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
@@ -314,18 +315,17 @@ def main(config):
     # computed from task splitter
     dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
                     
-    # train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
+    train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
 
-    train_tasks, eval_ds = split_dev_tasks(tasks, dev_set_keys)
+    train_tasks, dev_tasks = split_dev_tasks(tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
     model.to(config.device)
 
 
-    train_ds, eval_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_ds, tokenizer)
+    train_ds, eval_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer), construct_ds(dev_tasks, tokenizer)
 
-    dev_ds = None
 
     fine_tune(  model, 
                 tokenizer, 
