@@ -178,8 +178,6 @@ def prune_node(node):
 class BaseMethod:
     def __init__(self, uses_model):
         self.uses_model = uses_model
-
-
         self.n_forward_calls = 0
 
     def rollout(self, enc_out, action, task): 
@@ -325,6 +323,9 @@ class TGMCTSMethod(BaseMethod):
         priors = torch.softmax(seq_logp, dim=0)                    # (B,)
 
         return completions, priors
+    
+    def reset_stats(self): 
+        self.n_forward_calls = 0
 
 
 class SplintMCTSMethod(BaseMethod):
@@ -357,6 +358,7 @@ class SplintMCTSMethod(BaseMethod):
 
         self.n_entropy_spikes = 0
         self.n_non_entropy_spikes = 0
+        self.n_forward_calls = 0
 
 
         self.curr_nb_streak   = 0      # length of the *current* run
@@ -370,7 +372,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=3):
+        max_depth=5):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -504,7 +506,7 @@ class SplintMCTSMethod(BaseMethod):
 
 
         # encoder stuff
-        bos    = torch.tensor([0,1], device=device)
+        bos    = torch.tensor([0, 1], device=device)
 
 
         # tokenize all the completions
@@ -526,7 +528,7 @@ class SplintMCTSMethod(BaseMethod):
 
                 with torch.no_grad():
                     logits = model(
-                        decoder_input_ids=dec_in,
+                        labels=dec_in,
                         encoder_outputs=enc_out
                     ).logits[0, -1].log_softmax(-1)           # (V,)
 
@@ -633,8 +635,6 @@ class SplintMCTSMethod(BaseMethod):
             self.n_non_entropy_spikes += 1
             self.curr_nb_streak  += 1    
             comps, log_ps =  self._dfs_completer_trusted(state, 0, enc_out, task, input_ids) #self._handle_non_entropy_spike(state, enc_out, input_ids, task)#
-
-            print(log_ps)
 
             for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
@@ -770,6 +770,7 @@ def run_search(env: LineLevelArcEnv,
 
 
     model.reset_stats()
+    
     stats = {"max_depth": 0, 
              "nodes_expanded":0, 
              "solved_program": None,

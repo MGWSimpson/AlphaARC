@@ -108,6 +108,7 @@ class LineLevelArcEnv (BaseEnv):
         program = self._decode(observation)
 
 
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -196,6 +197,7 @@ class LineLevelArcEnv (BaseEnv):
         lines = program.split("\n")
 
         print(program)
+
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program
@@ -226,8 +228,6 @@ class LineLevelArcEnv (BaseEnv):
         
         if len(program) > self.max_length:
             terminated = True
-
-        
         
         
         terminated = terminated or reward == 1.0 # or reward == -1.0
