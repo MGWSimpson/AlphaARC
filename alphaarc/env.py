@@ -195,6 +195,7 @@ class LineLevelArcEnv (BaseEnv):
 
         lines = program.split("\n")
 
+        print(program)
         for i, st in enumerate(self.initial_states):
             candidate_program = append_return(program)
             # candidate_program = program

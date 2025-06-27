@@ -504,7 +504,7 @@ class SplintMCTSMethod(BaseMethod):
 
 
         # encoder stuff
-        bos    = torch.tensor([1], device=device)
+        bos    = torch.tensor([0,1], device=device)
 
 
         # tokenize all the completions
@@ -634,10 +634,13 @@ class SplintMCTSMethod(BaseMethod):
             self.curr_nb_streak  += 1    
             comps, log_ps =  self._dfs_completer_trusted(state, 0, enc_out, task, input_ids) #self._handle_non_entropy_spike(state, enc_out, input_ids, task)#
 
+            print(log_ps)
+
             for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
                     return comps, log_ps
             
+
             probs = torch.tensor(log_ps)
             probs = torch.softmax(probs, dim=0) 
 
@@ -879,7 +882,7 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-    tasks = [tasks[4]]
+    tasks = tasks[:4]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -920,7 +923,7 @@ def main():
     
 
     tau = 0.5
-    k = 8
+    k = 4
     limit = 300
     
     
