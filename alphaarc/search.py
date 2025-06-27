@@ -476,9 +476,8 @@ class SplintMCTSMethod(BaseMethod):
 
 
     """
-    Here, you handle the problem I was running into by accessing the completions logit.
-    This just gets around the whole problem of it being or not being a valid completion.
-    And retains the whole token efficency thing.    
+    So the reason we aren't seeing the speed benefits and stuff is because of this, where we are computing
+    it over all completions then just taking a subset.
     """
     def _handle_non_entropy_spike(self, state, enc_out, input_ids, task):    
 
@@ -556,7 +555,7 @@ class SplintMCTSMethod(BaseMethod):
                            state, 0, enc_out, task, input_ids)
             
 
-            for comp in comps:
+            for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
                     return comps, log_ps
             
