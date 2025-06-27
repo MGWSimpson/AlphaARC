@@ -193,7 +193,6 @@ class LineLevelArcEnv (BaseEnv):
         if should_token_account:
             self._add_and_check_token_budget(program)
 
-
         lines = program.split("\n")
 
         for i, st in enumerate(self.initial_states):
@@ -230,7 +229,7 @@ class LineLevelArcEnv (BaseEnv):
         
         
         
-        terminated = terminated or reward == 1.0
+        terminated = terminated or reward == 1.0 # or reward == -1.0
 
         return reward, terminated
 

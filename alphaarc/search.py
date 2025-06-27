@@ -29,7 +29,7 @@ import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 # -- tree viz --
@@ -149,7 +149,7 @@ def compute_prior(model, input_batch, ids_batch, batch_size: int = 64,
             log_probs = torch.log_softmax(logits, dim=-1)
 
             token_ll = log_probs.gather(-1, ids_sub.unsqueeze(-1)).squeeze(-1)
-            seq_logps.append((token_ll * mask).mean(-1))            # (b,)
+            seq_logps.append((token_ll * mask).sum(-1))            # (b,)
 
 
     return torch.cat(seq_logps, dim=0).cpu()                       # (N,)
@@ -195,6 +195,11 @@ class BaseMethod:
     def collect_stats(self): 
         return {}
     
+
+    def reset_stats(self): 
+        self.n_forward_calls = 0
+
+    
 # generates all actions + no priors 
 class MCTSMethod(BaseMethod): 
     
@@ -209,7 +214,6 @@ class MCTSMethod(BaseMethod):
         program = self.tok.decode(state.squeeze(), skip_special_tokens=True)
 
         completions = [None]
-        xtime = time.time()
         while len(completions) > 0: # if we can still generate completions, keep going
             try:
                 completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
@@ -307,10 +311,11 @@ class TGMCTSMethod(BaseMethod):
 
         if len(prev_program) != 0:
             completions = [ prev_program_str + x for x in completions]
-
+        
 
         completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+
 
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
 
@@ -346,6 +351,18 @@ class SplintMCTSMethod(BaseMethod):
 
         # env
     
+
+    def reset_stats(self):
+        super().reset_stats()
+
+        self.n_entropy_spikes = 0
+        self.n_non_entropy_spikes = 0
+
+
+        self.curr_nb_streak   = 0      # length of the *current* run
+        self.nb_streaks = []
+        self.collapsed_lens = []
+
     def _dfs_completer_trusted(
         self,
         state,    
@@ -353,7 +370,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=5):
+        max_depth=3):
 
 
         if state.shape[-1] > 512 or depth > max_depth:
@@ -374,7 +391,6 @@ class SplintMCTSMethod(BaseMethod):
 
 
 
-        # check here! 
         if not comps:                    
             self.collapsed_lens.append(depth)
             return [], []
@@ -421,9 +437,6 @@ class SplintMCTSMethod(BaseMethod):
             out = self.model(   encoder_outputs=enc_out,
                                 decoder_input_ids=dec_ids.to('cuda')).logits.to('cpu')
         
-
-        self.n_forward_calls += 1
-            
             
         return out[:, -1, :]
 
@@ -442,7 +455,7 @@ class SplintMCTSMethod(BaseMethod):
 
         try:
             completions = self.completer.complete(format_as_dummy_program(program), task.training_examples[0]['input'])
-        except Exception as e: # must make this stuff quite robust as finding completions on erroneous code is tricky.
+        except Exception as e: 
             return return_empty_nodes()
     
     
@@ -469,11 +482,7 @@ class SplintMCTSMethod(BaseMethod):
 
         log_ps = compute_prior(self.model, input_ids, completions_batched)
         self.n_forward_calls += log_ps.shape[-1]
-        
         priors = torch.softmax(log_ps, dim=0)      
-                
-
-        
         return completions, priors
 
 
@@ -585,21 +594,20 @@ class SplintMCTSMethod(BaseMethod):
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
             completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
-        
+
             log_ps = compute_prior(self.model, input_ids  , completions_batched)
        
         else:
-            completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions )
+            completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions, beam_width=self.k, top_n=self.k)
             
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-            
             log_ps = torch.tensor(log_ps)
             
 
         self.n_forward_calls += len(completions)
-        priors = torch.softmax(log_ps, dim=0)  
-        return completions, priors
+        #priors = torch.softmax(log_ps, dim=0)  
+        return completions, log_ps
 
 
 
@@ -610,7 +618,6 @@ class SplintMCTSMethod(BaseMethod):
 
         logits = self._fwd_step_encdec(enc_out, state.unsqueeze(0))
         entropy = entropy_bits(logits).item()
-        start_time = time.time()
 
         if entropy > self.tau:
 
@@ -619,26 +626,20 @@ class SplintMCTSMethod(BaseMethod):
                 self.nb_streaks.append(self.curr_nb_streak)
 
             self.curr_nb_streak =0
-
             comps, probs = self._handle_entropy_spike(state, enc_out, input_ids, task)
 
         else: 
 
-            start_time = time.time()
             self.n_non_entropy_spikes += 1
-            self.curr_nb_streak  += 1
-
-
-            comps, log_ps = self._dfs_completer_trusted(
-                           state, 0, enc_out, task, input_ids)
-            
+            self.curr_nb_streak  += 1    
+            comps, log_ps =  self._dfs_completer_trusted(state, 0, enc_out, task, input_ids) #self._handle_non_entropy_spike(state, enc_out, input_ids, task)#
 
             for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
                     return comps, log_ps
             
             probs = torch.tensor(log_ps)
-            probs = torch.softmax(probs, dim=0)                    # (B,)
+            probs = torch.softmax(probs, dim=0) 
 
 
 
@@ -741,13 +742,11 @@ def rollout( state,
             env: LineLevelArcEnv,
             task): 
 
-    start_time = time.time ()
     # need to make a random choice of actions    
     action = random.choice(actions)
     program = model.rollout(enc_out, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
-
-    return reward, np.array([0])
+    return reward, program
 
 def backpropagate(path, value):
     for node in reversed(path):    
@@ -767,12 +766,13 @@ def run_search(env: LineLevelArcEnv,
     
 
 
+    model.reset_stats()
     stats = {"max_depth": 0, 
              "nodes_expanded":0, 
              "solved_program": None,
              "nodes_traversed": 0,
             "avg_branching_factor": 0 }
-    
+
 
     if model.uses_model:
         model.eval()
@@ -806,8 +806,7 @@ def run_search(env: LineLevelArcEnv,
             action, node = node.select_child()
             search_path.append(node)
 
-        if len(search_path) > stats['max_depth']: # note taking
-            stats['max_depth'] = len(search_path)
+        
         
         stats['nodes_traversed'] += len(search_path)
 
@@ -827,6 +826,7 @@ def run_search(env: LineLevelArcEnv,
              value = 0 
         
         next_state = torch.tensor(next_state)
+
         if not terminated: 
             actions, action_probs = model.predict(enc_out, next_state, task, prompt_ids)
 
@@ -876,12 +876,10 @@ def run_experiment( method: BaseMethod,
     recorder = TreeRecorder(active=False)    # import this where you build the tree
 
 
-    # lets sort the list by program length
-
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
     
-
+    tasks = [tasks[4]]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -922,7 +920,7 @@ def main():
     
 
     tau = 0.5
-    k = 4
+    k = 8
     limit = 300
     
     
@@ -934,7 +932,6 @@ def main():
         method = SplintMCTSMethod(uses_model=True, model=model, tokenizer=tok, completer=completer, tau=tau, k=k)
     else:
         raise ValueError("Method does not exist!")
-
 
      
     output_dir =  f"results/final-test-{config['method'].lower()}-{k}-{tau}-{limit}"
