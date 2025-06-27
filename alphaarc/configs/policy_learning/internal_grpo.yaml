@@ -1,5 +1,5 @@
 method: "INTERNALGRPO"
-model_path: '/home/mgws3/AlphaARC/finetune/2025-06-15_22-53-13/checkpoint-140'
+model_path: '/home/mgws3/AlphaARC/finetune-checkpoint/dev-checkpoint-2'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
