@@ -29,7 +29,7 @@ import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 # -- tree viz --
@@ -354,8 +354,8 @@ class SplintMCTSMethod(BaseMethod):
     
 
     def reset_stats(self):
-        super().reset_stats()
-
+        
+        self.n_forward_calls = 0
         self.n_entropy_spikes = 0
         self.n_non_entropy_spikes = 0
         self.n_forward_calls = 0
@@ -770,7 +770,7 @@ def run_search(env: LineLevelArcEnv,
 
 
     model.reset_stats()
-    
+    model.n_forward_calls = 0
     stats = {"max_depth": 0, 
              "nodes_expanded":0, 
              "solved_program": None,
@@ -882,8 +882,6 @@ def run_experiment( method: BaseMethod,
 
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
-    
-    tasks = tasks[:4]
 
     for task in tasks:
         torch.cuda.empty_cache()
