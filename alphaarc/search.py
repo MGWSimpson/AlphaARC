@@ -29,7 +29,7 @@ import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 # -- tree viz --
@@ -852,10 +852,12 @@ def run_search(env: LineLevelArcEnv,
                 if value == -1.0:
                     value = 0
             else:
-                index = parent.children.index(node)
-                parent.child_actions.pop(index)
-                parent.children.pop(index)
-                
+                # index = parent.children.index(node)
+                # parent.child_actions.pop(index)
+                # parent.children.pop(index)
+                pass
+
+            
         backpropagate(search_path, value)
     stats['extra'] = model.collect_stats()
     
@@ -935,7 +937,7 @@ def main():
 
 
      
-    output_dir =  f"results/new-testing-{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/final-test-{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
 
