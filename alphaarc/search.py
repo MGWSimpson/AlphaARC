@@ -29,7 +29,7 @@ import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 # -- tree viz --
@@ -713,7 +713,6 @@ class Node:
         self.state = state.clone()
         self.child_actions = copy.deepcopy(actions)
         self.children = [Node(parent=self, recorder=recorder, prior=prob) for prob in action_probs]
-
         self.is_expanded = True
 
         if recorder.active:
@@ -774,7 +773,9 @@ def run_search(env: LineLevelArcEnv,
     stats = {"max_depth": 0, 
              "nodes_expanded":0, 
              "solved_program": None,
+             "solved_by_rollout": False,
              "nodes_traversed": 0,
+             "program_lengths": [],
             "avg_branching_factor": 0 }
 
 
@@ -844,12 +845,16 @@ def run_search(env: LineLevelArcEnv,
                 value, program = rollout(state, actions, enc_out, model, env, task) # rollout
                 if value == 1.0:
                     stats['extra'] = model.collect_stats()
+                    stats['solved_by_rollout'] = True
                     stats['solved_program'] = env.tokenizer.batch_decode(program)
                     return True, stats
 
-                    
+                
                 node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
+                decoded_programs = env.tokenizer.batch_decode(actions)
+                program_lengths = [len(prog.split("\n")) for prog in decoded_programs]
 
+                stats['program_lengths'].extend(program_lengths)
                 stats['nodes_expanded'] += 1
                 stats['avg_branching_factor'] += len(node.children)
 
@@ -923,7 +928,7 @@ def main():
 
     tau = 0.5
     k = 4
-    limit = 300
+    limit = 301
     
     
     if config['method'] == "MCTS": 
