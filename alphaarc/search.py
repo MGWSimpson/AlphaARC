@@ -180,7 +180,7 @@ class BaseMethod:
         self.uses_model = uses_model
         self.n_forward_calls = 0
 
-    def rollout(self, enc_out, action, task): 
+    def  rollout(self, enc_out, action, task): 
         raise NotImplementedError
     
     def predict(enc_out, init_state, task, prompt_ids): 
@@ -265,10 +265,12 @@ class TGMCTSMethod(BaseMethod):
         self.completer = completer
 
     
-    def rollout(self, enc_out, next_state, task):
-
+    def rollout(self, prompt_ids, next_state, task):
         with torch.no_grad(): 
-            output = self.model.generate(encoder_outputs=enc_out, decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
+            output = self.model.generate(
+                            input_ids=prompt_ids.unsqueeze(0).to('cuda'),
+                            decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
+                            num_beams=2)
         
         return output.to('cpu')
     
@@ -375,11 +377,9 @@ class SplintMCTSMethod(BaseMethod):
         max_depth=5):
 
 
-        if state.shape[-1] > 512 or depth > max_depth:
+        if depth > max_depth:
             return [], []
         
-        # make a quick check.
-
 
         reward, terminated = self.env.evaluate_program(state.squeeze(), should_token_account=False)
         if reward == 1.0:
@@ -400,15 +400,12 @@ class SplintMCTSMethod(BaseMethod):
 
         # zip them up 
         pairs = zip(priors.tolist(), comps)
-
         leaves, logps = [], []
 
 
         
         for p, comp in pairs:
             new_state = comp
-
-            # check entropy of the new completion.
 
             nxt_logits = self._fwd_step_encdec(enc_out, new_state.unsqueeze(0))
             if entropy_bits(nxt_logits).item() > self.tau:  # if its a breakpoint, then we stop and return
@@ -487,6 +484,71 @@ class SplintMCTSMethod(BaseMethod):
         priors = torch.softmax(log_ps, dim=0)      
         return completions, priors
 
+
+
+    def _score_first_token_only(
+        self,
+        model,
+        tok,
+        enc_out,
+        top_k, 
+        completions: List[str],
+        device: str | torch.device = "cuda"
+    ) -> List[Tuple[str, float]]:
+        device = torch.device(device)
+        model = model.to(device).eval()
+
+        bos = torch.tensor([0, 1], device=device)  # BOS tokens used in decoding
+
+        # Tokenize completions without special tokens
+        comp_ids = [tok(c, add_special_tokens=False).input_ids for c in completions]
+
+        # Compute longest common prefix
+        def longest_common_prefix(seqs: List[List[int]]) -> List[int]:
+            if not seqs:
+                return []
+            min_len = min(len(s) for s in seqs)
+            prefix = []
+            for i in range(min_len):
+                first_tok = seqs[0][i]
+                if all(seq[i] == first_tok for seq in seqs):
+                    prefix.append(first_tok)
+                else:
+                    break
+            return prefix
+
+        prefix = longest_common_prefix(comp_ids)
+
+        # Get next token after prefix for each completion
+        next_tokens = []
+        for ids in comp_ids:
+            if len(ids) > len(prefix):
+                next_tokens.append(ids[len(prefix)])
+            else:
+                next_tokens.append(None)  # In case the completion is exactly the prefix
+
+        # Prepare decoder input: BOS + common prefix
+        dec_in = torch.tensor([bos.tolist() + prefix], device=device)
+
+        with torch.no_grad():
+            logits = model(
+                labels=dec_in,
+                encoder_outputs=enc_out
+            ).logits[0, -1].log_softmax(-1)  # (V,)
+
+        # Score completions based on the log-prob of their next token
+        scores = []
+        for comp, tok_id in zip(completions, next_tokens):
+            if tok_id is not None:
+                score = float(logits[tok_id].item())
+            else:
+                score = float('-inf')  # Can't score if it's just the prefix
+            scores.append((comp, score))
+
+            # Sort and return top-k
+        top = sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
+        comps, log_ps = zip(*top) if top else ([], [])
+        return list(comps), list(log_ps)
 
     def _beam_search_on_completions(
             self,
@@ -600,11 +662,15 @@ class SplintMCTSMethod(BaseMethod):
             log_ps = compute_prior(self.model, input_ids  , completions_batched)
        
         else:
-            completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions, beam_width=self.k, top_n=self.k)
+            # completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions, beam_width=self.k, top_n=self.k)
             
+            completions, log_ps = self._score_first_token_only(self.model, self.tok, enc_out, self.k, completions)
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-            log_ps = torch.tensor(log_ps)
+            
+            completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+            log_ps = compute_prior(self.model, input_ids  , completions_batched)
+
             
 
         self.n_forward_calls += len(completions)
@@ -661,10 +727,12 @@ class SplintMCTSMethod(BaseMethod):
         self.model.eval()
 
     # perform a rollout from the current state.
-    def rollout(self, enc_out, next_state, task):
+    def rollout(self, prompt_ids, next_state, task):
         with torch.no_grad(): 
-            output = self.model.generate(encoder_outputs=enc_out, 
-                                         decoder_input_ids=next_state.unsqueeze(0).to('cuda'))
+            output = self.model.generate(
+                            input_ids=prompt_ids.unsqueeze(0).to('cuda'),
+                            decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
+                            num_beams=5)
         
         return output.to('cpu')
     
@@ -742,11 +810,12 @@ def rollout( state,
             enc_out,
             model: BaseMethod,
             env: LineLevelArcEnv,
-            task): 
+            task,
+            prompt_ids): 
 
     # need to make a random choice of actions    
     action = random.choice(actions)
-    program = model.rollout(enc_out, action, task)
+    program = model.rollout(prompt_ids, action, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
     return reward, program
 
@@ -773,7 +842,7 @@ def run_search(env: LineLevelArcEnv,
     stats = {"max_depth": 0, 
              "nodes_expanded":0, 
              "solved_program": None,
-             "solved_by_rollout": False,
+             "solved_by_rollout": 0,
              "nodes_traversed": 0,
              "program_lengths": [],
             "avg_branching_factor": 0 }
@@ -801,7 +870,6 @@ def run_search(env: LineLevelArcEnv,
 
 
     root.expand(init_state, actions, action_probs, recorder, env.tokenizer)
-    #while (time.time() - start_time) < time_limit:
     while stats['nodes_expanded'] < time_limit:
         node = root
         search_path = [node]
@@ -842,19 +910,20 @@ def run_search(env: LineLevelArcEnv,
                     return True, stats
                 
             if len(actions ) != 0:
-                value, program = rollout(state, actions, enc_out, model, env, task) # rollout
+                value, program = rollout(state, actions, enc_out, model, env, task, prompt_ids) # rollout
                 if value == 1.0:
                     stats['extra'] = model.collect_stats()
-                    stats['solved_by_rollout'] = True
+                    stats['solved_by_rollout'] = 1
                     stats['solved_program'] = env.tokenizer.batch_decode(program)
                     return True, stats
 
                 
                 node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
-                decoded_programs = env.tokenizer.batch_decode(actions)
+                """decoded_programs = env.tokenizer.batch_decode(actions)
                 program_lengths = [len(prog.split("\n")) for prog in decoded_programs]
 
                 stats['program_lengths'].extend(program_lengths)
+                """
                 stats['nodes_expanded'] += 1
                 stats['avg_branching_factor'] += len(node.children)
 
@@ -887,6 +956,22 @@ def run_experiment( method: BaseMethod,
 
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
+
+    hex_values = [
+    "6150a2bd",
+    "68b16354",
+    "c8f0f002",
+    "c9e6f938",
+    "9ecd008a",
+    "ac0a08a4",
+    "d9fac9be",
+    "ff805c23",
+    "ded97339",
+    "4258a5f9"
+    ]
+
+
+    tasks = [task for task in tasks if task.task_key in hex_values]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -927,8 +1012,8 @@ def main():
     
 
     tau = 0.5
-    k = 4
-    limit = 301
+    k = 8
+    limit = 300
     
     
     if config['method'] == "MCTS": 
