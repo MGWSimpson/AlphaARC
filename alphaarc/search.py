@@ -425,6 +425,8 @@ class SplintMCTSMethod(BaseMethod):
                 leaves.extend(c)
                 logps.extend(lp)
 
+        
+        # TODO: want to print the size of the leaves and logps
         return leaves, logps
 
     
