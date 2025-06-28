@@ -157,7 +157,7 @@ class LineLevelArcEnv (BaseEnv):
         result = check_syntax(candidate_program)
 
         for i, st in enumerate(self.initial_states):
-            candidate_program = append_return(program)
+            candidate_program = program
             output = execute_candidate_program(program_string=candidate_program, program_input=st)
 
             if output == "Invalid Input": 

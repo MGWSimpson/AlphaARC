@@ -136,7 +136,7 @@ class GRPOTrainer:
     def _compute_reward(self, task, decoder_input_ids): 
         self.env.set_task(task)
         rewards = [self.env.evaluate_program(x, should_token_account=False)[0] for x in decoder_input_ids]
-        rewards = [x if x == 1.0 else -1 for x in rewards]
+        rewards = [x if x == 1.0 else 0 for x in rewards]
         # NOTE: changing this over to match how it was previously.
         
         return torch.tensor(rewards, dtype=torch.float, device='cuda')
@@ -273,11 +273,11 @@ class GRPOTrainer:
             input_ids, decoder_input_ids, rewards = self._generate_completions(batch, exploration_reward=False)
             loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
 
-
-          
-
             grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                # log metrics
+            
+            loss.backward()
+            self.optimizer.step()
+            self.optimizer.zero_grad()
             self.run.log({  "loss": loss.detach().cpu().item(),
                                 "percent_clipped": clp_mask.cpu().float().mean().item(),
                                 "advantage": adv.cpu().mean().item(),
@@ -285,9 +285,6 @@ class GRPOTrainer:
                                 "grad norm": grad_norm.item(),
                                 "avg reward": rwrd.cpu().mean().item()})
             
-            loss.backward()
-            self.optimizer.step()
-            self.optimizer.zero_grad()
             answers.extend([x for x in decoder_input_ids])  
 
         answer_tensor = pad_sequence(answers, batch_first=True)
@@ -304,18 +301,6 @@ class GRPOTrainer:
             loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
 
 
-            grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                # log metrics
-            self.run.log({  "loss": loss.detach().cpu().item(),
-                                "percent_clipped": clp_mask.cpu().float().mean().item(),
-                                "advantage": adv.cpu().mean().item(),
-                                "ptkl": ptkl.cpu().mean().item(),
-                                "grad norm": grad_norm.item(),
-                                "avg reward": rwrd.cpu().mean().item()})
-            
-            loss.backward()
-            
-
 
             # you would basically insert it here, for each of the decoder ids, you would relabel it
             for i in range(decoder_input_ids.shape[0]):
@@ -329,19 +314,9 @@ class GRPOTrainer:
                 loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
                 loss.backward()
                 
-                # self.grad_accumulate_cntr += 1
-
-                # if self.grad_accumulate_cntr % self.grad_accumulate_steps  == 0:
-                    # self.grad_accumulate_cntr = 0
 
                 grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                # log metrics
-                self.run.log({  "loss": loss.detach().cpu().item(),
-                                "percent_clipped": clp_mask.cpu().float().mean().item(),
-                                "advantage": adv.cpu().mean().item(),
-                                "ptkl": ptkl.cpu().mean().item(),
-                                "grad norm": grad_norm.item(),
-                                "avg reward": rwrd.cpu().mean().item()})
+                
 
             self.optimizer.step()  
             self.optimizer.zero_grad()
@@ -349,9 +324,6 @@ class GRPOTrainer:
             x = self.tokenizer( task[0].program_lines, add_special_tokens=False, return_tensors='pt')['input_ids']
             x = x.to('cuda')
             
-            with torch.inference_mode():
-                policy_logits =  compute_logits(input_ids, x, self.policy_model ).unsqueeze(0)
-                answer_log_probs = compute_per_token_log_probs(policy_logits, x)
 
 
             answers.extend([x for x in decoder_input_ids])  
