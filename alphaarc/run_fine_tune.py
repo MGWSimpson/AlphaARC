@@ -28,7 +28,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 from alphaarc.task import Task
@@ -89,7 +89,7 @@ def fine_tune(  model,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
-        lr_scheduler_type='constant',
+        # lr_scheduler_type='constant',
         logging_steps=3,
         eval_strategy="steps",
         eval_steps=10,

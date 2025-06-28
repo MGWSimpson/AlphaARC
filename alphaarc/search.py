@@ -29,7 +29,7 @@ import torch
 
 import pyvis
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 # -- tree viz --
@@ -270,7 +270,7 @@ class TGMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            num_beams=2)
+                            num_beams=1)
         
         return output.to('cpu')
     
@@ -377,7 +377,8 @@ class SplintMCTSMethod(BaseMethod):
         max_depth=5):
 
 
-        if depth > max_depth:
+        
+        if state.shape[-1] > 512 or depth > max_depth:
             return [], []
         
 
@@ -399,7 +400,7 @@ class SplintMCTSMethod(BaseMethod):
 
 
         # zip them up 
-        pairs = zip(priors.tolist(), comps)
+        pairs = zip(priors, comps)
         leaves, logps = [], []
 
 
@@ -426,7 +427,6 @@ class SplintMCTSMethod(BaseMethod):
                 logps.extend(lp)
 
         
-        # TODO: want to print the size of the leaves and logps
 
 
         return leaves, logps
@@ -661,11 +661,12 @@ class SplintMCTSMethod(BaseMethod):
         if len(completions) < self.k:
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-            completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+            # completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
 
-            log_ps = compute_prior(self.model, input_ids  , completions_batched)
-       
+            # log_ps = compute_prior(self.model, input_ids  , completions_batched)
+
+            return completions, [0 for x in completions]
         else:
             # completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions, beam_width=self.k, top_n=self.k)
             
@@ -673,14 +674,12 @@ class SplintMCTSMethod(BaseMethod):
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
             
-            completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
-            log_ps = compute_prior(self.model, input_ids  , completions_batched)
-
+            # completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+            #
+            #  log_ps = compute_prior(self.model, input_ids  , completions_batched)
+            return completions, [0 for x in completions]
         
 
-        self.n_forward_calls += len(completions)
-        #priors = torch.softmax(log_ps, dim=0)  
-        return completions, log_ps
 
 
 
@@ -707,13 +706,22 @@ class SplintMCTSMethod(BaseMethod):
             self.curr_nb_streak  += 1    
             comps, log_ps =  self._dfs_completer_trusted(state, 0, enc_out, task, input_ids) #self._handle_non_entropy_spike(state, enc_out, input_ids, task)#
 
-            print(len(comps))
+
             for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
                     return comps, log_ps
             
 
-            probs = torch.tensor(log_ps)
+            if len(comps) ==0:
+                return [], []
+            completions_batched = pad_sequence(comps, batch_first=True, padding_value =0, padding_side='right')
+
+            log_ps = compute_prior(self.model, input_ids, completions_batched)
+            self.n_forward_calls += log_ps.shape[-1]
+            probs = torch.softmax(log_ps, dim=0)  
+
+            #
+
             probs = torch.softmax(probs, dim=0) 
 
 
@@ -738,7 +746,7 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            num_beams=5)
+                            num_beams=1)
         
         return output.to('cpu')
     
@@ -819,9 +827,7 @@ def rollout( state,
             task,
             prompt_ids): 
 
-    # need to make a random choice of actions    
-    action = random.choice(actions)
-    program = model.rollout(prompt_ids, action, task)
+    program = model.rollout(prompt_ids, state, task)
     reward, terminated = env.evaluate_program(program.squeeze(), should_token_account=False)
     return reward, program
 
@@ -862,7 +868,6 @@ def run_search(env: LineLevelArcEnv,
         enc_out = None
     
 
-    start_time = time.time()
     root = Node(None, recorder,  0)
 
     init_state = torch.tensor([0,1])
@@ -916,7 +921,7 @@ def run_search(env: LineLevelArcEnv,
                     return True, stats
                 
             if len(actions ) != 0:
-                value, program = rollout(state, actions, enc_out, model, env, task, prompt_ids) # rollout
+                value, program = rollout(next_state, actions, enc_out, model, env, task, prompt_ids) # rollout
                 if value == 1.0:
                     stats['extra'] = model.collect_stats()
                     stats['solved_by_rollout'] = 1
@@ -935,11 +940,7 @@ def run_search(env: LineLevelArcEnv,
 
                 if value == -1.0:
                     value = 0
-            else:
-                # index = parent.children.index(node)
-                # parent.child_actions.pop(index)
-                # parent.children.pop(index)
-                pass
+            
 
             
         backpropagate(search_path, value)
@@ -975,6 +976,7 @@ def run_experiment( method: BaseMethod,
     "ded97339",
     "4258a5f9"
     ]
+
 
 
     tasks = [task for task in tasks if task.task_key in hex_values]
@@ -1018,8 +1020,8 @@ def main():
     
 
     tau = 0.5
-    k = 8
-    limit = 300
+    k = 4
+    limit = 301
     
     
     if config['method'] == "MCTS": 
