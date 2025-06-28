@@ -28,8 +28,6 @@ from typing import List, Tuple
 import torch
 
 import pyvis
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 # -- tree viz --
@@ -374,7 +372,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=5):
+        max_depth=3):
 
 
         
@@ -384,6 +382,7 @@ class SplintMCTSMethod(BaseMethod):
 
         reward, terminated = self.env.evaluate_program(state.squeeze(), should_token_account=False)
         if reward == 1.0:
+            print("HEE")
             return [True], [True]
 
 
@@ -531,6 +530,7 @@ class SplintMCTSMethod(BaseMethod):
             else:
                 next_tokens.append(None)  # In case the completion is exactly the prefix
 
+
         # Prepare decoder input: BOS + common prefix
         dec_in = torch.tensor([bos.tolist() + prefix], device=device)
 
@@ -550,6 +550,7 @@ class SplintMCTSMethod(BaseMethod):
             scores.append((comp, score))
 
             # Sort and return top-k
+        
         top = sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
         comps, log_ps = zip(*top) if top else ([], [])
         return list(comps), list(log_ps)
@@ -658,27 +659,33 @@ class SplintMCTSMethod(BaseMethod):
 
 
 
-        if len(completions) < self.k:
+        """"if len(completions) < self.k:
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-            # completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
         
-
-            # log_ps = compute_prior(self.model, input_ids  , completions_batched)
-
             return completions, [0 for x in completions]
         else:
-            # completions, log_ps = self._beam_search_on_completions(self.model, self.tok, enc_out, completions, beam_width=self.k, top_n=self.k)
             
-            completions, log_ps = self._score_first_token_only(self.model, self.tok, enc_out, self.k, completions)
+            completions, log_ps = self._score_first_token_only(self.model, self.tok, enc_out, self.k,completions)
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
             
-            # completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
-            #
-            #  log_ps = compute_prior(self.model, input_ids  , completions_batched)
             return completions, [0 for x in completions]
+        """
+
+        completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         
+        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
+        
+        
+        log_ps = compute_prior(self.model, input_ids  , completions_batched)
+        topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
+        completions = [completions[i.item()] for i in topk_indices]
+
+        log_ps = topk_values
+
+        return completions, log_ps
 
 
 
@@ -965,17 +972,19 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    "6150a2bd",
-    "68b16354",
-    "c8f0f002",
-    "c9e6f938",
+    # "6150a2bd",
+    # "68b16354",
+    # "c8f0f002",
+    # "c9e6f938",
     "9ecd008a",
-    "ac0a08a4",
+    # "ac0a08a4",
     "d9fac9be",
-    "ff805c23",
-    "ded97339",
-    "4258a5f9"
+    # "ff805c23",
+    # "ded97339",
+    "4258a5f9",
+    "6d75e8bb"
     ]
+
 
 
 
@@ -996,6 +1005,8 @@ def run_experiment( method: BaseMethod,
         metrics.append(track_task_metrics(task.task_key, solved, start_time, extra=stats))
         save_metrics_to_file(metrics, output_path)
 
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def main(): 
@@ -1021,7 +1032,7 @@ def main():
 
     tau = 0.5
     k = 4
-    limit = 301
+    limit = 300
     
     
     if config['method'] == "MCTS": 
