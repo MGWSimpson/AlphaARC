@@ -427,6 +427,8 @@ class SplintMCTSMethod(BaseMethod):
 
         
         # TODO: want to print the size of the leaves and logps
+
+
         return leaves, logps
 
     
@@ -655,6 +657,7 @@ class SplintMCTSMethod(BaseMethod):
  
 
 
+
         if len(completions) < self.k:
             completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
@@ -673,7 +676,7 @@ class SplintMCTSMethod(BaseMethod):
             completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
             log_ps = compute_prior(self.model, input_ids  , completions_batched)
 
-            
+        
 
         self.n_forward_calls += len(completions)
         #priors = torch.softmax(log_ps, dim=0)  
@@ -704,6 +707,7 @@ class SplintMCTSMethod(BaseMethod):
             self.curr_nb_streak  += 1    
             comps, log_ps =  self._dfs_completer_trusted(state, 0, enc_out, task, input_ids) #self._handle_non_entropy_spike(state, enc_out, input_ids, task)#
 
+            print(len(comps))
             for comp in comps: # check to see if the answer is in the top.
                 if comp is True:
                     return comps, log_ps
