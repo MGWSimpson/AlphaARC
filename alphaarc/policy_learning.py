@@ -24,8 +24,7 @@ from alphaarc.policy.tokenize import tokenize_task
 
 from alphaarc.utils import save_answer, prepare_output_dir, save_stats_to_file, save_model
 
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+import transformers
 
 
 # --helpers --
@@ -90,7 +89,9 @@ def run_experiment(n_meta_epochs,
      
     solved_task_ids = []
     full_curriculum = curriculum.generate_curriculum()
+    
     full_curriculum = full_curriculum
+
     answers_dict = defaultdict(list)
     epoch_stats = []
 
@@ -110,15 +111,31 @@ def run_experiment(n_meta_epochs,
 
         epoch_stats.append({
             "epoch": epoch,
-            "solved_this_epoch": solved_this_epoch,
-            "cumulative_solved": set(solved_task_ids),
+            "solved_this_epoch": list(solved_this_epoch),
+            "cumulative_solved": list(set(solved_task_ids)),
             "n_solved_this_epoch": len(solved_this_epoch), 
             "n_cumulative_solved": len(set(solved_task_ids))
         })
         save_stats_to_file(epoch_stats, output_dir)
 
-            
-        
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    transformers.set_seed(seed)
+
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
+
 def main(): 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sparse_grpo.yaml')
@@ -188,6 +205,8 @@ def main():
     prepare_output_dir(output_dir)
 
     pl.seed_everything(args.seed)
+    seed_everything(args.seed)
+
     run_experiment(n_meta_epochs=args.n_epochs,
                    curriculum=curriculum,
                    env=env,
