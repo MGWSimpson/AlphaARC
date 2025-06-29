@@ -268,6 +268,7 @@ class TGMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
+                            max_new_tokens=64,
                             num_beams=1)
         
         return output.to('cpu')
@@ -372,7 +373,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=3):
+        max_depth=5):
 
 
         
@@ -655,25 +656,7 @@ class SplintMCTSMethod(BaseMethod):
 
                 
 
- 
-
-
-
-        """"if len(completions) < self.k:
-            completions = [torch.cat((torch.tensor([0, 1]), 
-                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-        
-            return completions, [0 for x in completions]
-        else:
-            
-            completions, log_ps = self._score_first_token_only(self.model, self.tok, enc_out, self.k,completions)
-            completions = [torch.cat((torch.tensor([0, 1]), 
-                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-            
-            return completions, [0 for x in completions]
-        """
-
-        completions = [torch.cat((torch.tensor([0, 1]), 
+        """completions = [torch.cat((torch.tensor([0, 1]), 
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
         
         completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
@@ -685,7 +668,25 @@ class SplintMCTSMethod(BaseMethod):
 
         log_ps = topk_values
 
-        return completions, log_ps
+        return completions, log_ps"""
+
+
+
+        if len(completions) < self.k:
+            completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+        
+            return completions, [0 for x in completions]
+        else:
+            
+            completions, log_ps = self._score_first_token_only(self.model, self.tok, enc_out, self.k,completions)
+            # completions, log_ps = self._beam_search_on_completions(self.model, self.tok,  enc_out, completions, beam_width=self.k, top_n=self.k)
+            completions = [torch.cat((torch.tensor([0, 1]), 
+                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
+            
+            return completions, [0 for x in completions]
+
+      
 
 
 
@@ -753,6 +754,7 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
+                            max_new_tokens=128,
                             num_beams=1)
         
         return output.to('cpu')
@@ -765,9 +767,9 @@ class SplintMCTSMethod(BaseMethod):
         return {
             "n_entropy_spikes"     : self.n_entropy_spikes,
             "n_non_entropy_spikes" : self.n_non_entropy_spikes,
-            "max_non_bp_streak"    : max(self.nb_streaks),
-            "avg_non_bp_streak"    : statistics.mean(self.nb_streaks),
-            "median_non_bp_streak" : statistics.median(self.nb_streaks),
+            "max_non_bp_streak"    : 0, #max(self.nb_streaks),
+            "avg_non_bp_streak"    : 0, #statistics.mean(self.nb_streaks),
+            "median_non_bp_streak" : 0, #statistics.median(self.nb_streaks),
             "n_forward_calls" : self.n_forward_calls
         }
     
@@ -972,17 +974,17 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    # "6150a2bd",
-    # "68b16354",
-    # "c8f0f002",
-    # "c9e6f938",
-    "9ecd008a",
-    # "ac0a08a4",
-    "d9fac9be",
-    # "ff805c23",
-    # "ded97339",
-    "4258a5f9",
-    "6d75e8bb"
+    #"6150a2bd",
+    #"68b16354",
+    #"c8f0f002",
+    #"c9e6f938",
+    #"9ecd008a",
+    #"ac0a08a4",
+    #"d9fac9be",
+    #"ff805c23",
+    "ded97339",
+    #"4258a5f9",
+    #"6d75e8bb"
     ]
 
 
@@ -1006,7 +1008,7 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def main(): 
@@ -1030,8 +1032,8 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.5
-    k = 4
+    tau = 0.2
+    k = 8
     limit = 300
     
     
