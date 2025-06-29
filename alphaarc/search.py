@@ -383,7 +383,6 @@ class SplintMCTSMethod(BaseMethod):
 
         reward, terminated = self.env.evaluate_program(state.squeeze(), should_token_account=False)
         if reward == 1.0:
-            print("HEE")
             return [True], [True]
 
 
@@ -656,21 +655,6 @@ class SplintMCTSMethod(BaseMethod):
 
                 
 
-        """completions = [torch.cat((torch.tensor([0, 1]), 
-                                  self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
-        
-        completions_batched = pad_sequence(completions, batch_first=True, padding_value =0, padding_side='right')
-        
-        
-        log_ps = compute_prior(self.model, input_ids  , completions_batched)
-        topk_values, topk_indices = torch.topk(log_ps, k=min(self.k, log_ps.shape[-1]), dim=-1)  # Get top-k log-probabilities and their indices
-        completions = [completions[i.item()] for i in topk_indices]
-
-        log_ps = topk_values
-
-        return completions, log_ps"""
-
-
 
         if len(completions) < self.k:
             completions = [torch.cat((torch.tensor([0, 1]), 
@@ -685,7 +669,10 @@ class SplintMCTSMethod(BaseMethod):
                                   self.tok(x, add_special_tokens=False, return_tensors='pt')['input_ids'].view(-1))) for x in completions]
             
             return completions, [0 for x in completions]
+       
 
+
+   
       
 
 
@@ -754,8 +741,8 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            max_new_tokens=128,
-                            num_beams=1)
+                            max_new_tokens=64,
+                            num_beams=2)
         
         return output.to('cpu')
     
@@ -974,23 +961,23 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    #"6150a2bd",
-    #"68b16354",
-    #"c8f0f002",
+    # "6150a2bd",
+    # "68b16354",
+    # "c8f0f002",
     #"c9e6f938",
-    #"9ecd008a",
+    # "9ecd008a",
     #"ac0a08a4",
-    #"d9fac9be",
-    #"ff805c23",
+    "d9fac9be",
+    # "ff805c23",
     "ded97339",
-    #"4258a5f9",
-    #"6d75e8bb"
+    "4258a5f9",
+    "6d75e8bb"
     ]
 
 
 
 
-    # tasks = [task for task in tasks if task.task_key in hex_values]
+    tasks = [task for task in tasks if task.task_key in hex_values]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -1008,7 +995,7 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 def main(): 
@@ -1032,8 +1019,8 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.1
-    k = 8
+    tau = 0.5
+    k = 4
     limit = 300
     
     
@@ -1047,7 +1034,7 @@ def main():
         raise ValueError("Method does not exist!")
 
      
-    output_dir =  f"results/final-test-{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/search/{config['method'].lower()}-{k}-{tau}-{limit}"
     prepare_output_dir(output_dir)
     pl.seed_everything(0)
 

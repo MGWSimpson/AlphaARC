@@ -28,7 +28,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 from alphaarc.task import Task
@@ -55,7 +55,7 @@ class FineTuneConfig:
     eval_batch_size: int = 2 
     lr: float =5e-5
     output_dir: str = './finetune/'
-    num_epochs: int = 50
+    num_epochs: int = 10
 
 
 
@@ -89,12 +89,11 @@ def fine_tune(  model,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
-        # lr_scheduler_type='constant',
-        logging_steps=3,
+        logging_steps=100,
         eval_strategy="steps",
-        eval_steps=10,
-        save_steps=10,
-        gradient_accumulation_steps=64,
+        eval_steps=500,
+        save_steps=500,
+        save_total_limit=5,
         bf16=True, 
         report_to=["wandb"],  
     )
@@ -315,7 +314,9 @@ def main(config):
     # computed from task splitter
     dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
                     
-    train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
+    # train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
+    train_tasks = tasks
+
     train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
@@ -323,7 +324,7 @@ def main(config):
     model.to(config.device)
 
 
-    train_ds, eval_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer), construct_ds(dev_tasks, tokenizer)
+    train_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(dev_tasks, tokenizer)
 
 
     fine_tune(  model, 
@@ -333,7 +334,7 @@ def main(config):
                 config.eval_batch_size,
                 train_ds,
                 dev_ds,
-                eval_ds, 
+                dev_ds, 
                 config.lr,
                 config.output_dir)
 
