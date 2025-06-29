@@ -961,17 +961,17 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    # "6150a2bd",
-    # "68b16354",
-    # "c8f0f002",
-    #"c9e6f938",
-    # "9ecd008a",
-    #"ac0a08a4",
+    "6150a2bd",
+    "68b16354",
+    "c8f0f002",
+    "c9e6f938",
+    "9ecd008a",
+    "ac0a08a4",
     "d9fac9be",
-    # "ff805c23",
-    # "ded97339",
-    # "4258a5f9",
-    # "6d75e8bb"
+    "ff805c23",
+    "ded97339",
+    "4258a5f9",
+    "6d75e8bb"
     ]
 
 
@@ -1001,16 +1001,26 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 def main(): 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+
+
+    parser.add_argument('--k', type=int, default=8)
+    parser.add_argument('--rho', type=float, default=0.1)
+    parser.add_argument('--limit', type=int, default=300)
         
 
     args = parser.parse_args()
     config = load_config(args.config_path)
     curriculum = build_curriculum(config['training_curriculum_config'])
+    training_name = config['training_curriculum_config']['params']['dir_paths'][0].split("/")[1]
+
+
     config = load_config(args.config_path)
     
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
     
+    if training_name != "evaluation":
+        task_key_split = load_key_split('data/split_keys.json')
+        curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+
 
     model = T5ForConditionalGeneration.from_pretrained(config['model_path'])
     model.to('cuda')
@@ -1019,9 +1029,9 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.1
-    k = 8
-    limit = 300
+    tau = args.rho
+    k = args.k
+    limit = args.limit
     
     
     if config['method'] == "MCTS": 

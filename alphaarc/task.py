@@ -23,7 +23,8 @@ colors = [(0, "blue"), (0.35, "blue"), (0.5, "green"), (0.75, "yellow"), (1, "re
 n_bins = 100  # Discretizes the interpolation into bins
 cmap_name = "custom_jet"
 # Create the colormap
-cm = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+#
+# cm = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
 
 
 def program_to_program_lines(program_string):
@@ -169,6 +170,7 @@ class Task:
     def display_task(self):
         num_training_examples = len(self.training_examples)
         num_test_examples = len(self.test_examples)
+        cm = plt.get_cmap('tab10') 
         fig, axes = plt.subplots(
             2,
             2 * max(num_training_examples, num_test_examples),

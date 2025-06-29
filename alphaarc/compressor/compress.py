@@ -189,13 +189,11 @@ def create_left_task(line, line_index, program_lines, task):
     
 
     left_task = Task(left_program_string, left_training_examples, left_test_examples, task.task_key+ str(line_index) + "L", parent_key=task.task_key )
-    
-
     return [left_task]
 
 
 
-def create_right_task(line, line_index, program_lines, task): 
+def create_right_task(line, line_index, program_lines, task, task_key): 
     new_training_targets = []
     new_test_targets = []
     
@@ -222,9 +220,8 @@ def create_right_task(line, line_index, program_lines, task):
     for i, inp in enumerate([x['output'] for x in task.test_examples]):
         right_test_example.append(create_task_dict(inp, new_test_targets[i]))
     
-
-    right_task = Task(right_program_string, right_training_example, right_test_example, task.task_key+ str(line_index) + "R", parent_key=task.task_key )
-
+    
+    right_task = Task(right_program_string, right_training_example, right_test_example, task_key+ str(line_index) + "R", parent_key=task_key )
     return [right_task]
 
 
@@ -254,7 +251,7 @@ def compress(program_lines: list, task: Task):
                     left_task = create_left_task(line, i, program_lines, task)
                     new_tasks.extend(left_task )
                     if right_program_can_be_created(line, i, program_lines) and len(left_task)> 0:
-                        new_tasks.extend(create_right_task(line, i, program_lines, left_task[0]))
+                        new_tasks.extend(create_right_task(line, i, program_lines, left_task[0], task_key=task.task_key))
                 
 
     return new_tasks
@@ -321,7 +318,7 @@ def load_train_tasks(dirs, files, ):
 
 def main():
     
-    tasks =  load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
+    tasks =  load_train_tasks(dirs=[ 'data/training'], files=[]) # files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
 
 
     task_queue = UniqueTaskQueue()              # queue for new tasks
@@ -335,8 +332,13 @@ def main():
         task = task_queue.get()
         program_lines = task.program_lines.split("\n")
         compressed_tasks = compress(program_lines, task)
+        
+
+
+        compressed_tasks[0].display_task()
+        exit()
         for new_task in compressed_tasks:
-            if new_task in task_queue.seen_programs:
+            if new_task not in task_queue.seen_programs:
                 processed_tasks.append(new_task)
             
             task_queue.put(new_task)
