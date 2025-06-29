@@ -110,8 +110,10 @@ def run_experiment(n_meta_epochs,
 
         epoch_stats.append({
             "epoch": epoch,
-            "solved_this_epoch": len(solved_this_epoch),
-            "cumulative_solved": len(set(solved_task_ids)),
+            "solved_this_epoch": solved_this_epoch,
+            "cumulative_solved": set(solved_task_ids),
+            "n_solved_this_epoch": len(solved_this_epoch), 
+            "n_cumulative_solved": len(set(solved_task_ids))
         })
         save_stats_to_file(epoch_stats, output_dir)
 
@@ -120,16 +122,26 @@ def run_experiment(n_meta_epochs,
 def main(): 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sparse_grpo.yaml')
+    parser.add_argument('--seed', type=int, default=0 )
+    parser.add_argument('--n_epochs', type=int, default=50)
+    parser.add_argument("--reward_shaping", type=bool, default=False)
+
     args = parser.parse_args()
         
     config = load_config(args.config_path)
 
     replay_buffer = ReplayBuffer()
     curriculum = build_curriculum(config['training_curriculum_config'])
+
+    training_name = config['training_curriculum_config']['params']['dir_paths'][0].split("/")[1]
+
     config = load_config(args.config_path)
-    
-    task_key_split = load_key_split('data/split_keys.json')
-    curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+
+
+    if training_name != "evaluation":
+        task_key_split = load_key_split('data/split_keys.json')
+        curriculum.prune_tasks_not_in_list(tasks_to_keep=task_key_split['val'])
+
     env = build_env(config['env_config'])
     
     model = T5ForConditionalGeneration.from_pretrained(config['model_path']).to('cuda')
@@ -146,14 +158,16 @@ def main():
                                     tokenizer,
                                     env,
                                     internal_mode=False,
-                                    sparse_variant=False)
+                                    sparse_variant=False,
+                                    reward_shaping_active=args.reward_shaping)
     elif method == "SPARSEGRPO": 
         grpo_trainer = GRPOTrainer(ref_model,
                                    model,
                                    tokenizer, 
                                    env,
                                    sparse_variant=True,
-                                   internal_mode=False)    
+                                   internal_mode=False,
+                                   reward_shaping_active=args.reward_shaping)    
     
     elif method == "INTERNALGRPO": 
         grpo_trainer = GRPOTrainer(ref_model,
@@ -161,24 +175,27 @@ def main():
                                    tokenizer,
                                    env, 
                                    sparse_variant=False,
-                                   internal_mode=True)    
+                                   internal_mode=True,
+                                   reward_shaping_active=args.reward_shaping)    
     elif method == "SAMPLE":
         grpo_trainer = None 
     else:
         raise ValueError('Specified method does not exist')
     
     
-    output_dir =  f"results/eval-test-{method.lower()}"
+    # fix the output dir
+    output_dir =  f"results/{training_name}-{method.lower()}-{args.seed}-{args.reward_shaping}"
     prepare_output_dir(output_dir)
 
-    pl.seed_everything(0)
-    run_experiment(n_meta_epochs=25,
+    pl.seed_everything(args.seed)
+    run_experiment(n_meta_epochs=args.n_epochs,
                    curriculum=curriculum,
                    env=env,
                    replay_buffer=replay_buffer,
                    tokenizer=tokenizer,
                    model=model,
                    grpo_trainer=grpo_trainer,
+                   save_model_every=  args.n_epochs / 5 , # make 5 checkpoints
                    output_dir=output_dir)
 
 

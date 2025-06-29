@@ -86,7 +86,8 @@ class GRPOTrainer:
                  beta= 0.04,
                  clip_param = 0.2,
                  sparse_variant=False,
-                 internal_mode=False): 
+                 internal_mode=False,
+                 reward_shaping_active=False): 
         
         self.tokenizer = tokenizer
         self.optimizer = AdamW(policy_model.parameters(), lr=lr)
@@ -113,9 +114,10 @@ class GRPOTrainer:
 
 
         self.sparse_variant = sparse_variant
-
-
         self.internal_mode = internal_mode
+
+
+        self.reward_shaping_active = reward_shaping_active
 
         self.run = wandb.init(
             project="alphaarc")
@@ -136,9 +138,11 @@ class GRPOTrainer:
     def _compute_reward(self, task, decoder_input_ids): 
         self.env.set_task(task)
         rewards = [self.env.evaluate_program(x, should_token_account=False)[0] for x in decoder_input_ids]
-        rewards = [x if x == 1.0 else 0 for x in rewards]
-        # NOTE: changing this over to match how it was previously.
         
+        if not self.reward_shaping_active:
+            rewards = [x if x == 1.0 else 0 for x in rewards]
+        
+
         return torch.tensor(rewards, dtype=torch.float, device='cuda')
         
 

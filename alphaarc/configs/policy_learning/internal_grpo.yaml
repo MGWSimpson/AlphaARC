@@ -1,5 +1,5 @@
 method: "INTERNALGRPO"
-model_path: '/home/mgws3/AlphaARC/finetune-checkpoint/eval-checkpoint'
+model_path: '/home/mgws3/AlphaARC/finetune-checkpoint/dev-checkpoint'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
@@ -10,7 +10,7 @@ num_return_sequences: 8
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/evaluation]
+    dir_paths: [ data/training]
     
 
 evaluation_curriculum_config:
