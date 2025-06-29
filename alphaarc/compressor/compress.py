@@ -318,7 +318,7 @@ def load_train_tasks(dirs, files, ):
 
 def main():
     
-    tasks =  load_train_tasks(dirs=[ 'data/training'], files=[]) # files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
+    tasks =  load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
 
 
     task_queue = UniqueTaskQueue()              # queue for new tasks
@@ -335,8 +335,6 @@ def main():
         
 
 
-        compressed_tasks[0].display_task()
-        exit()
         for new_task in compressed_tasks:
             if new_task not in task_queue.seen_programs:
                 processed_tasks.append(new_task)

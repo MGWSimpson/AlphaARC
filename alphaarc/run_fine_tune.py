@@ -28,7 +28,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 
 from alphaarc.task import Task
@@ -55,7 +55,7 @@ class FineTuneConfig:
     eval_batch_size: int = 8
     lr: float =2e-5
     output_dir: str = './finetune/'
-    num_epochs: int = 30
+    num_epochs: int = 15
 
 
 
@@ -95,7 +95,6 @@ def fine_tune(  model,
         eval_steps=500,
         save_steps=500,
         gradient_accumulation_steps=4,
-        save_total_limit=5,
         bf16=True, 
         report_to=["wandb"],  
     )

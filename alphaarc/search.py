@@ -960,7 +960,7 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
-    hex_values = [
+    """hex_values = [
     "6150a2bd",
     "68b16354",
     "c8f0f002",
@@ -972,12 +972,12 @@ def run_experiment( method: BaseMethod,
     "ded97339",
     "4258a5f9",
     "6d75e8bb"
-    ]
+    ]"""
 
 
 
 
-    tasks = [task for task in tasks if task.task_key in hex_values]
+    # tasks = [task for task in tasks if task.task_key in hex_values]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -995,12 +995,12 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
 
 
     parser.add_argument('--k', type=int, default=8)
