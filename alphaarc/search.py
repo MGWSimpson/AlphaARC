@@ -990,7 +990,7 @@ def run_experiment( method: BaseMethod,
 
 
 
-    tasks = [task for task in tasks if task.task_key in hex_values]
+    # tasks = [task for task in tasks if task.task_key in hex_values]
 
     for task in tasks:
         torch.cuda.empty_cache()
@@ -1032,7 +1032,7 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.2
+    tau = 0.1
     k = 8
     limit = 300
     
