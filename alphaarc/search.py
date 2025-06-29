@@ -373,7 +373,7 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=5):
+        max_depth=15):
 
 
         
@@ -742,7 +742,7 @@ class SplintMCTSMethod(BaseMethod):
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
                             max_new_tokens=64,
-                            num_beams=2)
+                            num_beams=1)
         
         return output.to('cpu')
     
@@ -969,9 +969,9 @@ def run_experiment( method: BaseMethod,
     #"ac0a08a4",
     "d9fac9be",
     # "ff805c23",
-    "ded97339",
-    "4258a5f9",
-    "6d75e8bb"
+    # "ded97339",
+    # "4258a5f9",
+    # "6d75e8bb"
     ]
 
 
@@ -1000,7 +1000,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
         
 
     args = parser.parse_args()
@@ -1019,8 +1019,8 @@ def main():
     completer = ProgramCompleter(sampler)
     
 
-    tau = 0.5
-    k = 4
+    tau = 0.1
+    k = 8
     limit = 300
     
     
