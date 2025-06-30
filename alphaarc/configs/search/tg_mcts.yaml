@@ -1,5 +1,5 @@
 method: 'TGMCTS'
-model_path: '/home/mgws3/AlphaARC/finetune/2025-06-30_11-27-29/checkpoint-4500'
+model_path: '/home/mgws3/AlphaARC/finetune/2025-06-30_13-11-52/checkpoint-16470'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1

@@ -27,7 +27,7 @@ timestamp_fmt = "%Y-%m-%d_%H-%M-%S"
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 from alphaarc.task import Task
@@ -48,8 +48,8 @@ from transformers import (
 class FineTuneConfig: 
     model_path: str = 'Salesforce/codet5p-220m'
     device: str = 'cuda'
-    train_batch_size: int = 8
-    eval_batch_size: int = 2 
+    train_batch_size: int = 16
+    eval_batch_size: int = 8 
     lr: float =5e-5
     output_dir: str = './finetune/'
     num_epochs: int = 10
@@ -85,8 +85,8 @@ def fine_tune(  model,
         learning_rate=lr,
         logging_steps=100,
         eval_strategy="steps",
-        # gradient_accumulation_steps=2,
-        eval_steps=500,
+        gradient_accumulation_steps=2,
+        eval_steps=100,
         save_steps=500,
         bf16=True, 
         report_to=["wandb"],  

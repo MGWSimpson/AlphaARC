@@ -26,6 +26,7 @@ import json
 from collections import defaultdict
 from typing import List, Tuple
 import torch
+import transformers
 
 import pyvis
 
@@ -268,8 +269,9 @@ class TGMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            max_new_tokens=64,
-                            num_beams=1)
+                            early_stopping=True,
+                            num_beams=1,
+                            max_length=512,)
         
         return output.to('cpu')
     
@@ -373,10 +375,9 @@ class SplintMCTSMethod(BaseMethod):
         enc_out,
         task, input_ids,
         depth=0, 
-        max_depth=15):
+        max_depth=25):
 
 
-        
         if state.shape[-1] > 512 or depth > max_depth:
             return [], []
         
@@ -503,10 +504,8 @@ class SplintMCTSMethod(BaseMethod):
 
         bos = torch.tensor([0, 1], device=device)  # BOS tokens used in decoding
 
-        # Tokenize completions without special tokens
         comp_ids = [tok(c, add_special_tokens=False).input_ids for c in completions]
 
-        # Compute longest common prefix
         def longest_common_prefix(seqs: List[List[int]]) -> List[int]:
             if not seqs:
                 return []
@@ -709,15 +708,14 @@ class SplintMCTSMethod(BaseMethod):
 
             if len(comps) ==0:
                 return [], []
+            
+
             completions_batched = pad_sequence(comps, batch_first=True, padding_value =0, padding_side='right')
 
             log_ps = compute_prior(self.model, input_ids, completions_batched)
             self.n_forward_calls += log_ps.shape[-1]
             probs = torch.softmax(log_ps, dim=0)  
 
-            #
-
-            probs = torch.softmax(probs, dim=0) 
 
 
 
@@ -741,8 +739,10 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            max_new_tokens=64,
-                            num_beams=1)
+                            do_sample=True,
+                            max_length=512,)
+        
+        
         
         return output.to('cpu')
     
@@ -918,6 +918,10 @@ def run_search(env: LineLevelArcEnv,
                 
             if len(actions ) != 0:
                 value, program = rollout(next_state, actions, enc_out, model, env, task, prompt_ids) # rollout
+                node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
+                stats['nodes_expanded'] += 1
+                stats['avg_branching_factor'] += len(node.children)
+                
                 if value == 1.0:
                     stats['extra'] = model.collect_stats()
                     stats['solved_by_rollout'] = 1
@@ -925,14 +929,7 @@ def run_search(env: LineLevelArcEnv,
                     return True, stats
 
                 
-                node.expand(next_state, actions, action_probs, recorder, env.tokenizer) # check in here.
-                """decoded_programs = env.tokenizer.batch_decode(actions)
-                program_lengths = [len(prog.split("\n")) for prog in decoded_programs]
-
-                stats['program_lengths'].extend(program_lengths)
-                """
-                stats['nodes_expanded'] += 1
-                stats['avg_branching_factor'] += len(node.children)
+               
 
                 if value == -1.0:
                     value = 0
@@ -961,16 +958,16 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    #"6150a2bd",
-    #"68b16354",
-    #"c8f0f002",
-    #"c9e6f938",
-    #"9ecd008a",
+    "6150a2bd",
+    "68b16354",
+    "c8f0f002",
+    "c9e6f938",
+    "9ecd008a",
     "ac0a08a4",
-    #"d9fac9be",
+    "d9fac9be",
     "ff805c23",
     "ded97339",
-    #"4258a5f9",
+    "4258a5f9",
     "6d75e8bb"
     ]
 
@@ -996,7 +993,18 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
+    transformers.set_seed(seed)
+    print(f"set seed to {seed}")
+    
 
 
 def main(): 
@@ -1005,11 +1013,17 @@ def main():
 
 
     parser.add_argument('--k', type=int, default=8)
-    parser.add_argument('--rho', type=float, default=0.1)
-    parser.add_argument('--limit', type=int, default=300)
-        
+    parser.add_argument('--rho', type=float, default=0.5)
+    parser.add_argument('--limit', type=int, default=320)
+    parser.add_argument('--seed', type=int, default=0)
+
 
     args = parser.parse_args()
+    seed = args.seed
+
+    pl.seed_everything(args.seed)
+    seed_everything(args.seed)
+    
     config = load_config(args.config_path)
     curriculum = build_curriculum(config['training_curriculum_config'])
     training_name = config['training_curriculum_config']['params']['dir_paths'][0].split("/")[1]
@@ -1045,9 +1059,8 @@ def main():
         raise ValueError("Method does not exist!")
 
      
-    output_dir =  f"results/search/{config['method'].lower()}-{k}-{tau}-{limit}"
+    output_dir =  f"results/search/{config['method'].lower()}-{k}-{tau}-{limit}-{seed}"
     prepare_output_dir(output_dir)
-    pl.seed_everything(0)
 
 
     start_time = time.time()

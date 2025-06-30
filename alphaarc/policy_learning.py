@@ -23,6 +23,7 @@ import shutil
 from alphaarc.policy.tokenize import tokenize_task
 
 from alphaarc.utils import save_answer, prepare_output_dir, save_stats_to_file, save_model
+import time
 
 import transformers
 
@@ -42,7 +43,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
             reward, terminated = env.evaluate_program(program, should_token_account=False)
             
             if reward == 1:
-                answer_dict[task.task_key].append(tokenizer.decode(program, skip_special_tokens=True, clean_up_tokenization_spaces=True))
+                answer_dict[task.task_key].append(i)
                 save_answer(answer_dict)
                 return True
 
@@ -52,7 +53,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
 def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=8 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length,
-                                num_return_sequences=num_return_sequences,
+                                num_return_sequences=24,
                                 do_sample=True)
 
     answers = answers.squeeze(0)
@@ -92,6 +93,10 @@ def run_experiment(n_meta_epochs,
     
     full_curriculum = full_curriculum
 
+    
+    
+
+
     answers_dict = defaultdict(list)
     epoch_stats = []
 
@@ -114,7 +119,8 @@ def run_experiment(n_meta_epochs,
             "solved_this_epoch": list(solved_this_epoch),
             "cumulative_solved": list(set(solved_task_ids)),
             "n_solved_this_epoch": len(solved_this_epoch), 
-            "n_cumulative_solved": len(set(solved_task_ids))
+            "n_cumulative_solved": len(set(solved_task_ids)),
+            "answer_dict": answers_dict
         })
         save_stats_to_file(epoch_stats, output_dir)
 
@@ -125,10 +131,6 @@ def seed_everything(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
     transformers.set_seed(seed)
 
 
@@ -138,9 +140,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sparse_grpo.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sample.yaml')
     parser.add_argument('--seed', type=int, default=0 )
-    parser.add_argument('--n_epochs', type=int, default=100 )
+    parser.add_argument('--n_epochs', type=int, default=10 )
     parser.add_argument("--reward_shaping", type=bool, default=False)
 
     args = parser.parse_args()

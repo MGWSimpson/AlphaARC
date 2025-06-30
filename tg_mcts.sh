@@ -1,0 +1,3 @@
+/home/mgws3/.conda/envs/AlphaARC/bin/python /home/mgws3/AlphaARC/alphaarc/search.py --config_path alphaarc/configs/search/tg_mcts.yaml --seed 0
+/home/mgws3/.conda/envs/AlphaARC/bin/python /home/mgws3/AlphaARC/alphaarc/search.py --config_path alphaarc/configs/search/tg_mcts.yaml --seed 1
+/home/mgws3/.conda/envs/AlphaARC/bin/python /home/mgws3/AlphaARC/alphaarc/search.py --config_path alphaarc/configs/search/tg_mcts.yaml --seed 2
