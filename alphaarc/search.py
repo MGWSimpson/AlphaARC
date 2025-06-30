@@ -961,16 +961,16 @@ def run_experiment( method: BaseMethod,
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
     hex_values = [
-    "6150a2bd",
-    # "68b16354",
-    "c8f0f002",
-    "c9e6f938",
-    # "9ecd008a",
+    #"6150a2bd",
+    #"68b16354",
+    #"c8f0f002",
+    #"c9e6f938",
+    #"9ecd008a",
     "ac0a08a4",
-    "d9fac9be",
+    #"d9fac9be",
     "ff805c23",
     "ded97339",
-    "4258a5f9",
+    #"4258a5f9",
     "6d75e8bb"
     ]
 
@@ -996,7 +996,7 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 def main(): 
