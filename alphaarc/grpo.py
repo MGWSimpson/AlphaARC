@@ -82,7 +82,7 @@ class GRPOTrainer:
                  env: BaseEnv,
                  num_gen_per_group=8,
                  batch_size=2, 
-                 lr=1e-6,
+                 lr=5e-6,
                  beta= 0.04,
                  clip_param = 0.2,
                  sparse_variant=False,
