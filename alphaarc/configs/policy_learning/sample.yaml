@@ -1,5 +1,5 @@
 method: "SAMPLE"
-model_path: '/home/mgws3/AlphaARC/finetune-checkpoint/dev-checkpoint/checkpoint-1000'
+model_path: 'finetune-checkpoint/dev-checkpoint/checkpoint-16470'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1

@@ -43,7 +43,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
             reward, terminated = env.evaluate_program(program, should_token_account=False)
             
             if reward == 1:
-                answer_dict[task.task_key].append(i)
+                answer_dict[task.task_key].append((i, tokenizer.decode(program)))
                 save_answer(answer_dict)
                 return True
 
@@ -53,7 +53,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
 def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=8 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length,
-                                num_return_sequences=24,
+                                num_return_sequences=num_return_sequences,
                                 do_sample=True)
 
     answers = answers.squeeze(0)
@@ -93,7 +93,7 @@ def run_experiment(n_meta_epochs,
     
     full_curriculum = full_curriculum
 
-    
+    torch.cuda.empty_cache()
     
 
 
@@ -135,7 +135,7 @@ def seed_everything(seed):
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 
 def main(): 
