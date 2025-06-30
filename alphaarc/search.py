@@ -957,7 +957,7 @@ def run_experiment( method: BaseMethod,
 
     tasks = sorted(tasks, key=lambda task: len(task.program_lines))
 
-    hex_values = [
+    """hex_values = [
     "6150a2bd",
     "68b16354",
     "c8f0f002",
@@ -969,7 +969,9 @@ def run_experiment( method: BaseMethod,
     "ded97339",
     "4258a5f9",
     "6d75e8bb"
-    ]
+    ]"""
+
+    hex_values = ["ac0a08a4", "6d75e8bb", "c8f0f002", "4258a5f9", "d9fac9be", "6150a2bd", "c9e6f938"]
 
 
 
@@ -993,7 +995,7 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 
 def seed_everything(seed):
