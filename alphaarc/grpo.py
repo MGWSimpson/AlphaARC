@@ -82,7 +82,7 @@ class GRPOTrainer:
                  env: BaseEnv,
                  num_gen_per_group=8,
                  batch_size=2, 
-                 lr=5e-6,
+                 lr=1e-6,
                  beta= 0.04,
                  clip_param = 0.2,
                  sparse_variant=False,
@@ -93,8 +93,7 @@ class GRPOTrainer:
         self.optimizer = AdamW(policy_model.parameters(), lr=lr)
         
 
-        self.grad_accumulate_steps = 8
-
+        self.grad_accumulate_steps = 2
         self.grad_accumulate_cntr = 0
 
         self.ref_model = ref_model
@@ -246,21 +245,6 @@ class GRPOTrainer:
     
         
 
-    # pass in a list of hindsight relabelled tasks
-    def train(self, tasks):
-        self.policy_model.eval()
-        self.ref_model.eval()
-
-        # shuffle the order of the tasks.
-        random.shuffle(tasks)
-        for i in tqdm(range(0, len (tasks), self.batch_size)):
-            self.optimizer.zero_grad()
-            batch = tasks[i:i+self.batch_size]
-            input_ids, decoder_input_ids, rewards = self._generate_completions(batch)
-            loss = self._grpo_step(input_ids, decoder_input_ids, rewards)
-            loss.backward()
-            self.optimizer.step()
-
 
     def generate_answers(self, task, env,  n_generations):
         if self.internal_mode:
@@ -277,17 +261,21 @@ class GRPOTrainer:
             input_ids, decoder_input_ids, rewards = self._generate_completions(batch, exploration_reward=False)
             loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
 
-            grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
             
+
+            self.grad_accumulate_cntr +=1
+            loss = loss / self.grad_accumulate_cntr
             loss.backward()
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-            self.run.log({  "loss": loss.detach().cpu().item(),
-                                "percent_clipped": clp_mask.cpu().float().mean().item(),
-                                "advantage": adv.cpu().mean().item(),
-                                "ptkl": ptkl.cpu().mean().item(),
-                                "grad norm": grad_norm.item(),
-                                "avg reward": rwrd.cpu().mean().item()})
+
+            if self.grad_accumulate_cntr % self.grad_accumulate_steps == 0:
+                self.grad_accumulate_cntr = 0
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                self.run.log({  "loss": loss.detach().cpu().item(),
+                                    "percent_clipped": clp_mask.cpu().float().mean().item(),
+                                    "advantage": adv.cpu().mean().item(),
+                                    "ptkl": ptkl.cpu().mean().item(),
+                                    "avg reward": rwrd.cpu().mean().item()})
             
             answers.extend([x for x in decoder_input_ids])  
 
@@ -302,11 +290,6 @@ class GRPOTrainer:
             batch = task
             input_ids, decoder_input_ids, rewards = self._generate_completions(batch)
 
-            loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
-
-
-
-            # you would basically insert it here, for each of the decoder ids, you would relabel it
             for i in range(decoder_input_ids.shape[0]):
                 
 
@@ -316,84 +299,23 @@ class GRPOTrainer:
                 input_ids, rewards, new_task = self._relabel(input_ids, decoder_input_ids[i], decoder_input_ids, task, env)    
                 
                 loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
+                self.grad_accumulate_cntr +=1
+                loss = loss / self.grad_accumulate_cntr
                 loss.backward()
-                
-
-                grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                
-
-            self.optimizer.step()  
-            self.optimizer.zero_grad()
-
-            x = self.tokenizer( task[0].program_lines, add_special_tokens=False, return_tensors='pt')['input_ids']
-            x = x.to('cuda')
-            
+                if self.grad_accumulate_cntr % self.grad_accumulate_steps == 0:
+                    self.grad_accumulate_cntr = 0
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
 
             answers.extend([x for x in decoder_input_ids])  
 
         answer_tensor = pad_sequence(answers, batch_first=True)
-        self.env.set_task(task[0])
         return answer_tensor
     
 
 
-    def generate_relabeled_answers_external(self, task, env, n_generations): 
-        answers = []
-        self.env.set_task(task[0])
-        for i in range(0, n_generations, self.num_gen_per_group):
-            batch = task
-            input_ids, decoder_input_ids, rewards = self._generate_completions(batch)
-
-            loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, decoder_input_ids, rewards)
-
-
-            grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                # log metrics
-            self.run.log({  "loss": loss.detach().cpu().item(),
-                                "percent_clipped": clp_mask.cpu().float().mean().item(),
-                                "advantage": adv.cpu().mean().item(),
-                                "ptkl": ptkl.cpu().mean().item(),
-                                "grad norm": grad_norm.item(),
-                                "avg reward": rwrd.cpu().mean().item()})
-            
-            loss.backward()
-
-
-            for i in range(decoder_input_ids.shape[0]):
-                
-
-                if not env.is_valid_syntax(decoder_input_ids[i]): # if not valid program, skip relabel
-                    continue 
-                
-                input_ids, rewards, new_task = self._relabel(input_ids, decoder_input_ids[i], decoder_input_ids, task, env)   
-                new_task = [new_task] 
-                input_ids, new_decoder_input_ids, rewards= self._generate_completions(new_task, should_append_HER=True)
-
-                loss, ptkl, adv, clp_mask, rwrd = self._grpo_step(input_ids, new_decoder_input_ids, rewards)
-                loss.backward()
-                
-                # self.grad_accumulate_cntr += 1
-
-                # if self.grad_accumulate_cntr % self.grad_accumulate_steps  == 0:
-                    # self.grad_accumulate_cntr = 0
-
-                grad_norm = torch.nn.utils.get_total_norm(self.policy_model.parameters())
-                self.run.log({  "loss": loss.detach().cpu().item(),
-                                "percent_clipped": clp_mask.cpu().float().mean().item(),
-                                "advantage": adv.cpu().mean().item(),
-                                "ptkl": ptkl.cpu().mean().item(),
-                                "grad norm": grad_norm.item(),
-                                "avg reward": rwrd.cpu().mean().item()})
-
-            self.optimizer.step()  
-            self.optimizer.zero_grad()
-                    
-            answers.extend([x for x in decoder_input_ids])  
-
-        answer_tensor = pad_sequence(answers, batch_first=True)
-        self.env.set_task(task[0])
-        return answer_tensor
+    
 
 
 

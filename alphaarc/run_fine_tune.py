@@ -53,9 +53,9 @@ class FineTuneConfig:
     device: str = 'cuda'
     train_batch_size: int = 8
     eval_batch_size: int = 8
-    lr: float =2e-5
+    lr: float =5e-5
     output_dir: str = './finetune/'
-    num_epochs: int = 15
+    num_epochs: int = 10 
 
 
 
@@ -90,11 +90,9 @@ def fine_tune(  model,
         per_device_eval_batch_size=eval_batch_size,
         learning_rate=lr,
         logging_steps=100,
-        weight_decay=0.01,
         eval_strategy="steps",
         eval_steps=500,
         save_steps=500,
-        gradient_accumulation_steps=4,
         bf16=True, 
         report_to=["wandb"],  
     )
@@ -135,12 +133,11 @@ def fine_tune(  model,
 
             return dev_metrics
 
-    trainer = MultiEvalTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
-        eval_extra_dataset=dev_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
@@ -313,17 +310,17 @@ def main(config):
     tasks = load_train_tasks(dirs=[ 'data/training'], files=['data/mutated_tasks_train_9600.json', 'data/mutated_tasks_train_19200.json'])
     
     # computed from task splitter
-    dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
+    # dev_set_keys = ['ddf7fa4f', '0962bcdd', '444801d8', 'c1d99e64', 'b1948b0a', 'e26a3af2', '8e1813be', 'd9f24cd1', 'a2fd1cf0', 'ce22a75a', '4290ef0e']
                     
     train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
-    train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
+    # train_tasks, dev_tasks = split_dev_tasks(train_tasks, dev_set_keys)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = T5ForConditionalGeneration.from_pretrained(config.model_path)        
     model.to(config.device)
 
 
-    train_ds, eval_ds, dev_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer ), construct_ds(dev_tasks, tokenizer)
+    train_ds, eval_ds = construct_ds(train_tasks, tokenizer), construct_ds(eval_tasks, tokenizer )
 
 
     fine_tune(  model, 
@@ -333,7 +330,7 @@ def main(config):
                 config.eval_batch_size,
                 train_ds,
                 eval_ds,
-                dev_ds, 
+                None, 
                 config.lr,
                 config.output_dir)
 

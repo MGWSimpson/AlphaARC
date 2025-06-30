@@ -49,7 +49,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
         return False
 
 
-def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=24 ):
+def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=8 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length,
                                 num_return_sequences=num_return_sequences,
@@ -67,7 +67,7 @@ def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict, 
         answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     
     else:
-        answers = grpo_trainer.generate_answers([task], env,  24)
+        answers = grpo_trainer.generate_answers([task], env,  8)
 
     
     solved = evaluate_solutions(answers, task, env, relabelled_tasks
@@ -140,7 +140,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_path', type=str, default='alphaarc/configs/policy_learning/sparse_grpo.yaml')
     parser.add_argument('--seed', type=int, default=0 )
-    parser.add_argument('--n_epochs', type=int, default=50)
+    parser.add_argument('--n_epochs', type=int, default=100 )
     parser.add_argument("--reward_shaping", type=bool, default=False)
 
     args = parser.parse_args()
