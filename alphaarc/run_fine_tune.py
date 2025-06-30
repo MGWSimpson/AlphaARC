@@ -48,9 +48,9 @@ from transformers import (
 class FineTuneConfig: 
     model_path: str = 'Salesforce/codet5p-220m'
     device: str = 'cuda'
-    train_batch_size: int = 16
+    train_batch_size: int = 8
     eval_batch_size: int = 8 
-    lr: float =5e-5
+    lr: float =1e-5
     output_dir: str = './finetune/'
     num_epochs: int = 10
 
@@ -85,7 +85,7 @@ def fine_tune(  model,
         learning_rate=lr,
         logging_steps=100,
         eval_strategy="steps",
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=1,
         eval_steps=100,
         save_steps=500,
         bf16=True, 
