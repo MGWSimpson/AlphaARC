@@ -1010,12 +1010,12 @@ def seed_everything(seed):
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts_eval.yaml')
 
 
-    parser.add_argument('--k', type=int, default=8)
+    parser.add_argument('--k', type=int, default=4)
     parser.add_argument('--rho', type=float, default=0.5)
-    parser.add_argument('--limit', type=int, default=320)
+    parser.add_argument('--limit', type=int, default=100)
     parser.add_argument('--seed', type=int, default=0)
 
 
@@ -1060,7 +1060,7 @@ def main():
         raise ValueError("Method does not exist!")
 
      
-    output_dir =  f"results/search/{config['method'].lower()}-{k}-{tau}-{limit}-{seed}"
+    output_dir =  f"results/search/{config['method'].lower()}-{k}-{tau}-{limit}-{seed}-{training_name}"
     prepare_output_dir(output_dir)
 
 
