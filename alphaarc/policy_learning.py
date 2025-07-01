@@ -50,7 +50,7 @@ def evaluate_solutions(answers, task, env: BaseEnv, relabelled_tasks, tokenizer,
         return False
 
 
-def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=8 ):
+def generate_answers(model, tokenized_task, max_new_length=512, num_return_sequences=10 ):
     answers = model.generate(   tokenized_task.unsqueeze(0),
                                 max_new_tokens= max_new_length,
                                 num_return_sequences=num_return_sequences,
@@ -68,7 +68,7 @@ def try_solve_task(task, env, relabelled_tasks,  tokenizer, model, answer_dict, 
         answers = generate_answers(model, tokenized_task) # generate a fixed number of samples, will worry about other stuff later
     
     else:
-        answers = grpo_trainer.generate_answers([task], env,  8)
+        answers = grpo_trainer.generate_answers([task], env,  10)
 
     
     solved = evaluate_solutions(answers, task, env, relabelled_tasks
@@ -135,7 +135,7 @@ def seed_everything(seed):
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def main(): 
@@ -203,7 +203,7 @@ def main():
     
     
     # fix the output dir
-    output_dir =  f"results/{training_name}-{method.lower()}-{args.seed}-{args.reward_shaping}"
+    output_dir =  f"results/{training_name}-{method.lower()}-{args.seed}-{args.reward_shaping}-{args.n_epochs}"
     prepare_output_dir(output_dir)
 
     pl.seed_everything(args.seed)
