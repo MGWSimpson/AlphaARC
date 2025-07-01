@@ -739,10 +739,9 @@ class SplintMCTSMethod(BaseMethod):
             output = self.model.generate(
                             input_ids=prompt_ids.unsqueeze(0).to('cuda'),
                             decoder_input_ids=next_state.unsqueeze(0).to('cuda'),
-                            do_sample=True,
+                            early_stopping=True,
+                            num_beams=1,
                             max_length=512,)
-        
-        
         
         return output.to('cpu')
     
