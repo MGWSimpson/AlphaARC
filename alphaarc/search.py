@@ -902,8 +902,8 @@ def run_search(env: LineLevelArcEnv,
             stats['solved_program'] = env.tokenizer.decode(next_state)
             return True, stats
         
-        if value == -1.0:
-             value = 0 
+        """if value == -1.0:
+             value = 0 """
         
         next_state = torch.tensor(next_state)
 
@@ -931,8 +931,8 @@ def run_search(env: LineLevelArcEnv,
                 
                
 
-                if value == -1.0:
-                    value = 0
+                """if value == -1.0:
+                    value = 0"""
             
 
             
@@ -971,13 +971,13 @@ def run_experiment( method: BaseMethod,
     "6d75e8bb"
     ]"""
 
-    hex_values = ["ac0a08a4", "6d75e8bb", "c8f0f002", "4258a5f9", "d9fac9be", "6150a2bd", "c9e6f938"]
+    # hex_values = ["ac0a08a4", "6d75e8bb", "c8f0f002", "4258a5f9", "d9fac9be", "6150a2bd", "c9e6f938"]
 
 
 
 
     
-    tasks = [task for task in tasks if task.task_key in hex_values]
+    #' tasks = [task for task in tasks if task.task_key in hex_values]
 
     for task in tasks:
         torch.cuda.empty_cache()
