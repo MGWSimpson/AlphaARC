@@ -1,5 +1,5 @@
 method: "SAMPLE"
-model_path: 'finetune-checkpoint/dev-checkpoint/checkpoint-16470'
+model_path: 'ms429/main-dev-checkpoint'
 tokenizer_path:  'Salesforce/codet5p-220m'
 max_new_length: 512
 batch_size: 1
