@@ -994,7 +994,7 @@ def run_experiment( method: BaseMethod,
         save_metrics_to_file(metrics, output_path)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def seed_everything(seed):
@@ -1010,7 +1010,7 @@ def seed_everything(seed):
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/tg_mcts.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts.yaml')
 
 
     parser.add_argument('--k', type=int, default=8)
