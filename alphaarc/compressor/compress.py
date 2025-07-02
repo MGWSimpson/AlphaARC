@@ -1,3 +1,8 @@
+"""
+
+All mine.
+
+"""
 import re 
 import os
 import copy
@@ -11,7 +16,6 @@ from pathlib import Path
 import json
 from queue import Queue
 from alphaarc.task import Task, from_dict
-
 from alphaarc.augment.mutate_grid import valid_grid
 
 def find_grid_functions(filename):

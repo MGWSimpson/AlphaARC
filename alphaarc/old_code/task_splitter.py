@@ -122,7 +122,6 @@ def split_tasks(tasks):
 
     l = []
     for task in tasks:
-        # not core task and no eval task yet 
         if task.parent_key is None and task.parent_key not in eval_tasks:
             eval_tasks[task.parent_key] = task
 
@@ -162,7 +161,6 @@ def stratified_sample_k(train: List[Task],
   
     rng = random.Random(rng_seed)
 
-    # group task indices by length
     idx_by_len = defaultdict(list)
     for idx, (_, L) in enumerate(train):
         idx_by_len[L].append(idx)
@@ -183,16 +181,13 @@ def stratified_sample_k(train: List[Task],
         available = [i for i in range(total_train) if i not in chosen_idx]
         chosen_idx.update(rng.sample(available, remaining_k))
 
-    # Build splits
     val_split  = [train[i] for i in chosen_idx]
     new_train  = [task     for i, task in enumerate(train) if i not in chosen_idx]
 
     return val_split, new_train
 
 
-# ---------------- example usage ----------------
 if __name__ == "__main__":
-    # Example data
     tasks = load_train_tasks(dirs=[ 'data/training'], files=[], dev_mode=False)
     train_tasks, eval_tasks = split_tasks_based_on_key(tasks)
 

@@ -135,23 +135,23 @@ def compute_prior(model, input_batch, ids_batch, batch_size: int = 64,
     with torch.no_grad():
         for start in range(0, ids_batch.size(0), batch_size):
             end = start + batch_size
-            ids_sub = ids_batch[start:end].to(device)              # (b, L_tgt)
+            ids_sub = ids_batch[start:end].to(device)               
 
             labels = ids_sub.clone()
-            labels[labels == 0] = -100                             # ignore padding
-            labels[:, 0] = 0                                       # keep BOS
-            mask = labels.ne(-100)                                 # (b, L_tgt)
+            labels[labels == 0] = -100                              
+            labels[:, 0] = 0                                       
+            mask = labels.ne(-100)                                 
 
-            prompt = input_batch.expand(ids_sub.size(0), -1)       # (b, L_prompt)
+            prompt = input_batch.expand(ids_sub.size(0), -1)       
 
-            logits = model(input_ids=prompt, labels=labels).logits # (b, L_tgt, V)
+            logits = model(input_ids=prompt, labels=labels).logits #  
             log_probs = torch.log_softmax(logits, dim=-1)
 
             token_ll = log_probs.gather(-1, ids_sub.unsqueeze(-1)).squeeze(-1)
-            seq_logps.append((token_ll * mask).sum(-1))            # (b,)
+            seq_logps.append((token_ll * mask).sum(-1))            
 
 
-    return torch.cat(seq_logps, dim=0).cpu()                       # (N,)
+    return torch.cat(seq_logps, dim=0).cpu()                      
 
 
 
@@ -323,7 +323,7 @@ class TGMCTSMethod(BaseMethod):
         seq_logp = compute_prior(self.model, prompt_ids, completions_batched)
         self.n_forward_calls += seq_logp.shape[-1]
         
-        priors = torch.softmax(seq_logp, dim=0)                    # (B,)
+        priors = torch.softmax(seq_logp, dim=0)                     
 
         return completions, priors
     
@@ -502,7 +502,7 @@ class SplintMCTSMethod(BaseMethod):
         device = torch.device(device)
         model = model.to(device).eval()
 
-        bos = torch.tensor([0, 1], device=device)  # BOS tokens used in decoding
+        bos = torch.tensor([0, 1], device=device)   
 
         comp_ids = [tok(c, add_special_tokens=False).input_ids for c in completions]
 
@@ -521,34 +521,30 @@ class SplintMCTSMethod(BaseMethod):
 
         prefix = longest_common_prefix(comp_ids)
 
-        # Get next token after prefix for each completion
         next_tokens = []
         for ids in comp_ids:
             if len(ids) > len(prefix):
                 next_tokens.append(ids[len(prefix)])
             else:
-                next_tokens.append(None)  # In case the completion is exactly the prefix
+                next_tokens.append(None)  
 
 
-        # Prepare decoder input: BOS + common prefix
         dec_in = torch.tensor([bos.tolist() + prefix], device=device)
 
         with torch.no_grad():
             logits = model(
                 labels=dec_in,
                 encoder_outputs=enc_out
-            ).logits[0, -1].log_softmax(-1)  # (V,)
+            ).logits[0, -1].log_softmax(-1)  
 
-        # Score completions based on the log-prob of their next token
         scores = []
         for comp, tok_id in zip(completions, next_tokens):
             if tok_id is not None:
                 score = float(logits[tok_id].item())
             else:
-                score = float('-inf')  # Can't score if it's just the prefix
+                score = float('-inf')  
             scores.append((comp, score))
 
-            # Sort and return top-k
         
         top = sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
         comps, log_ps = zip(*top) if top else ([], [])
@@ -575,7 +571,6 @@ class SplintMCTSMethod(BaseMethod):
         bos    = torch.tensor([0, 1], device=device)
 
 
-        # tokenize all the completions
         comp_ids = [tok(c, add_special_tokens=False).input_ids for c in completions]
         cursors  = [0] * len(completions)
         cum_lp   = [0.0] * len(completions)     

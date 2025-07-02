@@ -1,3 +1,7 @@
+"""
+Code from codeit github: https://github.com/Qualcomm-AI-research/codeit
+"""
+
 # Copyright (c) 2024 Qualcomm Technologies, Inc.
 # All Rights Reserved.
 
