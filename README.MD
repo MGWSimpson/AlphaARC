@@ -5,3 +5,5 @@
 
 
 -> all the files in data are codeits
+
+-> all results in results are mine + the finetune-checkpoints are where youll find the final models used. Also the finetune stuff is where you will see i tried a bunch of params.
