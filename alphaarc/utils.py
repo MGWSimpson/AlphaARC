@@ -96,6 +96,7 @@ def get_num_pixels(grid):
     num_columns = len(grid[0]) if num_rows > 0 else 0
     return num_rows if num_columns == 0 else num_rows * num_columns
 
+##-- actually below this is me.
 
 def pad_and_convert(task, state, actions, pad_value=0.0, max_state_size=1024, max_action_size=20):
     
