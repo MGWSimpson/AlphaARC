@@ -1010,13 +1010,13 @@ def seed_everything(seed):
 
 def main(): 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/splint_mcts eval.yaml')
+    parser.add_argument('--config_path', type=str, default='alphaarc/configs/search/mcts.yaml')
 
 
     parser.add_argument('--k', type=int, default=4)
     parser.add_argument('--rho', type=float, default=0.5)
     parser.add_argument('--limit', type=int, default=100)
-    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=1)
 
 
     args = parser.parse_args()

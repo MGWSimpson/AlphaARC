@@ -10,7 +10,7 @@ num_return_sequences: 8
 training_curriculum_config:
   type: BaselineCurriculum
   params:
-    dir_paths: [ data/training]
+    dir_paths: [ data/evaluation]
     
 
 evaluation_curriculum_config:
