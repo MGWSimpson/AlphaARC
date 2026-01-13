@@ -1,7 +1,7 @@
 # AlphaARC
 
 **Synthetic task generation & experiments for the Abstraction and Reasoning Corpus (ARC).**
-This repository contains code and experiment notebooks for generating synthetic ARC-like tasks, running search/policy learning over those tasks, and fine-tuning models used in related experiments. The core implementation lives under `alphaarc/`; data and experiment scripts are provided in `data/`, `experiment_scripts/`, and `experiments/`. ([GitHub][1])
+This repository contains code and experiment notebooks for generating synthetic ARC-like tasks, running search/policy learning over those tasks, and fine-tuning models used in related experiments. The core implementation lives under `alphaarc/`; data and experiment scripts are provided in `data/`, `experiment_scripts/`, and `experiments/`.
 
 ---
 
@@ -15,7 +15,7 @@ This repository contains code and experiment notebooks for generating synthetic 
   * `alphaarc/search.py` and `alphaarc/policy_learning.py` — main search and policy-learning drivers.
   * `run_fine_tune.py` and `experiment_scripts/` — examples of training / experiment flows.
   * `data/` — stored datasets (mutated/generated / codeits).
-  * `results/` — experiment results and finetune checkpoints. ([GitHub][1])
+  * `results/` — experiment results and finetune checkpoints.
 
 ---
 
@@ -39,7 +39,7 @@ conda activate alphaarc
 pip install -r requirements.txt
 ```
 
-The repository contains both `environment.yml` and `requirements.txt` for environment setup. A `Dockerfile` is also provided if you prefer containerized runs. ([GitHub][1])
+The repository contains both `environment.yml` and `requirements.txt` for environment setup. A `Dockerfile` is also provided if you prefer containerized runs.
 
 ---
 
@@ -83,7 +83,7 @@ python run_fine_tune.py --config <your-config>
 
 ### Reproducing experiments
 
-Look in `experiment_scripts/` and `experiments/` for runnable examples (shell scripts and notebooks) that demonstrate common experiment pipelines and parameter sweeps. ([GitHub][1])
+Look in `experiment_scripts/` and `experiments/` for runnable examples (shell scripts and notebooks) that demonstrate common experiment pipelines and parameter sweeps.
 
 ---
 
@@ -103,21 +103,21 @@ AlphaARC/
 └─ LICENSE                 # BSD-3-Clause-Clear
 ```
 
-See the repository root for the exact file names and structure. ([GitHub][1])
+See the repository root for the exact file names and structure.
 
 ---
 
 ## Notes, tips & pointers
 
-* If you’re exploring the code, start with `alphaarc/search.py` and `alphaarc/policy_learning.py` — these are the main algorithmic entry points. The generator (`compress.py`) creates synthetic tasks used in many experiments. ([GitHub][1])
-* Many scripts expect data to be in `data/` and will save outputs to `results/`; check and set the working paths in script arguments before running large experiments. ([GitHub][1])
-* Some files and notebooks may be legacy or used for quick experimentation — look for notes/headers within those files and prefer scripts under `experiment_scripts/` for reproducible runs. ([GitHub][1])
+* If you’re exploring the code, start with `alphaarc/search.py` and `alphaarc/policy_learning.py` — these are the main algorithmic entry points. The generator (`compress.py`) creates synthetic tasks used in many experiments.
+* Many scripts expect data to be in `data/` and will save outputs to `results/`; check and set the working paths in script arguments before running large experiments.
+* Some files and notebooks may be legacy or used for quick experimentation — look for notes/headers within those files and prefer scripts under `experiment_scripts/` for reproducible runs.
 
 ---
 
 ## About ARC (context)
 
-This repository targets the Abstraction and Reasoning Corpus (ARC) — a small-sample, compositional visual reasoning benchmark introduced to probe generalization and human-like problem solving. If you’re new to ARC, see the ARC home/info pages and the original challenge resources for background and dataset format. ([ARC Prize][2])
+This repository targets the Abstraction and Reasoning Corpus (ARC) — a small-sample, compositional visual reasoning benchmark introduced to probe generalization and human-like problem solving. If you’re new to ARC, see the ARC home/info pages and the original challenge resources for background and dataset format.
 
 ---
 
